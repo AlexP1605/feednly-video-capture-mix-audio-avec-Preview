@@ -985,8 +985,14 @@
     let currentMusicDuration = 30; // Durée connue pour le slider (s)
     let activeTag = null;
     let isOriginalMuted = false;
+    let musicSessionId = 0;
     const WAVEFORM_BAR_COUNT = 32;
     const TAG_OPTIONS = ['Chill', 'Rap', 'Pop', 'Electro', 'Cinematic', 'Rock'];
+
+    function invalidateMusicSession() {
+        musicSessionId += 1;
+        return musicSessionId;
+    }
 
     function getCachedAudioBufferEntry(id, url) {
         if (id && audioBufferCache.has(id)) return audioBufferCache.get(id);
@@ -1032,8 +1038,13 @@
     function preloadSelectedMusic() {
         const music = getSelectedMusic();
         if (!music || !music.url || !musicEngine) return Promise.resolve(null);
+        const sessionId = musicSessionId;
+        const expectedId = music.id;
         return preloadMusicBuffer(music.id, music.url)
             .then((buffer) => {
+                if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+                    return null;
+                }
                 if (buffer?.duration) {
                     setSeekLimits(Math.floor(buffer.duration));
                 }
@@ -1820,7 +1831,8 @@
         syncVolumeLabels();
         renderMusicList(musicSearchInput.value);
         updateMusicOverlay();
-        stopMusicPreview();
+        stopMusicPreview({ hard: true });
+        invalidateMusicSession();
         updateMusicSelectionUI();
     }
 
@@ -1837,6 +1849,8 @@
         updateMusicOverlay();
         renderMusicList(musicSearchInput.value);
         updateMusicSelectionUI();
+        stopMusicPreview({ hard: true });
+        invalidateMusicSession();
     }
 
     const MAX_PRELOAD_ITEMS = 2;
@@ -2412,6 +2426,8 @@
 
     async function startMusicPreview(opt) {
         if (!opt || !musicEngine) return;
+        const sessionId = musicSessionId;
+        const expectedId = opt.id;
 
         if (currentlyPlayingMusicId && currentlyPlayingMusicId !== opt.id) {
             stopMusicPreview({ hard: false });
@@ -2432,10 +2448,17 @@
         const { start, end } = getLoopBounds();
         try {
             await ensureAudioReady();
+            if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+                return;
+            }
             if (audioCtx?.state === 'suspended') {
                 await audioCtx.resume().catch(() => {});
             }
             const duration = await musicEngine.load(opt.url, { id: opt.id });
+            if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+                musicEngine.stop();
+                return;
+            }
             if (Number.isFinite(duration)) {
                 setSeekLimits(Math.floor(duration));
             }
@@ -2444,6 +2467,10 @@
                 await audioCtx.resume().catch(() => {});
             }
             const started = await musicEngine.play(start, end);
+            if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+                musicEngine.stop();
+                return;
+            }
             if (!started) {
                 currentlyPlayingMusicId = null;
             }
@@ -2829,6 +2856,7 @@
             previewTimeout = null;
         }
         stopMusicPreview({ hard: true });
+        invalidateMusicSession();
         resetThumbnailDefaults();
         previewVideo.pause();
         previewVideo.src = '';
