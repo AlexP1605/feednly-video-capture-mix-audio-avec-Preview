@@ -983,11 +983,13 @@
     let musicStartTime = 0; // Début sélection musique (s)
     let selectedMusicId = null; // Musique choisie pour la preview
     let currentMusicDuration = 30; // Durée connue pour le slider (s)
-    let activeTag = null;
+    const DEFAULT_TAG_LABEL = 'Aucun';
+    const DEFAULT_TAG_VALUE = 'aucun';
+    let activeTag = DEFAULT_TAG_VALUE;
     let isOriginalMuted = false;
     let musicSessionId = 0;
     const WAVEFORM_BAR_COUNT = 32;
-    const TAG_OPTIONS = ['Chill', 'Rap', 'Pop', 'Electro', 'Cinematic', 'Rock'];
+    const TAG_OPTIONS = [DEFAULT_TAG_LABEL, 'Chill', 'Rap', 'Pop', 'Electro', 'Cinematic', 'Rock'];
 
     function invalidateMusicSession() {
         musicSessionId += 1;
@@ -1660,6 +1662,16 @@
         return String(tag || '').trim().toLowerCase();
     }
 
+    function isDefaultTag(tag) {
+        return !tag || tag === DEFAULT_TAG_VALUE;
+    }
+
+    function resetFilterTag() {
+        activeTag = DEFAULT_TAG_VALUE;
+        renderFilterTags();
+        renderMusicList(musicSearchInput.value);
+    }
+
     function getTrackTags(opt) {
         const tagList = [];
         const rawTags = opt?.tags;
@@ -1690,7 +1702,11 @@
                 btn.classList.add('active');
             }
             btn.onclick = () => {
-                activeTag = activeTag === normalized ? null : normalized;
+                if (normalized === DEFAULT_TAG_VALUE) {
+                    activeTag = DEFAULT_TAG_VALUE;
+                } else {
+                    activeTag = activeTag === normalized ? DEFAULT_TAG_VALUE : normalized;
+                }
                 renderFilterTags();
                 renderMusicList(musicSearchInput.value);
             };
@@ -1704,7 +1720,7 @@
         const items = musicOptions.filter(opt => {
             const hay = `${opt.title} ${opt.artist}`.toLowerCase();
             const tags = getTrackTags(opt);
-            const matchesTag = !activeTag || tags.some((tag) => tag.includes(activeTag) || activeTag.includes(tag));
+            const matchesTag = isDefaultTag(activeTag) || tags.some((tag) => tag.includes(activeTag) || activeTag.includes(tag));
             return hay.includes(query) && matchesTag;
         });
         if (!items.length) {
@@ -2060,12 +2076,18 @@
 
     function closeMusicSheet() {
         musicSheet?.classList.remove('active');
-        musicFilterSheet?.classList.remove('active');
+        if (musicFilterSheet?.classList.contains('active')) {
+            musicFilterSheet.classList.remove('active');
+            resetFilterTag();
+        }
         updateSheetBackdrop();
     }
 
     function closeFilterSheet() {
-        musicFilterSheet?.classList.remove('active');
+        if (musicFilterSheet?.classList.contains('active')) {
+            musicFilterSheet.classList.remove('active');
+            resetFilterTag();
+        }
         updateSheetBackdrop();
     }
 
@@ -2140,7 +2162,8 @@
         e.stopPropagation();
         openThumbnailPicker();
     });
-    sheetBackdrop.onclick = () => {
+    sheetBackdrop.onclick = (e) => {
+        e.stopPropagation();
         if (musicFilterSheet?.classList.contains('active')) {
             closeFilterSheet();
             return;
@@ -2428,6 +2451,7 @@
         if (!opt || !musicEngine) return;
         const sessionId = musicSessionId;
         const expectedId = opt.id;
+        const shouldResumePreview = previewOverlay.classList.contains('active') && previewVideo && !previewVideo.paused && !previewVideo.ended;
 
         if (currentlyPlayingMusicId && currentlyPlayingMusicId !== opt.id) {
             stopMusicPreview({ hard: false });
@@ -2455,6 +2479,9 @@
                 await audioCtx.resume().catch(() => {});
             }
             const duration = await musicEngine.load(opt.url, { id: opt.id });
+            if (shouldResumePreview && previewVideo.paused) {
+                previewVideo.play().catch(() => {});
+            }
             if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
                 musicEngine.stop();
                 return;
