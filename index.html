@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -958,19 +957,6 @@
     let selectedThumbnailTime = 0.5;
     let thumbnailFrames = [];
     let thumbnailFramesPromise = null;
-    // Watchdog léger pour réveiller le renderer vidéo iOS si les frames se figent
-    const previewRenderWatchdog = {
-        enabled: false,
-        frameCallbackId: null,
-        timerId: null,
-        lastFrameRenderedAt: 0,
-        lastFrameCount: 0,
-        lastCurrentTime: 0,
-        lastKickAt: 0
-    };
-    const PREVIEW_WATCHDOG_INTERVAL_MS = 1200;
-    const PREVIEW_FRAME_STALL_MS = 2000;
-    const PREVIEW_KICK_MIN_INTERVAL_MS = 1500;
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
@@ -996,18 +982,10 @@
     let musicStartTime = 0; // Début sélection musique (s)
     let selectedMusicId = null; // Musique choisie pour la preview
     let currentMusicDuration = 30; // Durée connue pour le slider (s)
-    const DEFAULT_TAG_LABEL = 'Aucun';
-    const DEFAULT_TAG_VALUE = 'aucun';
-    let activeTag = DEFAULT_TAG_VALUE;
+    let activeTag = null;
     let isOriginalMuted = false;
-    let musicSessionId = 0;
     const WAVEFORM_BAR_COUNT = 32;
-    const TAG_OPTIONS = [DEFAULT_TAG_LABEL, 'Chill', 'Rap', 'Pop', 'Electro', 'Cinematic', 'Rock'];
-
-    function invalidateMusicSession() {
-        musicSessionId += 1;
-        return musicSessionId;
-    }
+    const TAG_OPTIONS = ['Chill', 'Rap', 'Pop', 'Electro', 'Cinematic', 'Rock'];
 
     function getCachedAudioBufferEntry(id, url) {
         if (id && audioBufferCache.has(id)) return audioBufferCache.get(id);
@@ -1053,13 +1031,8 @@
     function preloadSelectedMusic() {
         const music = getSelectedMusic();
         if (!music || !music.url || !musicEngine) return Promise.resolve(null);
-        const sessionId = musicSessionId;
-        const expectedId = music.id;
         return preloadMusicBuffer(music.id, music.url)
             .then((buffer) => {
-                if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
-                    return null;
-                }
                 if (buffer?.duration) {
                     setSeekLimits(Math.floor(buffer.duration));
                 }
@@ -1675,16 +1648,6 @@
         return String(tag || '').trim().toLowerCase();
     }
 
-    function isDefaultTag(tag) {
-        return !tag || tag === DEFAULT_TAG_VALUE;
-    }
-
-    function resetFilterTag() {
-        activeTag = DEFAULT_TAG_VALUE;
-        renderFilterTags();
-        renderMusicList(musicSearchInput.value);
-    }
-
     function getTrackTags(opt) {
         const tagList = [];
         const rawTags = opt?.tags;
@@ -1715,11 +1678,7 @@
                 btn.classList.add('active');
             }
             btn.onclick = () => {
-                if (normalized === DEFAULT_TAG_VALUE) {
-                    activeTag = DEFAULT_TAG_VALUE;
-                } else {
-                    activeTag = activeTag === normalized ? DEFAULT_TAG_VALUE : normalized;
-                }
+                activeTag = activeTag === normalized ? null : normalized;
                 renderFilterTags();
                 renderMusicList(musicSearchInput.value);
             };
@@ -1733,7 +1692,7 @@
         const items = musicOptions.filter(opt => {
             const hay = `${opt.title} ${opt.artist}`.toLowerCase();
             const tags = getTrackTags(opt);
-            const matchesTag = isDefaultTag(activeTag) || tags.some((tag) => tag.includes(activeTag) || activeTag.includes(tag));
+            const matchesTag = !activeTag || tags.some((tag) => tag.includes(activeTag) || activeTag.includes(tag));
             return hay.includes(query) && matchesTag;
         });
         if (!items.length) {
@@ -1860,8 +1819,7 @@
         syncVolumeLabels();
         renderMusicList(musicSearchInput.value);
         updateMusicOverlay();
-        stopMusicPreview({ hard: true });
-        invalidateMusicSession();
+        stopMusicPreview();
         updateMusicSelectionUI();
     }
 
@@ -1878,8 +1836,6 @@
         updateMusicOverlay();
         renderMusicList(musicSearchInput.value);
         updateMusicSelectionUI();
-        stopMusicPreview({ hard: true });
-        invalidateMusicSession();
     }
 
     const MAX_PRELOAD_ITEMS = 2;
@@ -2089,18 +2045,12 @@
 
     function closeMusicSheet() {
         musicSheet?.classList.remove('active');
-        if (musicFilterSheet?.classList.contains('active')) {
-            musicFilterSheet.classList.remove('active');
-            resetFilterTag();
-        }
+        musicFilterSheet?.classList.remove('active');
         updateSheetBackdrop();
     }
 
     function closeFilterSheet() {
-        if (musicFilterSheet?.classList.contains('active')) {
-            musicFilterSheet.classList.remove('active');
-            resetFilterTag();
-        }
+        musicFilterSheet?.classList.remove('active');
         updateSheetBackdrop();
     }
 
@@ -2175,8 +2125,7 @@
         e.stopPropagation();
         openThumbnailPicker();
     });
-    sheetBackdrop.onclick = (e) => {
-        e.stopPropagation();
+    sheetBackdrop.onclick = () => {
         if (musicFilterSheet?.classList.contains('active')) {
             closeFilterSheet();
             return;
@@ -2462,9 +2411,6 @@
 
     async function startMusicPreview(opt) {
         if (!opt || !musicEngine) return;
-        const sessionId = musicSessionId;
-        const expectedId = opt.id;
-        const shouldResumePreview = previewOverlay.classList.contains('active') && previewVideo && !previewVideo.paused && !previewVideo.ended;
 
         if (currentlyPlayingMusicId && currentlyPlayingMusicId !== opt.id) {
             stopMusicPreview({ hard: false });
@@ -2485,20 +2431,10 @@
         const { start, end } = getLoopBounds();
         try {
             await ensureAudioReady();
-            if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
-                return;
-            }
             if (audioCtx?.state === 'suspended') {
                 await audioCtx.resume().catch(() => {});
             }
             const duration = await musicEngine.load(opt.url, { id: opt.id });
-            if (shouldResumePreview && previewVideo.paused) {
-                previewVideo.play().catch(() => {});
-            }
-            if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
-                musicEngine.stop();
-                return;
-            }
             if (Number.isFinite(duration)) {
                 setSeekLimits(Math.floor(duration));
             }
@@ -2507,10 +2443,6 @@
                 await audioCtx.resume().catch(() => {});
             }
             const started = await musicEngine.play(start, end);
-            if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
-                musicEngine.stop();
-                return;
-            }
             if (!started) {
                 currentlyPlayingMusicId = null;
             }
@@ -2851,94 +2783,6 @@
        if (thumbnailLoading) thumbnailLoading.hidden = true;
     }
 
-    function getPreviewFrameCount() {
-        if (!previewVideo) return null;
-        if (typeof previewVideo.getVideoPlaybackQuality === 'function') {
-            return previewVideo.getVideoPlaybackQuality().totalVideoFrames || 0;
-        }
-        if (typeof previewVideo.webkitDecodedFrameCount === 'number') {
-            return previewVideo.webkitDecodedFrameCount;
-        }
-        return null;
-    }
-
-    function kickPreviewRenderer() {
-        if (!previewVideo || previewVideo.readyState < 2 || previewVideo.paused) return;
-        const now = performance.now();
-        if (now - previewRenderWatchdog.lastKickAt < PREVIEW_KICK_MIN_INTERVAL_MS) return;
-        previewRenderWatchdog.lastKickAt = now;
-        const currentTime = previewVideo.currentTime || 0;
-        const duration = Number(previewVideo.duration) || 0;
-        const maxSafe = duration ? Math.max(0, duration - 0.05) : currentTime + 0.01;
-        const bumpedTime = Math.min(currentTime + 0.001, maxSafe);
-        if (Number.isFinite(bumpedTime) && bumpedTime !== currentTime) {
-            previewVideo.currentTime = bumpedTime;
-            Promise.resolve().then(() => {
-                if (!previewVideo || previewVideo.paused) return;
-                previewVideo.currentTime = currentTime;
-            });
-            return;
-        }
-        const baseTransform = previewVideo.style.transform || '';
-        previewVideo.style.transform = `${baseTransform} translateZ(0)`;
-        requestAnimationFrame(() => {
-            if (!previewVideo) return;
-            previewVideo.style.transform = baseTransform;
-        });
-    }
-
-    function startPreviewRenderWatchdog() {
-        if (!previewVideo || previewRenderWatchdog.enabled) return;
-        previewRenderWatchdog.enabled = true;
-        previewRenderWatchdog.lastFrameRenderedAt = performance.now();
-        previewRenderWatchdog.lastFrameCount = getPreviewFrameCount() || 0;
-        previewRenderWatchdog.lastCurrentTime = previewVideo.currentTime || 0;
-        const hasFrameCallback = typeof previewVideo.requestVideoFrameCallback === 'function';
-        const trackFrame = () => {
-            if (!previewRenderWatchdog.enabled) return;
-            previewRenderWatchdog.lastFrameRenderedAt = performance.now();
-            const frameCount = getPreviewFrameCount();
-            if (frameCount !== null) {
-                previewRenderWatchdog.lastFrameCount = frameCount;
-            }
-            previewRenderWatchdog.frameCallbackId = previewVideo.requestVideoFrameCallback(trackFrame);
-        };
-        if (hasFrameCallback) {
-            previewRenderWatchdog.frameCallbackId = previewVideo.requestVideoFrameCallback(trackFrame);
-        }
-        previewRenderWatchdog.timerId = setInterval(() => {
-            if (!previewRenderWatchdog.enabled || !previewVideo) return;
-            if (previewVideo.paused || previewVideo.ended || previewVideo.readyState < 2) return;
-            if (!previewOverlay.classList.contains('active')) return;
-            const now = performance.now();
-            const currentTime = previewVideo.currentTime || 0;
-            const timeAdvanced = currentTime > previewRenderWatchdog.lastCurrentTime + 0.01;
-            const frameCount = getPreviewFrameCount();
-            if (frameCount !== null && frameCount !== previewRenderWatchdog.lastFrameCount) {
-                previewRenderWatchdog.lastFrameCount = frameCount;
-                previewRenderWatchdog.lastFrameRenderedAt = now;
-            }
-            if (timeAdvanced && now - previewRenderWatchdog.lastFrameRenderedAt > PREVIEW_FRAME_STALL_MS) {
-                kickPreviewRenderer();
-                previewRenderWatchdog.lastFrameRenderedAt = now;
-            }
-            previewRenderWatchdog.lastCurrentTime = currentTime;
-        }, PREVIEW_WATCHDOG_INTERVAL_MS);
-    }
-
-    function stopPreviewRenderWatchdog() {
-        if (!previewRenderWatchdog.enabled) return;
-        previewRenderWatchdog.enabled = false;
-        if (previewRenderWatchdog.timerId) {
-            clearInterval(previewRenderWatchdog.timerId);
-            previewRenderWatchdog.timerId = null;
-        }
-        if (previewRenderWatchdog.frameCallbackId && typeof previewVideo?.cancelVideoFrameCallback === 'function') {
-            previewVideo.cancelVideoFrameCallback(previewRenderWatchdog.frameCallbackId);
-        }
-        previewRenderWatchdog.frameCallbackId = null;
-    }
-
     function showPreview(blob) {
        if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
        previewObjectURL = URL.createObjectURL(blob);
@@ -2983,9 +2827,7 @@
             clearTimeout(previewTimeout);
             previewTimeout = null;
         }
-        stopPreviewRenderWatchdog();
         stopMusicPreview({ hard: true });
-        invalidateMusicSession();
         resetThumbnailDefaults();
         previewVideo.pause();
         previewVideo.src = '';
@@ -3028,10 +2870,6 @@
 
     previewVideo.addEventListener('play', syncOriginalMuteState);
     previewVideo.addEventListener('pause', syncOriginalMuteState);
-    previewVideo.addEventListener('play', startPreviewRenderWatchdog);
-    previewVideo.addEventListener('pause', stopPreviewRenderWatchdog);
-    previewVideo.addEventListener('ended', stopPreviewRenderWatchdog);
-    previewVideo.addEventListener('emptied', stopPreviewRenderWatchdog);
 
     flashBtn.onclick = toggleFlash;
     
