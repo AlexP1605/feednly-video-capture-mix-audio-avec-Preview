@@ -745,7 +745,7 @@
   <div id="recording-timer">0:00</div>
 
   <div id="camera-container">
-    <video id="camera-preview" playsinline muted autoplay></video>
+    <video id="camera-preview" playsinline webkit-playsinline muted autoplay></video>
     
     <div class="controls">
       <div class="top-bar">
@@ -999,6 +999,17 @@
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
+
+    function stopCameraStream() {
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => {
+          try { track.stop(); } catch (e) {}
+        });
+        mediaStream = null;
+      }
+      try { cameraPreview.pause(); } catch (e) {}
+      cameraPreview.srcObject = null;
+    }
 
     // --- AJOUT MUSIQUE (prévisualisation uniquement) : catalogue et configuration ---
     const DEFAULT_MUSIC_OPTIONS = [
@@ -2941,6 +2952,10 @@
     }
 
     function showPreview(blob) {
+       stopCameraStream();
+       previewVideo.pause();
+       previewVideo.removeAttribute('src');
+       previewVideo.load();
        if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
        previewObjectURL = URL.createObjectURL(blob);
        lockPreviewViewport();
@@ -2948,7 +2963,6 @@
        previewVideo.src = previewObjectURL;
        syncOriginalMuteState();
        previewVideo.preload = 'auto';
-       previewVideo.currentTime = 0;
        previewVideo.style.transform = recordedFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
        let previewActivated = false;
        previewVideo.oncanplay = () => {
@@ -2961,10 +2975,9 @@
              previewVideo.play().catch(() => {});
           });
        };
+       previewVideo.load();
        if (previewVideo.readyState >= 3) {
           previewVideo.oncanplay?.();
-       } else {
-          previewVideo.load();
        }
 
        // Sélection par défaut à chaque nouvelle preview
