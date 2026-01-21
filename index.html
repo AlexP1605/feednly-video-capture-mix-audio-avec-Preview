@@ -1169,7 +1169,6 @@
     const THUMBNAIL_TIME_TOLERANCE = 0.08;
     let thumbnailGenerationId = 0;
     let isThumbnailScrubbing = false;
-    let lastPreviewSeek = 0;
     function getThumbnailFrameTimes(durationSeconds) {
         const duration = Math.max(0.1, Number(durationSeconds) || 0.1);
         const step = Math.max(THUMBNAIL_MIN_STEP, Math.min(THUMBNAIL_MAX_STEP, duration / (THUMBNAIL_MAX_FRAMES - 1)));
@@ -1267,10 +1266,6 @@
             }
         });
         items.forEach((item) => item.classList.toggle('active', item === closestItem));
-        if (seekPreview && previewVideo?.readyState) {
-            const safeTime = Math.min(Math.max(0, nextTime), Math.max(previewVideo.duration || nextTime, 0));
-            safeSeekPreview(safeTime);
-        }
     }
 
     function renderThumbnailStrip(frames) {
@@ -1343,13 +1338,6 @@
         const snapped = selectNearestThumbnailFrame(time)?.time ?? time;
         // UI scrub: met à jour la sélection sans seek vidéo pendant le drag.
         setSelectedThumbnail(snapped, { seekPreview: false });
-    }
-
-    function safeSeekPreview(timeSeconds) {
-        const now = performance.now();
-        if (now - lastPreviewSeek < 33) return;
-        lastPreviewSeek = now;
-        previewVideo.currentTime = timeSeconds;
     }
 
     function seekVideoToTime(video, timeSeconds) {
@@ -2892,18 +2880,6 @@
         const now = performance.now();
         if (now - previewRenderWatchdog.lastKickAt < PREVIEW_KICK_MIN_INTERVAL_MS) return;
         previewRenderWatchdog.lastKickAt = now;
-        const currentTime = previewVideo.currentTime || 0;
-        const duration = Number(previewVideo.duration) || 0;
-        const maxSafe = duration ? Math.max(0, duration - 0.05) : currentTime + 0.01;
-        const bumpedTime = Math.min(currentTime + 0.001, maxSafe);
-        if (Number.isFinite(bumpedTime) && bumpedTime !== currentTime) {
-            previewVideo.currentTime = bumpedTime;
-            Promise.resolve().then(() => {
-                if (!previewVideo || previewVideo.paused) return;
-                previewVideo.currentTime = currentTime;
-            });
-            return;
-        }
         const baseTransform = previewVideo.style.transform || '';
         previewVideo.style.transform = `${baseTransform} translateZ(0)`;
         requestAnimationFrame(() => {
