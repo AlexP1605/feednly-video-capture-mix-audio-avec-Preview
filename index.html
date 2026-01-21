@@ -310,6 +310,12 @@
       opacity: 1;
       transform: scale(1);
     }
+    .thumbnail-label {
+      margin-top: 8px;
+      text-align: center;
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+    }
 
     .thumbnail-strip {
       display: flex;
@@ -543,7 +549,7 @@
       line-height: 1.5;
     }
     .visually-hidden { position: absolute !important; height: 1px; width: 1px; overflow: hidden; clip: rect(1px, 1px, 1px, 1px); white-space: nowrap; }
-    #preview-actions { height: 110px; min-height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px; z-index: 60; pointer-events: auto; position: fixed; left: 0; right: 0; bottom: 0; }
+    #preview-actions { height: 110px; min-height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px; z-index: 90; pointer-events: auto; position: fixed; left: 0; right: 0; bottom: 0; }
     .action-btn { flex: 1; height: 54px; font-size: 16px; font-weight: 700; border: none; cursor: pointer; border-radius: 14px; }
     #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
     #next-button { background: #fff; color: #000; }
@@ -784,6 +790,7 @@
         <div class="thumbnail-preview-wrap">
           <div id="selected-thumbnail-preview" class="thumbnail-preview" role="img" aria-label="Miniature sélectionnée"></div>
         </div>
+        <div class="thumbnail-label">Miniature sélectionnée</div>
         <div id="thumbnail-strip" class="thumbnail-strip" role="listbox" aria-label="Choisir une miniature"></div>
         <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
         <div class="preview-audio-controls">
