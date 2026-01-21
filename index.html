@@ -983,19 +983,6 @@
     let selectedThumbnailTime = 0.5;
     let thumbnailFrames = [];
     let thumbnailFramesPromise = null;
-    // Watchdog léger pour réveiller le renderer vidéo iOS si les frames se figent
-    const previewRenderWatchdog = {
-        enabled: false,
-        frameCallbackId: null,
-        timerId: null,
-        lastFrameRenderedAt: 0,
-        lastFrameCount: 0,
-        lastCurrentTime: 0,
-        lastKickAt: 0
-    };
-    const PREVIEW_WATCHDOG_INTERVAL_MS = 1200;
-    const PREVIEW_FRAME_STALL_MS = 2000;
-    const PREVIEW_KICK_MIN_INTERVAL_MS = 1500;
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
@@ -2875,82 +2862,6 @@
        if (thumbnailLoading) thumbnailLoading.hidden = true;
     }
 
-    function getPreviewFrameCount() {
-        if (!previewVideo) return null;
-        if (typeof previewVideo.getVideoPlaybackQuality === 'function') {
-            return previewVideo.getVideoPlaybackQuality().totalVideoFrames || 0;
-        }
-        if (typeof previewVideo.webkitDecodedFrameCount === 'number') {
-            return previewVideo.webkitDecodedFrameCount;
-        }
-        return null;
-    }
-
-    function kickPreviewRenderer() {
-        if (!previewVideo || previewVideo.readyState < 2 || previewVideo.paused) return;
-        const now = performance.now();
-        if (now - previewRenderWatchdog.lastKickAt < PREVIEW_KICK_MIN_INTERVAL_MS) return;
-        previewRenderWatchdog.lastKickAt = now;
-        const baseTransform = previewVideo.style.transform || '';
-        previewVideo.style.transform = `${baseTransform} translateZ(0)`;
-        requestAnimationFrame(() => {
-            if (!previewVideo) return;
-            previewVideo.style.transform = baseTransform;
-        });
-    }
-
-    function startPreviewRenderWatchdog() {
-        if (!previewVideo || previewRenderWatchdog.enabled) return;
-        previewRenderWatchdog.enabled = true;
-        previewRenderWatchdog.lastFrameRenderedAt = performance.now();
-        previewRenderWatchdog.lastFrameCount = getPreviewFrameCount() || 0;
-        previewRenderWatchdog.lastCurrentTime = previewVideo.currentTime || 0;
-        const hasFrameCallback = typeof previewVideo.requestVideoFrameCallback === 'function';
-        const trackFrame = () => {
-            if (!previewRenderWatchdog.enabled) return;
-            previewRenderWatchdog.lastFrameRenderedAt = performance.now();
-            const frameCount = getPreviewFrameCount();
-            if (frameCount !== null) {
-                previewRenderWatchdog.lastFrameCount = frameCount;
-            }
-            previewRenderWatchdog.frameCallbackId = previewVideo.requestVideoFrameCallback(trackFrame);
-        };
-        if (hasFrameCallback) {
-            previewRenderWatchdog.frameCallbackId = previewVideo.requestVideoFrameCallback(trackFrame);
-        }
-        previewRenderWatchdog.timerId = setInterval(() => {
-            if (!previewRenderWatchdog.enabled || !previewVideo) return;
-            if (previewVideo.paused || previewVideo.ended || previewVideo.readyState < 2) return;
-            if (!previewOverlay.classList.contains('active')) return;
-            const now = performance.now();
-            const currentTime = previewVideo.currentTime || 0;
-            const timeAdvanced = currentTime > previewRenderWatchdog.lastCurrentTime + 0.01;
-            const frameCount = getPreviewFrameCount();
-            if (frameCount !== null && frameCount !== previewRenderWatchdog.lastFrameCount) {
-                previewRenderWatchdog.lastFrameCount = frameCount;
-                previewRenderWatchdog.lastFrameRenderedAt = now;
-            }
-            if (timeAdvanced && now - previewRenderWatchdog.lastFrameRenderedAt > PREVIEW_FRAME_STALL_MS) {
-                kickPreviewRenderer();
-                previewRenderWatchdog.lastFrameRenderedAt = now;
-            }
-            previewRenderWatchdog.lastCurrentTime = currentTime;
-        }, PREVIEW_WATCHDOG_INTERVAL_MS);
-    }
-
-    function stopPreviewRenderWatchdog() {
-        if (!previewRenderWatchdog.enabled) return;
-        previewRenderWatchdog.enabled = false;
-        if (previewRenderWatchdog.timerId) {
-            clearInterval(previewRenderWatchdog.timerId);
-            previewRenderWatchdog.timerId = null;
-        }
-        if (previewRenderWatchdog.frameCallbackId && typeof previewVideo?.cancelVideoFrameCallback === 'function') {
-            previewVideo.cancelVideoFrameCallback(previewRenderWatchdog.frameCallbackId);
-        }
-        previewRenderWatchdog.frameCallbackId = null;
-    }
-
     function showPreview(blob) {
        stopCameraStream();
        previewVideo.pause();
@@ -2997,7 +2908,6 @@
             clearTimeout(previewTimeout);
             previewTimeout = null;
         }
-        stopPreviewRenderWatchdog();
         stopMusicPreview({ hard: true });
         invalidateMusicSession();
         resetThumbnailDefaults();
@@ -3043,13 +2953,9 @@
 
     previewVideo.addEventListener('play', syncOriginalMuteState);
     previewVideo.addEventListener('pause', syncOriginalMuteState);
-    previewVideo.addEventListener('play', startPreviewRenderWatchdog);
-    previewVideo.addEventListener('pause', stopPreviewRenderWatchdog);
     previewVideo.addEventListener('ended', () => {
-        stopPreviewRenderWatchdog();
         previewReplayBtn?.classList.add('active');
     });
-    previewVideo.addEventListener('emptied', stopPreviewRenderWatchdog);
     previewVideo.addEventListener('play', () => {
         previewReplayBtn?.classList.remove('active');
     });
@@ -3141,7 +3047,6 @@
     nextBtn.onclick = async () => {
        // Couper immédiatement la preview pour éviter le son pendant l'upload
        previewVideo.pause();
-       previewVideo.currentTime = 0;
        stopMusicPreview({ hard: true });
        let uploadPhaseTimeout = null;
        let uploadSuccessNotified = false;
