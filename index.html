@@ -175,10 +175,25 @@
       height: var(--preview-viewport-height, 100dvh);
     }
     #preview-overlay.active { display: flex; opacity: 1; }
+    .preview-edit-layout {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding-bottom: 24px;
+    }
+    .preview-media-section {
+      height: 50dvh;
+      min-height: 50dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 18px;
+    }
     .preview-video-container {
       aspect-ratio: 9 / 16;
-      width: 1080px;
-      height: 1920px;
+      width: 100%;
+      height: 100%;
       max-width: 100%;
       max-height: 100%;
       margin: auto;
@@ -189,25 +204,27 @@
       border-bottom-right-radius: 24px;
       background: #000;
     }
-    #preview-video {
+    #preview-image {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      background: #000 center / cover no-repeat;
       pointer-events: none;
-      background: #000;
+      transform: scaleX(1);
+    }
+    .preview-caption {
+      padding: 8px 18px 0;
+      color: rgba(255,255,255,0.7);
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
     }
 
     .preview-audio-controls {
-      position: absolute;
-      top: var(--preview-top-control-offset);
-      left: 0;
-      right: 0;
-      z-index: 10;
       display: flex;
       align-items: center;
-      justify-content: center;
-      padding: 0 18px;
-      pointer-events: none;
+      gap: 12px;
+      padding: 12px 18px 0;
+      pointer-events: auto;
     }
     .music-overlay {
       padding: 0 14px;
@@ -247,9 +264,6 @@
     .music-clear svg { width: 12px; height: 12px; }
     .music-clear:active { transform: scale(0.92); }
     .preview-audio-toggle {
-      position: absolute;
-      right: 18px;
-      top: 0;
       width: var(--preview-audio-control-size);
       height: var(--preview-audio-control-size);
       border-radius: 50%;
@@ -262,7 +276,6 @@
       backdrop-filter: blur(14px);
       box-shadow: 0 12px 28px rgba(0,0,0,0.35);
       transition: transform 0.2s ease;
-      pointer-events: auto;
     }
     .preview-audio-toggle:active { transform: scale(0.92); }
     .preview-audio-toggle svg { width: 22px; height: 22px; fill: currentColor; }
@@ -372,7 +385,15 @@
     .sheet-backdrop.active { opacity: 1; pointer-events: auto; }
     .sheet { position: absolute; left: 0; right: 0; bottom: 0; padding: 20px 18px 0; display: flex; flex-direction: column; gap: 18px; background: rgba(10,10,10,0.96); color: #fff; border-top-left-radius: 26px; border-top-right-radius: 26px; transform: translateY(110%); transition: transform 0.28s ease; z-index: 80; box-shadow: 0 -18px 40px rgba(0,0,0,0.55); height: 80dvh; max-height: 80dvh; overflow: hidden; }
     .sheet.active { transform: translateY(0); }
+    .inline-sheet {
+      position: relative;
+      transform: none;
+      height: auto;
+      max-height: none;
+      box-shadow: none;
+    }
     #music-filter-sheet { height: 30dvh; max-height: 30dvh; }
+    #music-controls { height: 30dvh; max-height: 30dvh; }
     .sheet .sheet-handle { width: 70px; height: 6px; border-radius: 10px; background: #2f2f2f; align-self: center; margin-bottom: 4px; }
     .sheet-content { display: flex; flex-direction: column; gap: 18px; flex: 1; overflow-y: auto; padding-bottom: 90px; }
     .sheet header { display: flex; align-items: center; justify-content: center; gap: 10px; }
@@ -519,7 +540,7 @@
       line-height: 1.5;
     }
     .visually-hidden { position: absolute !important; height: 1px; width: 1px; overflow: hidden; clip: rect(1px, 1px, 1px, 1px); white-space: nowrap; }
-    #preview-actions { height: 110px; min-height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px; z-index: 60; pointer-events: auto; }
+    #preview-actions { height: 110px; min-height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px; z-index: 60; pointer-events: auto; position: sticky; bottom: 0; }
     .action-btn { flex: 1; height: 54px; font-size: 16px; font-weight: 700; border: none; cursor: pointer; border-radius: 14px; }
     #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
     #next-button { background: #fff; color: #000; }
@@ -705,13 +726,6 @@
     input[type="file"] { display: none; }
     body.showing-preview .controls { display: none !important; }
 
-    #preview-video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      pointer-events: none;
-      background: #000;
-    }
   </style>
 </head>
 <body>
@@ -755,8 +769,42 @@
   </div>
 
     <div id="preview-overlay">
-      <div class="preview-video-container">
+      <div class="preview-edit-layout">
+        <div class="preview-media-section">
+          <div class="preview-video-container">
+            <div id="preview-image" role="img" aria-label="Aperçu de la miniature"></div>
+            <button type="button" id="thumbnail-button" class="thumbnail-button" aria-label="Choisir une miniature"></button>
+          </div>
+        </div>
+        <div class="preview-caption">Miniature de la vidéo</div>
+        <div id="thumbnail-sheet" class="sheet inline-sheet">
+          <div class="sheet-handle"></div>
+          <div class="sheet-content">
+            <header>
+              <div class="title">Miniature</div>
+            </header>
+            <p style="margin: 0; opacity: 0.65; font-size: 12px; text-align: center;">Sélectionnez l’image de couverture de votre vidéo.</p>
+            <div class="thumbnail-preview-wrap">
+              <div id="selected-thumbnail-preview" class="thumbnail-preview" role="img" aria-label="Miniature sélectionnée"></div>
+            </div>
+            <div id="thumbnail-strip" class="thumbnail-strip" role="listbox" aria-label="Choisir une miniature"></div>
+            <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
+          </div>
+        </div>
         <div class="preview-audio-controls">
+          <button type="button" id="original-mute-toggle" class="preview-audio-toggle" aria-label="Couper le son original" aria-pressed="false">
+            <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M24 104a8 8 0 0 1 8-8h40l48-48a8 8 0 0 1 13.66 5.66v144.68A8 8 0 0 1 120 206l-48-48H32a8 8 0 0 1-8-8Zm176 24a32 32 0 0 1-18.75 29.08 8 8 0 1 1-6.5-14.6 16 16 0 0 0 0-28.96 8 8 0 1 1 6.5-14.6A32 32 0 0 1 200 128Zm32 0a64 64 0 0 1-37.5 58.16 8 8 0 0 1-6.5-14.6 48 48 0 0 0 0-87.12 8 8 0 0 1 6.5-14.6A64 64 0 0 1 232 128Z"></path></svg>
+          </button>
+        </div>
+        <div id="tab-music" class="tab-panel active">
+          <div class="music-search-row">
+            <input id="music-search" type="search" placeholder="Rechercher un titre ou un artiste" />
+            <button type="button" id="music-filter-btn" class="music-filter-btn" aria-label="Filtre">
+              <svg viewBox="0 0 256 256" aria-hidden="true">
+                <path d="M40 64a8 8 0 0 1 8-8h160a8 8 0 0 1 0 16h-24v112a8 8 0 0 1-8 8h-40a8 8 0 0 1-8-8V72h-24v64a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V72h-0a8 8 0 0 1-8-8Zm24 8v56h24V72Zm80 0v104h24V72Z"></path>
+              </svg>
+            </button>
+          </div>
           <div id="music-overlay" class="music-overlay hidden">
             <div class="music-visual">
               <svg class="music-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M211.79 35.48a8 8 0 0 0-6.62-1.43l-96 20a8 8 0 0 0-6.54 7.86V168a28 28 0 1 0 16 25.45V121.89l80-16.67V152a28 28 0 1 0 16 25.45V43.91a8 8 0 0 0-3.38-6.63ZM88 216a12 12 0 1 1 12-12 12 12 0 0 1-12 12Zm28-106.67V79.12l80-16.67v30.22Zm80 106.67a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
@@ -770,12 +818,33 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4-1.4L12 9.17 7.1 4.3a1 1 0 1 0-1.4 1.4L10.83 12l-5.13 4.9a1 1 0 0 0 1.4 1.45L12 14.83l4.9 5.12a1 1 0 0 0 1.45-1.4L13.17 12Z"/></svg>
             </button>
           </div>
-          <button type="button" id="original-mute-toggle" class="preview-audio-toggle" aria-label="Couper le son original" aria-pressed="false">
-            <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M24 104a8 8 0 0 1 8-8h40l48-48a8 8 0 0 1 13.66 5.66v144.68A8 8 0 0 1 120 206l-48-48H32a8 8 0 0 1-8-8Zm176 24a32 32 0 0 1-18.75 29.08 8 8 0 1 1-6.5-14.6 16 16 0 0 0 0-28.96 8 8 0 1 1 6.5-14.6A32 32 0 0 1 200 128Zm32 0a64 64 0 0 1-37.5 58.16 8 8 0 0 1-6.5-14.6 48 48 0 0 0 0-87.12 8 8 0 0 1 6.5-14.6A64 64 0 0 1 232 128Z"></path></svg>
+          <div id="music-list"></div>
+        </div>
+        <div id="tab-audio" class="tab-panel">
+          <div class="audio-tab-title">Musique</div>
+          <div class="timeline-row" id="volume-row">
+            <label>
+              <div class="slider-meta">
+                <span class="value-chip" id="music-volume-value">50</span>
+              </div>
+              <input id="music-volume" type="range" min="0" max="1" step="0.01" value="0.5" />
+            </label>
+          </div>
+        </div>
+        <div class="tab-bar" id="music-tab-bar">
+          <button type="button" class="tab-btn active" id="tab-btn-music" aria-label="Musique">
+            <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M211.79 35.48a8 8 0 0 0-6.62-1.43l-96 20a8 8 0 0 0-6.54 7.86V168a28 28 0 1 0 16 25.45V121.89l80-16.67V152a28 28 0 1 0 16 25.45V43.91a8 8 0 0 0-3.38-6.63ZM88 216a12 12 0 1 1 12-12 12 12 0 0 1-12 12Zm28-106.67V79.12l80-16.67v30.22Zm80 106.67a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
+            <span class="tab-label">Musique</span>
+          </button>
+          <button type="button" class="tab-btn" id="tab-btn-waveform" aria-label="Waveform">
+            <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M56 64a8 8 0 0 1 8 8v112a8 8 0 0 1-16 0V72a8 8 0 0 1 8-8Zm36 24a8 8 0 0 1 8 8v64a8 8 0 0 1-16 0V96a8 8 0 0 1 8-8Zm36-40a8 8 0 0 1 8 8v144a8 8 0 0 1-16 0V56a8 8 0 0 1 8-8Zm36 32a8 8 0 0 1 8 8v96a8 8 0 0 1-16 0V88a8 8 0 0 1 8-8Zm36-24a8 8 0 0 1 8 8v144a8 8 0 0 1-16 0V64a8 8 0 0 1 8-8Z"></path></svg>
+            <span class="tab-label">Waveform</span>
+          </button>
+          <button type="button" class="tab-btn" id="tab-btn-audio" aria-label="Son">
+            <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M32 96v64a16 16 0 0 0 16 16h32l48 48a8 8 0 0 0 13.66-5.66V37.66A8 8 0 0 0 128 32L80 80H48a16 16 0 0 0-16 16Zm136 8a8 8 0 0 1 8 8v32a8 8 0 0 1-16 0v-32a8 8 0 0 1 8-8Zm32-24a8 8 0 0 1 8 8v80a8 8 0 0 1-16 0V88a8 8 0 0 1 8-8Z"></path></svg>
+            <span class="tab-label">Son</span>
           </button>
         </div>
-        <video id="preview-video" playsinline webkit-playsinline loop preload="auto"></video>
-        <button type="button" id="thumbnail-button" class="thumbnail-button" aria-label="Choisir une miniature"></button>
       </div>
       <div id="sheet-backdrop" class="sheet-backdrop"></div>
         <div id="music-controls" class="sheet">
@@ -785,17 +854,6 @@
               <div class="title">Musique</div>
             </header>
             <p style="margin: 0; opacity: 0.6; font-size: 12px; text-align: center;">La musique sera ajoutée automatiquement au moment de la publication de la vidéo.</p>
-            <div id="tab-music" class="tab-panel active">
-              <div class="music-search-row">
-                <input id="music-search" type="search" placeholder="Rechercher un titre ou un artiste" />
-                <button type="button" id="music-filter-btn" class="music-filter-btn" aria-label="Filtre">
-                  <svg viewBox="0 0 256 256" aria-hidden="true">
-                    <path d="M40 64a8 8 0 0 1 8-8h160a8 8 0 0 1 0 16h-24v112a8 8 0 0 1-8 8h-40a8 8 0 0 1-8-8V72h-24v64a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V72h-0a8 8 0 0 1-8-8Zm24 8v56h24V72Zm80 0v104h24V72Z"></path>
-                  </svg>
-                </button>
-              </div>
-              <div id="music-list"></div>
-            </div>
             <div id="tab-waveform" class="tab-panel">
               <div class="timeline-row">
                 <div class="timeline-header">
@@ -807,33 +865,6 @@
                 <div id="waveform-visual" class="waveform-visual" role="presentation">
                 </div>
               </div>
-            </div>
-            <div id="tab-audio" class="tab-panel">
-              <div class="audio-tab-title">Musique</div>
-              <div class="timeline-row" id="volume-row">
-                <label>
-                  <div class="slider-meta">
-                    <span class="value-chip" id="music-volume-value">50</span>
-                  </div>
-                  <input id="music-volume" type="range" min="0" max="1" step="0.01" value="0.5" />
-                </label>
-              </div>
-            </div>
-          </div>
-          <div class="sheet-footer">
-            <div class="tab-bar" id="music-tab-bar">
-              <button type="button" class="tab-btn active" id="tab-btn-music" aria-label="Musique">
-                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M211.79 35.48a8 8 0 0 0-6.62-1.43l-96 20a8 8 0 0 0-6.54 7.86V168a28 28 0 1 0 16 25.45V121.89l80-16.67V152a28 28 0 1 0 16 25.45V43.91a8 8 0 0 0-3.38-6.63ZM88 216a12 12 0 1 1 12-12 12 12 0 0 1-12 12Zm28-106.67V79.12l80-16.67v30.22Zm80 106.67a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
-                <span class="tab-label">Musique</span>
-              </button>
-              <button type="button" class="tab-btn" id="tab-btn-waveform" aria-label="Waveform">
-                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M56 64a8 8 0 0 1 8 8v112a8 8 0 0 1-16 0V72a8 8 0 0 1 8-8Zm36 24a8 8 0 0 1 8 8v64a8 8 0 0 1-16 0V96a8 8 0 0 1 8-8Zm36-40a8 8 0 0 1 8 8v144a8 8 0 0 1-16 0V56a8 8 0 0 1 8-8Zm36 32a8 8 0 0 1 8 8v96a8 8 0 0 1-16 0V88a8 8 0 0 1 8-8Zm36-24a8 8 0 0 1 8 8v144a8 8 0 0 1-16 0V64a8 8 0 0 1 8-8Z"></path></svg>
-                <span class="tab-label">Waveform</span>
-              </button>
-              <button type="button" class="tab-btn" id="tab-btn-audio" aria-label="Son">
-                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M32 96v64a16 16 0 0 0 16 16h32l48 48a8 8 0 0 0 13.66-5.66V37.66A8 8 0 0 0 128 32L80 80H48a16 16 0 0 0-16 16Zm136 8a8 8 0 0 1 8 8v32a8 8 0 0 1-16 0v-32a8 8 0 0 1 8-8Zm32-24a8 8 0 0 1 8 8v80a8 8 0 0 1-16 0V88a8 8 0 0 1 8-8Z"></path></svg>
-                <span class="tab-label">Son</span>
-              </button>
             </div>
           </div>
         </div>
@@ -847,20 +878,6 @@
               </div>
             </header>
             <div id="music-filter-tags" class="tag-grid"></div>
-          </div>
-        </div>
-        <div id="thumbnail-sheet" class="sheet">
-          <div class="sheet-handle"></div>
-          <div class="sheet-content">
-            <header>
-              <div class="title">Miniature</div>
-            </header>
-            <p style="margin: 0; opacity: 0.65; font-size: 12px; text-align: center;">Sélectionnez l’image de couverture de votre vidéo.</p>
-            <div class="thumbnail-preview-wrap">
-              <div id="selected-thumbnail-preview" class="thumbnail-preview" role="img" aria-label="Miniature sélectionnée"></div>
-            </div>
-            <div id="thumbnail-strip" class="thumbnail-strip" role="listbox" aria-label="Choisir une miniature"></div>
-            <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
           </div>
         </div>
     <div id="preview-actions">
@@ -881,7 +898,7 @@
 
   <script>
     const cameraPreview = document.getElementById('camera-preview');
-    const previewVideo = document.getElementById('preview-video');
+    const previewImage = document.getElementById('preview-image');
     const previewOverlay = document.getElementById('preview-overlay');
     const recordWrapBtn = document.getElementById('record-wrap-btn');
     const flashBtn = document.getElementById('flash-btn');
@@ -953,23 +970,9 @@
     let recordedChunks = [];
     let isRecording = false;
     let recordedBlob = null;
-    let previewObjectURL = null;
     let selectedThumbnailTime = 0.5;
     let thumbnailFrames = [];
     let thumbnailFramesPromise = null;
-    // Watchdog léger pour réveiller le renderer vidéo iOS si les frames se figent
-    const previewRenderWatchdog = {
-        enabled: false,
-        frameCallbackId: null,
-        timerId: null,
-        lastFrameRenderedAt: 0,
-        lastFrameCount: 0,
-        lastCurrentTime: 0,
-        lastKickAt: 0
-    };
-    const PREVIEW_WATCHDOG_INTERVAL_MS = 1200;
-    const PREVIEW_FRAME_STALL_MS = 2000;
-    const PREVIEW_KICK_MIN_INTERVAL_MS = 1500;
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
@@ -1143,7 +1146,6 @@
     const THUMBNAIL_TIME_TOLERANCE = 0.08;
     let thumbnailGenerationId = 0;
     let isThumbnailScrubbing = false;
-    let lastPreviewSeek = 0;
     function getThumbnailFrameTimes(durationSeconds) {
         const duration = Math.max(0.1, Number(durationSeconds) || 0.1);
         const step = Math.max(THUMBNAIL_MIN_STEP, Math.min(THUMBNAIL_MAX_STEP, duration / (THUMBNAIL_MAX_FRAMES - 1)));
@@ -1223,11 +1225,23 @@
         }
     }
 
-    function setSelectedThumbnail(timeSeconds, { seekPreview = false } = {}) {
+    function updatePreviewImage() {
+        if (!previewImage) return;
+        const frame = selectNearestThumbnailFrame(selectedThumbnailTime)
+            || thumbnailFrames.find(item => item.url);
+        if (frame?.url) {
+            previewImage.style.backgroundImage = `url(${frame.url})`;
+        } else {
+            previewImage.style.backgroundImage = '';
+        }
+    }
+
+    function setSelectedThumbnail(timeSeconds) {
         const nextTime = Math.max(0, Number.isFinite(timeSeconds) ? timeSeconds : DEFAULT_THUMBNAIL_TIME);
         selectedThumbnailTime = nextTime;
         updateThumbnailButtonPreview();
         updateSelectedThumbnailPreview();
+        updatePreviewImage();
         if (!thumbnailStrip) return;
         const items = thumbnailStrip.querySelectorAll('.thumbnail-frame');
         let closestItem = null;
@@ -1241,10 +1255,6 @@
             }
         });
         items.forEach((item) => item.classList.toggle('active', item === closestItem));
-        if (seekPreview && previewVideo?.readyState) {
-            const safeTime = Math.min(Math.max(0, nextTime), Math.max(previewVideo.duration || nextTime, 0));
-            safeSeekPreview(safeTime);
-        }
     }
 
     function renderThumbnailStrip(frames) {
@@ -1281,7 +1291,7 @@
             button.style.backgroundImage = frame.url ? `url(${frame.url})` : '';
             button.onclick = (e) => {
                 e.stopPropagation();
-                setSelectedThumbnail(frame.time, { seekPreview: true });
+                setSelectedThumbnail(frame.time);
             };
             fragment.appendChild(button);
         });
@@ -1316,14 +1326,7 @@
         if (!Number.isFinite(time)) return;
         const snapped = selectNearestThumbnailFrame(time)?.time ?? time;
         // UI scrub: met à jour la sélection sans seek vidéo pendant le drag.
-        setSelectedThumbnail(snapped, { seekPreview: false });
-    }
-
-    function safeSeekPreview(timeSeconds) {
-        const now = performance.now();
-        if (now - lastPreviewSeek < 33) return;
-        lastPreviewSeek = now;
-        previewVideo.currentTime = timeSeconds;
+        setSelectedThumbnail(snapped);
     }
 
     function seekVideoToTime(video, timeSeconds) {
@@ -1385,6 +1388,7 @@
                     }
                     updateThumbnailButtonPreview();
                     updateSelectedThumbnailPreview();
+                    updatePreviewImage();
                 });
             };
 
@@ -1458,6 +1462,7 @@
         })()
             .then((frames) => {
                 thumbnailFrames = frames;
+                updatePreviewImage();
                 return frames;
             })
             .catch(() => [])
@@ -1486,6 +1491,7 @@
         extractThumbnailFrames(recordedBlob).then((frames) => {
             updateThumbnailButtonPreview();
             updateSelectedThumbnailPreview();
+            updatePreviewImage();
             if (thumbnailSheet?.classList.contains('active')) {
                 renderThumbnailStrip(frames || []);
             }
@@ -2072,10 +2078,10 @@
         sheetBackdrop?.classList.toggle('active', hasActiveSheet);
     }
 
-    function openMusicSheet() {
+    function openMusicSheet(tabKey = 'music') {
         if (!musicSheet) return;
         closeThumbnailSheet();
-        setActiveTab('music');
+        setActiveTab(tabKey);
         musicSheet.classList.add('active');
         updateSheetBackdrop();
     }
@@ -2091,6 +2097,9 @@
         if (musicFilterSheet?.classList.contains('active')) {
             musicFilterSheet.classList.remove('active');
             resetFilterTag();
+        }
+        if (tabWaveform?.classList.contains('active')) {
+            setActiveTab('music');
         }
         updateSheetBackdrop();
     }
@@ -2129,9 +2138,6 @@
     }
 
     function syncOriginalMuteState() {
-        if (previewVideo) {
-            previewVideo.muted = isOriginalMuted;
-        }
         updateOriginalMuteButton();
     }
 
@@ -2144,13 +2150,19 @@
         syncOriginalMuteState();
     }
 
-    tabBtnMusic?.addEventListener('click', () => setActiveTab('music'));
+    tabBtnMusic?.addEventListener('click', () => {
+        closeMusicSheet();
+        setActiveTab('music');
+    });
     tabBtnWaveform?.addEventListener('click', () => {
-        setActiveTab('waveform');
+        openMusicSheet('waveform');
         updatePositionLabel();
         updateWaveformProgress();
     });
-    tabBtnAudio?.addEventListener('click', () => setActiveTab('audio'));
+    tabBtnAudio?.addEventListener('click', () => {
+        closeMusicSheet();
+        setActiveTab('audio');
+    });
 
     musicOverlay.onclick = (e) => { e.stopPropagation(); openMusicSheet(); };
     originalMuteToggleBtn?.addEventListener('click', (e) => {
@@ -2243,10 +2255,9 @@
                     mediaStream = null;
                 }
             }
-            if (previewOverlay.classList.contains('active')) {
-                previewVideo.pause();
-                stopMusicPreview({ hard: true });
-            }
+        if (previewOverlay.classList.contains('active')) {
+            stopMusicPreview({ hard: true });
+        }
         } else {
             if (
                 !mediaStream &&
@@ -2450,20 +2461,11 @@
         renderMusicList(musicSearchInput.value);
     }
 
-    function restartPreviewIfPlaying() {
-        if (!currentlyPlayingMusicId) return;
-        const music = musicOptions.find(opt => opt.id === currentlyPlayingMusicId);
-        if (!music) return;
-        if (musicEngine?.isPlaying) {
-            startMusicPreview(music);
-        }
-    }
-
     async function startMusicPreview(opt) {
         if (!opt || !musicEngine) return;
         const sessionId = musicSessionId;
         const expectedId = opt.id;
-        const shouldResumePreview = previewOverlay.classList.contains('active') && previewVideo && !previewVideo.paused && !previewVideo.ended;
+        openMusicSheet('waveform');
 
         if (currentlyPlayingMusicId && currentlyPlayingMusicId !== opt.id) {
             stopMusicPreview({ hard: false });
@@ -2491,9 +2493,6 @@
                 await audioCtx.resume().catch(() => {});
             }
             const duration = await musicEngine.load(opt.url, { id: opt.id });
-            if (shouldResumePreview && previewVideo.paused) {
-                previewVideo.play().catch(() => {});
-            }
             if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
                 musicEngine.stop();
                 return;
@@ -2850,120 +2849,43 @@
        if (thumbnailLoading) thumbnailLoading.hidden = true;
     }
 
-    function getPreviewFrameCount() {
-        if (!previewVideo) return null;
-        if (typeof previewVideo.getVideoPlaybackQuality === 'function') {
-            return previewVideo.getVideoPlaybackQuality().totalVideoFrames || 0;
-        }
-        if (typeof previewVideo.webkitDecodedFrameCount === 'number') {
-            return previewVideo.webkitDecodedFrameCount;
-        }
-        return null;
-    }
-
-    function kickPreviewRenderer() {
-        if (!previewVideo || previewVideo.readyState < 2 || previewVideo.paused) return;
-        const now = performance.now();
-        if (now - previewRenderWatchdog.lastKickAt < PREVIEW_KICK_MIN_INTERVAL_MS) return;
-        previewRenderWatchdog.lastKickAt = now;
-        const currentTime = previewVideo.currentTime || 0;
-        const duration = Number(previewVideo.duration) || 0;
-        const maxSafe = duration ? Math.max(0, duration - 0.05) : currentTime + 0.01;
-        const bumpedTime = Math.min(currentTime + 0.001, maxSafe);
-        if (Number.isFinite(bumpedTime) && bumpedTime !== currentTime) {
-            previewVideo.currentTime = bumpedTime;
-            Promise.resolve().then(() => {
-                if (!previewVideo || previewVideo.paused) return;
-                previewVideo.currentTime = currentTime;
-            });
-            return;
-        }
-        const baseTransform = previewVideo.style.transform || '';
-        previewVideo.style.transform = `${baseTransform} translateZ(0)`;
-        requestAnimationFrame(() => {
-            if (!previewVideo) return;
-            previewVideo.style.transform = baseTransform;
+    function loadVideoMetadata(blob) {
+        return new Promise((resolve) => {
+            if (!blob) {
+                resolve({ duration: 0 });
+                return;
+            }
+            const tempVideo = document.createElement('video');
+            const objectUrl = URL.createObjectURL(blob);
+            tempVideo.preload = 'metadata';
+            tempVideo.src = objectUrl;
+            tempVideo.muted = true;
+            tempVideo.playsInline = true;
+            tempVideo.setAttribute('playsinline', '');
+            tempVideo.onloadedmetadata = () => {
+                const duration = Math.max(0, Number(tempVideo.duration) || 0);
+                tempVideo.removeAttribute('src');
+                tempVideo.load();
+                URL.revokeObjectURL(objectUrl);
+                resolve({ duration });
+            };
+            tempVideo.onerror = () => {
+                tempVideo.removeAttribute('src');
+                tempVideo.load();
+                URL.revokeObjectURL(objectUrl);
+                resolve({ duration: 0 });
+            };
         });
     }
 
-    function startPreviewRenderWatchdog() {
-        if (!previewVideo || previewRenderWatchdog.enabled) return;
-        previewRenderWatchdog.enabled = true;
-        previewRenderWatchdog.lastFrameRenderedAt = performance.now();
-        previewRenderWatchdog.lastFrameCount = getPreviewFrameCount() || 0;
-        previewRenderWatchdog.lastCurrentTime = previewVideo.currentTime || 0;
-        const hasFrameCallback = typeof previewVideo.requestVideoFrameCallback === 'function';
-        const trackFrame = () => {
-            if (!previewRenderWatchdog.enabled) return;
-            previewRenderWatchdog.lastFrameRenderedAt = performance.now();
-            const frameCount = getPreviewFrameCount();
-            if (frameCount !== null) {
-                previewRenderWatchdog.lastFrameCount = frameCount;
-            }
-            previewRenderWatchdog.frameCallbackId = previewVideo.requestVideoFrameCallback(trackFrame);
-        };
-        if (hasFrameCallback) {
-            previewRenderWatchdog.frameCallbackId = previewVideo.requestVideoFrameCallback(trackFrame);
-        }
-        previewRenderWatchdog.timerId = setInterval(() => {
-            if (!previewRenderWatchdog.enabled || !previewVideo) return;
-            if (previewVideo.paused || previewVideo.ended || previewVideo.readyState < 2) return;
-            if (!previewOverlay.classList.contains('active')) return;
-            const now = performance.now();
-            const currentTime = previewVideo.currentTime || 0;
-            const timeAdvanced = currentTime > previewRenderWatchdog.lastCurrentTime + 0.01;
-            const frameCount = getPreviewFrameCount();
-            if (frameCount !== null && frameCount !== previewRenderWatchdog.lastFrameCount) {
-                previewRenderWatchdog.lastFrameCount = frameCount;
-                previewRenderWatchdog.lastFrameRenderedAt = now;
-            }
-            if (timeAdvanced && now - previewRenderWatchdog.lastFrameRenderedAt > PREVIEW_FRAME_STALL_MS) {
-                kickPreviewRenderer();
-                previewRenderWatchdog.lastFrameRenderedAt = now;
-            }
-            previewRenderWatchdog.lastCurrentTime = currentTime;
-        }, PREVIEW_WATCHDOG_INTERVAL_MS);
-    }
-
-    function stopPreviewRenderWatchdog() {
-        if (!previewRenderWatchdog.enabled) return;
-        previewRenderWatchdog.enabled = false;
-        if (previewRenderWatchdog.timerId) {
-            clearInterval(previewRenderWatchdog.timerId);
-            previewRenderWatchdog.timerId = null;
-        }
-        if (previewRenderWatchdog.frameCallbackId && typeof previewVideo?.cancelVideoFrameCallback === 'function') {
-            previewVideo.cancelVideoFrameCallback(previewRenderWatchdog.frameCallbackId);
-        }
-        previewRenderWatchdog.frameCallbackId = null;
-    }
-
     function showPreview(blob) {
-       if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
-       previewObjectURL = URL.createObjectURL(blob);
        lockPreviewViewport();
-       previewVideo.src = previewObjectURL;
        syncOriginalMuteState();
-       previewVideo.preload = 'auto';
-       previewVideo.loop = true;
-       previewVideo.currentTime = 0;
-       previewVideo.style.transform = recordedFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
-       let previewActivated = false;
-       previewVideo.oncanplay = () => {
-          if (previewActivated) return;
-          previewActivated = true;
-          previewVideo.oncanplay = null;
-          requestAnimationFrame(() => {
-             previewOverlay.classList.add('active');
-             document.body.classList.add('showing-preview');
-             previewVideo.play().catch(() => {});
-          });
-       };
-       if (previewVideo.readyState >= 3) {
-          previewVideo.oncanplay?.();
-       } else {
-          previewVideo.load();
+       if (previewImage) {
+           previewImage.style.transform = recordedFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
        }
+       previewOverlay.classList.add('active');
+       document.body.classList.add('showing-preview');
 
        // Sélection par défaut à chaque nouvelle preview
        resetThumbnailDefaults();
@@ -2975,6 +2897,24 @@
        syncOriginalMuteState();
        updateMusicSelectionUI();
        prepareThumbnailPreview();
+
+       loadVideoMetadata(blob).then(({ duration }) => {
+           videoDurationSeconds = duration;
+           if (shouldCheckDuration && duration > 61) {
+               const sec = Math.round(duration);
+               showError(`Vidéo trop longue (${Math.floor(sec/60)}m${sec%60}s). Max 60s.`);
+               hidePreview();
+               shouldCheckDuration = false;
+               return;
+           }
+           shouldCheckDuration = false;
+           if (duration && selectedThumbnailTime > duration) {
+               setSelectedThumbnail(duration);
+           }
+           setSeekLimits(currentMusicDuration);
+           updateMusicOverlay();
+           updateMusicSelectionUI();
+       });
     }
 
     function resetPreviewState() {
@@ -2982,18 +2922,14 @@
             clearTimeout(previewTimeout);
             previewTimeout = null;
         }
-        stopPreviewRenderWatchdog();
         stopMusicPreview({ hard: true });
         invalidateMusicSession();
         resetThumbnailDefaults();
-        previewVideo.pause();
-        previewVideo.src = '';
-        if (previewObjectURL) {
-            URL.revokeObjectURL(previewObjectURL);
-            previewObjectURL = null;
-       }
        recordedBlob = null;
        videoDurationSeconds = 0;
+        if (previewImage) {
+            previewImage.style.backgroundImage = '';
+        }
     }
 
     function hidePreview() {
@@ -3006,31 +2942,6 @@
            startCamera();
        }
     }
-
-    previewVideo.onloadedmetadata = () => {
-        videoDurationSeconds = Math.max(0, Number(previewVideo.duration) || 0);
-        if (shouldCheckDuration) {
-            if (previewVideo.duration > 61) {
-                const sec = Math.round(previewVideo.duration);
-                showError(`Vidéo trop longue (${Math.floor(sec/60)}m${sec%60}s). Max 60s.`);
-                hidePreview();
-            }
-            shouldCheckDuration = false;
-        }
-        if (videoDurationSeconds && selectedThumbnailTime > videoDurationSeconds) {
-            setSelectedThumbnail(videoDurationSeconds);
-        }
-        setSeekLimits(currentMusicDuration);
-        updateMusicOverlay();
-        restartPreviewIfPlaying();
-    };
-
-    previewVideo.addEventListener('play', syncOriginalMuteState);
-    previewVideo.addEventListener('pause', syncOriginalMuteState);
-    previewVideo.addEventListener('play', startPreviewRenderWatchdog);
-    previewVideo.addEventListener('pause', stopPreviewRenderWatchdog);
-    previewVideo.addEventListener('ended', stopPreviewRenderWatchdog);
-    previewVideo.addEventListener('emptied', stopPreviewRenderWatchdog);
 
     flashBtn.onclick = toggleFlash;
     
@@ -3064,11 +2975,8 @@
         shouldCheckDuration = false;
 
         // 💥 VIDE LES SOURCES VIDÉO AVANT hidePreview()
-        previewVideo.pause();
-        previewVideo.src = '';
-        if (previewObjectURL) {
-            URL.revokeObjectURL(previewObjectURL);
-            previewObjectURL = null;
+        if (previewImage) {
+            previewImage.style.backgroundImage = '';
         }
 
         // 💥 MAINTENANT on peut cacher la preview
@@ -3111,8 +3019,6 @@
 
     nextBtn.onclick = async () => {
        // Couper immédiatement la preview pour éviter le son pendant l'upload
-       previewVideo.pause();
-       previewVideo.currentTime = 0;
        stopMusicPreview({ hard: true });
        let uploadPhaseTimeout = null;
        let uploadSuccessNotified = false;
@@ -3311,13 +3217,6 @@
             closeMusicSheet();
          }
          return;
-      }
-      if(!tappedAction) {
-         if (previewVideo.paused) {
-            previewVideo.play().catch(()=>{});
-         } else {
-            previewVideo.pause();
-         }
       }
     };
 
