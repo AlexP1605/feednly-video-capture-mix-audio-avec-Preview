@@ -174,23 +174,27 @@
       transition: opacity 0.2s ease;
       width: var(--preview-viewport-width, 100%);
       height: var(--preview-viewport-height, 100dvh);
+      overflow-y: auto;
     }
     #preview-overlay.active { display: flex; opacity: 1; }
     .preview-video-container {
-      aspect-ratio: 9 / 16;
-      width: 1080px;
-      height: 1920px;
+      width: 100%;
       max-width: 100%;
-      max-height: 100%;
-      margin: auto;
+      margin: 0 auto;
       flex: 1;
       position: relative;
       overflow: hidden;
       border-bottom-left-radius: 24px;
       border-bottom-right-radius: 24px;
       background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: max(16px, env(safe-area-inset-top)) 18px calc(140px + env(safe-area-inset-bottom));
     }
     #preview-video {
+      display: none;
       width: 100%;
       height: 100%;
       object-fit: cover;
@@ -199,16 +203,14 @@
     }
 
     .preview-audio-controls {
-      position: absolute;
-      top: var(--preview-top-control-offset);
-      left: 0;
-      right: 0;
+      position: static;
       z-index: 10;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 0 18px;
       pointer-events: none;
+      width: 100%;
     }
     .music-overlay {
       padding: 0 14px;
@@ -292,8 +294,8 @@
       justify-content: center;
     }
     .thumbnail-preview {
-      width: min(190px, 58vw);
-      aspect-ratio: 9 / 16;
+      width: min(200px, 60vw);
+      aspect-ratio: 2 / 3;
       border-radius: 16px;
       border: 1px solid rgba(255,255,255,0.2);
       background: rgba(255,255,255,0.08);
@@ -358,13 +360,34 @@
       text-align: center;
       padding: 18px 0;
     }
-
-    #thumbnail-sheet .sheet-content {
-      overflow: hidden;
-      padding-bottom: 24px;
-      align-items: center;
+    .inline-music-controls {
+      position: relative;
+      left: auto;
+      right: auto;
+      bottom: auto;
+      transform: none;
+      height: auto;
+      max-height: none;
+      box-shadow: none;
+      border-top-left-radius: 26px;
+      border-top-right-radius: 26px;
     }
-    #thumbnail-sheet .sheet-content > * { width: 100%; }
+    .inline-music-controls.hidden { display: none; }
+    .original-audio-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .original-audio-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #fff;
+    }
 
     .sheet-backdrop {
       position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.75));
@@ -520,7 +543,7 @@
       line-height: 1.5;
     }
     .visually-hidden { position: absolute !important; height: 1px; width: 1px; overflow: hidden; clip: rect(1px, 1px, 1px, 1px); white-space: nowrap; }
-    #preview-actions { height: 110px; min-height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px; z-index: 60; pointer-events: auto; }
+    #preview-actions { height: 110px; min-height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px; z-index: 60; pointer-events: auto; position: fixed; left: 0; right: 0; bottom: 0; }
     .action-btn { flex: 1; height: 54px; font-size: 16px; font-weight: 700; border: none; cursor: pointer; border-radius: 14px; }
     #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
     #next-button { background: #fff; color: #000; }
@@ -707,6 +730,7 @@
     body.showing-preview .controls { display: none !important; }
 
     #preview-video {
+      display: none;
       width: 100%;
       height: 100%;
       object-fit: cover;
@@ -757,6 +781,11 @@
 
     <div id="preview-overlay">
       <div class="preview-video-container">
+        <div class="thumbnail-preview-wrap">
+          <div id="selected-thumbnail-preview" class="thumbnail-preview" role="img" aria-label="Miniature sélectionnée"></div>
+        </div>
+        <div id="thumbnail-strip" class="thumbnail-strip" role="listbox" aria-label="Choisir une miniature"></div>
+        <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
         <div class="preview-audio-controls">
           <div id="music-overlay" class="music-overlay hidden">
             <div class="music-visual">
@@ -771,15 +800,13 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4-1.4L12 9.17 7.1 4.3a1 1 0 1 0-1.4 1.4L10.83 12l-5.13 4.9a1 1 0 0 0 1.4 1.45L12 14.83l4.9 5.12a1 1 0 0 0 1.45-1.4L13.17 12Z"/></svg>
             </button>
           </div>
-          <button type="button" id="original-mute-toggle" class="preview-audio-toggle" aria-label="Couper le son original" aria-pressed="false">
-            <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M24 104a8 8 0 0 1 8-8h40l48-48a8 8 0 0 1 13.66 5.66v144.68A8 8 0 0 1 120 206l-48-48H32a8 8 0 0 1-8-8Zm176 24a32 32 0 0 1-18.75 29.08 8 8 0 1 1-6.5-14.6 16 16 0 0 0 0-28.96 8 8 0 1 1 6.5-14.6A32 32 0 0 1 200 128Zm32 0a64 64 0 0 1-37.5 58.16 8 8 0 0 1-6.5-14.6 48 48 0 0 0 0-87.12 8 8 0 0 1 6.5-14.6A64 64 0 0 1 232 128Z"></path></svg>
-          </button>
         </div>
-        <video id="preview-video" playsinline webkit-playsinline loop preload="auto"></video>
-        <button type="button" id="thumbnail-button" class="thumbnail-button" aria-label="Choisir une miniature"></button>
-      </div>
-      <div id="sheet-backdrop" class="sheet-backdrop"></div>
-        <div id="music-controls" class="sheet">
+        <div class="original-audio-row">
+          <span>Couper le son original de la vidéo</span>
+          <input type="checkbox" id="original-mute-toggle" aria-label="Couper le son original" />
+        </div>
+        <video id="preview-video" playsinline webkit-playsinline preload="auto"></video>
+        <div id="music-controls" class="sheet inline-music-controls hidden">
           <div class="sheet-handle"></div>
           <div class="sheet-content">
             <header>
@@ -838,32 +865,20 @@
             </div>
           </div>
         </div>
-        <div id="music-filter-sheet" class="sheet">
-          <div class="sheet-handle"></div>
-          <div class="sheet-content">
-            <header>
-              <div class="title">
-                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M40 64a8 8 0 0 1 8-8h160a8 8 0 0 1 0 16h-24v112a8 8 0 0 1-8 8h-40a8 8 0 0 1-8-8V72h-24v64a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V72h0a8 8 0 0 1-8-8Zm24 8v56h24V72Zm80 0v104h24V72Z"></path></svg>
-                <span>Filtres</span>
-              </div>
-            </header>
-            <div id="music-filter-tags" class="tag-grid"></div>
-          </div>
-        </div>
-        <div id="thumbnail-sheet" class="sheet">
-          <div class="sheet-handle"></div>
-          <div class="sheet-content">
-            <header>
-              <div class="title">Miniature</div>
-            </header>
-            <p style="margin: 0; opacity: 0.65; font-size: 12px; text-align: center;">Sélectionnez l’image de couverture de votre vidéo.</p>
-            <div class="thumbnail-preview-wrap">
-              <div id="selected-thumbnail-preview" class="thumbnail-preview" role="img" aria-label="Miniature sélectionnée"></div>
+      </div>
+      <div id="sheet-backdrop" class="sheet-backdrop"></div>
+      <div id="music-filter-sheet" class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-content">
+          <header>
+            <div class="title">
+              <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M40 64a8 8 0 0 1 8-8h160a8 8 0 0 1 0 16h-24v112a8 8 0 0 1-8 8h-40a8 8 0 0 1-8-8V72h-24v64a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V72h0a8 8 0 0 1-8-8Zm24 8v56h24V72Zm80 0v104h24V72Z"></path></svg>
+              <span>Filtres</span>
             </div>
-            <div id="thumbnail-strip" class="thumbnail-strip" role="listbox" aria-label="Choisir une miniature"></div>
-            <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
-          </div>
+          </header>
+          <div id="music-filter-tags" class="tag-grid"></div>
         </div>
+      </div>
     <div id="preview-actions">
       <button type="button" id="restart-button" class="action-btn">Recommencer</button>
       <button type="button" id="next-button" class="action-btn">Suivant</button>
@@ -903,7 +918,6 @@
     const errorToast = document.getElementById('error-toast');
     const recordingTimer = document.getElementById('recording-timer');
     const musicOverlay = document.getElementById('music-overlay');
-    const originalMuteToggleBtn = document.getElementById('original-mute-toggle');
     const musicOverlayTitle = musicOverlay.querySelector('.music-title');
     const musicOverlayArtist = musicOverlay.querySelector('.music-artist');
     const musicOverlayDuration = document.getElementById('music-duration');
@@ -919,8 +933,7 @@
     const musicFilterTags = document.getElementById('music-filter-tags');
     const sheetBackdrop = document.getElementById('sheet-backdrop');
     const waveformVisual = document.getElementById('waveform-visual');
-    const thumbnailButton = document.getElementById('thumbnail-button');
-    const thumbnailSheet = document.getElementById('thumbnail-sheet');
+    const originalMuteToggleInput = document.getElementById('original-mute-toggle');
     const selectedThumbnailPreview = document.getElementById('selected-thumbnail-preview');
     const thumbnailStrip = document.getElementById('thumbnail-strip');
     const thumbnailLoading = document.getElementById('thumbnail-loading');
@@ -958,19 +971,6 @@
     let selectedThumbnailTime = 0.5;
     let thumbnailFrames = [];
     let thumbnailFramesPromise = null;
-    // Watchdog léger pour réveiller le renderer vidéo iOS si les frames se figent
-    const previewRenderWatchdog = {
-        enabled: false,
-        frameCallbackId: null,
-        timerId: null,
-        lastFrameRenderedAt: 0,
-        lastFrameCount: 0,
-        lastCurrentTime: 0,
-        lastKickAt: 0
-    };
-    const PREVIEW_WATCHDOG_INTERVAL_MS = 1200;
-    const PREVIEW_FRAME_STALL_MS = 2000;
-    const PREVIEW_KICK_MIN_INTERVAL_MS = 1500;
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
@@ -1202,16 +1202,6 @@
         }, null);
     }
 
-    function updateThumbnailButtonPreview() {
-        if (!thumbnailButton) return;
-        const frame = selectNearestThumbnailFrame(selectedThumbnailTime);
-        if (frame?.url) {
-            thumbnailButton.style.backgroundImage = `url(${frame.url})`;
-        } else {
-            thumbnailButton.style.backgroundImage = '';
-        }
-    }
-
     function updateSelectedThumbnailPreview() {
         if (!selectedThumbnailPreview) return;
         const frame = selectNearestThumbnailFrame(selectedThumbnailTime);
@@ -1227,7 +1217,6 @@
     function setSelectedThumbnail(timeSeconds, { seekPreview = false } = {}) {
         const nextTime = Math.max(0, Number.isFinite(timeSeconds) ? timeSeconds : DEFAULT_THUMBNAIL_TIME);
         selectedThumbnailTime = nextTime;
-        updateThumbnailButtonPreview();
         updateSelectedThumbnailPreview();
         if (!thumbnailStrip) return;
         const items = thumbnailStrip.querySelectorAll('.thumbnail-frame');
@@ -1282,7 +1271,7 @@
             button.style.backgroundImage = frame.url ? `url(${frame.url})` : '';
             button.onclick = (e) => {
                 e.stopPropagation();
-                setSelectedThumbnail(frame.time, { seekPreview: true });
+                setSelectedThumbnail(frame.time, { seekPreview: false });
             };
             fragment.appendChild(button);
         });
@@ -1381,10 +1370,7 @@
                 requestAnimationFrame(() => {
                     renderScheduled = false;
                     if (currentGeneration !== thumbnailGenerationId) return;
-                    if (thumbnailSheet?.classList.contains('active')) {
-                        renderThumbnailStrip(frames);
-                    }
-                    updateThumbnailButtonPreview();
+                    renderThumbnailStrip(frames);
                     updateSelectedThumbnailPreview();
                 });
             };
@@ -1414,9 +1400,7 @@
             // UX: réserver toute la bande pour éviter les sauts visuels pendant le chargement
             frames = times.map(time => ({ time, url: '' }));
             thumbnailFrames = frames;
-            if (thumbnailSheet?.classList.contains('active')) {
-                renderThumbnailStrip(frames);
-            }
+            renderThumbnailStrip(frames);
             const immediateTimes = getImmediateThumbnailTimes(duration);
             const remainingTimes = times.filter(
                 time => !immediateTimes.some(immediate => Math.abs(immediate - time) < THUMBNAIL_TIME_TOLERANCE),
@@ -1470,26 +1454,11 @@
         return thumbnailFramesPromise;
     }
 
-    function openThumbnailPicker() {
-        if (!thumbnailSheet) return;
-        closeMusicSheet();
-        thumbnailSheet.classList.add('active');
-        updateSheetBackdrop();
-        updateSelectedThumbnailPreview();
-        extractThumbnailFrames(recordedBlob).then((frames) => {
-            renderThumbnailStrip(frames || []);
-            updateThumbnailButtonPreview();
-        });
-    }
-
     function prepareThumbnailPreview() {
         if (!recordedBlob) return;
         extractThumbnailFrames(recordedBlob).then((frames) => {
-            updateThumbnailButtonPreview();
             updateSelectedThumbnailPreview();
-            if (thumbnailSheet?.classList.contains('active')) {
-                renderThumbnailStrip(frames || []);
-            }
+            renderThumbnailStrip(frames || []);
         });
     }
 
@@ -1860,6 +1829,7 @@
         syncVolumeLabels();
         renderMusicList(musicSearchInput.value);
         updateMusicOverlay();
+        closeMusicSheet();
         stopMusicPreview({ hard: true });
         invalidateMusicSession();
         updateMusicSelectionUI();
@@ -1878,6 +1848,7 @@
         updateMusicOverlay();
         renderMusicList(musicSearchInput.value);
         updateMusicSelectionUI();
+        closeMusicSheet();
         stopMusicPreview({ hard: true });
         invalidateMusicSession();
     }
@@ -2067,18 +2038,14 @@
     }
 
     function updateSheetBackdrop() {
-        const hasActiveSheet = musicSheet?.classList.contains('active')
-            || musicFilterSheet?.classList.contains('active')
-            || thumbnailSheet?.classList.contains('active');
+        const hasActiveSheet = musicFilterSheet?.classList.contains('active');
         sheetBackdrop?.classList.toggle('active', hasActiveSheet);
     }
 
     function openMusicSheet() {
         if (!musicSheet) return;
-        closeThumbnailSheet();
         setActiveTab('music');
-        musicSheet.classList.add('active');
-        updateSheetBackdrop();
+        musicSheet.classList.remove('hidden');
     }
 
     function openFilterSheet() {
@@ -2088,7 +2055,7 @@
     }
 
     function closeMusicSheet() {
-        musicSheet?.classList.remove('active');
+        musicSheet?.classList.add('hidden');
         if (musicFilterSheet?.classList.contains('active')) {
             musicFilterSheet.classList.remove('active');
             resetFilterTag();
@@ -2104,29 +2071,14 @@
         updateSheetBackdrop();
     }
 
-    function closeThumbnailSheet() {
-        thumbnailSheet?.classList.remove('active');
-        updateSheetBackdrop();
-    }
-
     function syncVolumeLabels() {
         if (musicVolumeValue) musicVolumeValue.textContent = Math.round((parseFloat(musicVolumeInput.value) || 0) * 100);
     }
 
-    const originalVolumeIconOn = `
-      <svg viewBox="0 0 256 256" aria-hidden="true">
-        <path d="M24 104a8 8 0 0 1 8-8h40l48-48a8 8 0 0 1 13.66 5.66v144.68A8 8 0 0 1 120 206l-48-48H32a8 8 0 0 1-8-8Zm176 24a32 32 0 0 1-18.75 29.08 8 8 0 1 1-6.5-14.6 16 16 0 0 0 0-28.96 8 8 0 1 1 6.5-14.6A32 32 0 0 1 200 128Zm32 0a64 64 0 0 1-37.5 58.16 8 8 0 0 1-6.5-14.6 48 48 0 0 0 0-87.12 8 8 0 0 1 6.5-14.6A64 64 0 0 1 232 128Z"></path>
-      </svg>`;
-    const originalVolumeIconOff = `
-      <svg viewBox="0 0 256 256" aria-hidden="true">
-        <path d="M200 128a64 64 0 0 1-12.62 38.38 8 8 0 0 1-12.76-9.76 48 48 0 0 0 0-57.24 8 8 0 0 1 12.76-9.76A64 64 0 0 1 200 128Zm-88.82 56.92a8 8 0 0 1-8.86-1.72L64.69 146H32a8 8 0 0 1-8-8v-20a8 8 0 0 1 8-8h32.69l37.63-37.2A8 8 0 0 1 120 78.66v98.68a8 8 0 0 1-8.82 7.58ZM226.34 29.66a8 8 0 0 0-11.32 0L29.66 215.02a8 8 0 0 0 11.32 11.32L226.34 40.98a8 8 0 0 0 0-11.32Z"></path>
-      </svg>`;
-
     function updateOriginalMuteButton() {
-        if (!originalMuteToggleBtn) return;
-        originalMuteToggleBtn.setAttribute('aria-pressed', String(isOriginalMuted));
-        originalMuteToggleBtn.setAttribute('aria-label', isOriginalMuted ? 'Réactiver le son original' : 'Couper le son original');
-        originalMuteToggleBtn.innerHTML = isOriginalMuted ? originalVolumeIconOff : originalVolumeIconOn;
+        if (!originalMuteToggleInput) return;
+        originalMuteToggleInput.checked = isOriginalMuted;
+        originalMuteToggleInput.setAttribute('aria-label', isOriginalMuted ? 'Réactiver le son original' : 'Couper le son original');
     }
 
     function syncOriginalMuteState() {
@@ -2154,9 +2106,9 @@
     tabBtnAudio?.addEventListener('click', () => setActiveTab('audio'));
 
     musicOverlay.onclick = (e) => { e.stopPropagation(); openMusicSheet(); };
-    originalMuteToggleBtn?.addEventListener('click', (e) => {
+    originalMuteToggleInput?.addEventListener('change', (e) => {
         e.stopPropagation();
-        toggleOriginalMute();
+        toggleOriginalMute(Boolean(e.target.checked));
     });
     musicClearBtn.onclick = (e) => { e.stopPropagation(); clearMusicSelection(); };
     musicSearchInput.oninput = (e) => renderMusicList(e.target.value);
@@ -2170,19 +2122,10 @@
     });
     musicSheet.onclick = (e) => e.stopPropagation();
     musicFilterSheet.onclick = (e) => e.stopPropagation();
-    thumbnailSheet.onclick = (e) => e.stopPropagation();
-    thumbnailButton?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openThumbnailPicker();
-    });
     sheetBackdrop.onclick = (e) => {
         e.stopPropagation();
         if (musicFilterSheet?.classList.contains('active')) {
             closeFilterSheet();
-            return;
-        }
-        if (thumbnailSheet?.classList.contains('active')) {
-            closeThumbnailSheet();
             return;
         }
         closeMusicSheet();
@@ -2195,16 +2138,12 @@
                 closeFilterSheet();
                 return;
             }
-            if (thumbnailSheet?.classList.contains('active')) {
-                closeThumbnailSheet();
-                return;
-            }
             closeMusicSheet();
         }
     });
 
     let sheetTouchStartY = null;
-    [musicSheet, musicFilterSheet, thumbnailSheet].forEach((sheet) => {
+    [musicSheet, musicFilterSheet].forEach((sheet) => {
         sheet?.addEventListener('touchstart', (e) => {
             sheetTouchStartY = e.touches[0]?.clientY ?? null;
         }, { passive: true });
@@ -2215,8 +2154,6 @@
             if (endY - sheetTouchStartY > 60) {
                 if (sheet === musicFilterSheet) {
                     closeFilterSheet();
-                } else if (sheet === thumbnailSheet) {
-                    closeThumbnailSheet();
                 } else {
                     closeMusicSheet();
                 }
@@ -2245,7 +2182,6 @@
                 }
             }
             if (previewOverlay.classList.contains('active')) {
-                previewVideo.pause();
                 stopMusicPreview({ hard: true });
             }
         } else {
@@ -2464,7 +2400,6 @@
         if (!opt || !musicEngine) return;
         const sessionId = musicSessionId;
         const expectedId = opt.id;
-        const shouldResumePreview = previewOverlay.classList.contains('active') && previewVideo && !previewVideo.paused && !previewVideo.ended;
 
         if (currentlyPlayingMusicId && currentlyPlayingMusicId !== opt.id) {
             stopMusicPreview({ hard: false });
@@ -2492,9 +2427,6 @@
                 await audioCtx.resume().catch(() => {});
             }
             const duration = await musicEngine.load(opt.url, { id: opt.id });
-            if (shouldResumePreview && previewVideo.paused) {
-                previewVideo.play().catch(() => {});
-            }
             if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
                 musicEngine.stop();
                 return;
@@ -2843,100 +2775,11 @@
        thumbnailFrames = [];
        thumbnailFramesPromise = null;
        if (thumbnailStrip) thumbnailStrip.innerHTML = '';
-       if (thumbnailButton) thumbnailButton.style.backgroundImage = '';
        if (selectedThumbnailPreview) {
            selectedThumbnailPreview.style.backgroundImage = '';
            selectedThumbnailPreview.classList.remove('ready');
        }
        if (thumbnailLoading) thumbnailLoading.hidden = true;
-    }
-
-    function getPreviewFrameCount() {
-        if (!previewVideo) return null;
-        if (typeof previewVideo.getVideoPlaybackQuality === 'function') {
-            return previewVideo.getVideoPlaybackQuality().totalVideoFrames || 0;
-        }
-        if (typeof previewVideo.webkitDecodedFrameCount === 'number') {
-            return previewVideo.webkitDecodedFrameCount;
-        }
-        return null;
-    }
-
-    function kickPreviewRenderer() {
-        if (!previewVideo || previewVideo.readyState < 2 || previewVideo.paused) return;
-        const now = performance.now();
-        if (now - previewRenderWatchdog.lastKickAt < PREVIEW_KICK_MIN_INTERVAL_MS) return;
-        previewRenderWatchdog.lastKickAt = now;
-        const currentTime = previewVideo.currentTime || 0;
-        const duration = Number(previewVideo.duration) || 0;
-        const maxSafe = duration ? Math.max(0, duration - 0.05) : currentTime + 0.01;
-        const bumpedTime = Math.min(currentTime + 0.001, maxSafe);
-        if (Number.isFinite(bumpedTime) && bumpedTime !== currentTime) {
-            previewVideo.currentTime = bumpedTime;
-            Promise.resolve().then(() => {
-                if (!previewVideo || previewVideo.paused) return;
-                previewVideo.currentTime = currentTime;
-            });
-            return;
-        }
-        const baseTransform = previewVideo.style.transform || '';
-        previewVideo.style.transform = `${baseTransform} translateZ(0)`;
-        requestAnimationFrame(() => {
-            if (!previewVideo) return;
-            previewVideo.style.transform = baseTransform;
-        });
-    }
-
-    function startPreviewRenderWatchdog() {
-        if (!previewVideo || previewRenderWatchdog.enabled) return;
-        previewRenderWatchdog.enabled = true;
-        previewRenderWatchdog.lastFrameRenderedAt = performance.now();
-        previewRenderWatchdog.lastFrameCount = getPreviewFrameCount() || 0;
-        previewRenderWatchdog.lastCurrentTime = previewVideo.currentTime || 0;
-        const hasFrameCallback = typeof previewVideo.requestVideoFrameCallback === 'function';
-        const trackFrame = () => {
-            if (!previewRenderWatchdog.enabled) return;
-            previewRenderWatchdog.lastFrameRenderedAt = performance.now();
-            const frameCount = getPreviewFrameCount();
-            if (frameCount !== null) {
-                previewRenderWatchdog.lastFrameCount = frameCount;
-            }
-            previewRenderWatchdog.frameCallbackId = previewVideo.requestVideoFrameCallback(trackFrame);
-        };
-        if (hasFrameCallback) {
-            previewRenderWatchdog.frameCallbackId = previewVideo.requestVideoFrameCallback(trackFrame);
-        }
-        previewRenderWatchdog.timerId = setInterval(() => {
-            if (!previewRenderWatchdog.enabled || !previewVideo) return;
-            if (previewVideo.paused || previewVideo.ended || previewVideo.readyState < 2) return;
-            if (!previewOverlay.classList.contains('active')) return;
-            const now = performance.now();
-            const currentTime = previewVideo.currentTime || 0;
-            const timeAdvanced = currentTime > previewRenderWatchdog.lastCurrentTime + 0.01;
-            const frameCount = getPreviewFrameCount();
-            if (frameCount !== null && frameCount !== previewRenderWatchdog.lastFrameCount) {
-                previewRenderWatchdog.lastFrameCount = frameCount;
-                previewRenderWatchdog.lastFrameRenderedAt = now;
-            }
-            if (timeAdvanced && now - previewRenderWatchdog.lastFrameRenderedAt > PREVIEW_FRAME_STALL_MS) {
-                kickPreviewRenderer();
-                previewRenderWatchdog.lastFrameRenderedAt = now;
-            }
-            previewRenderWatchdog.lastCurrentTime = currentTime;
-        }, PREVIEW_WATCHDOG_INTERVAL_MS);
-    }
-
-    function stopPreviewRenderWatchdog() {
-        if (!previewRenderWatchdog.enabled) return;
-        previewRenderWatchdog.enabled = false;
-        if (previewRenderWatchdog.timerId) {
-            clearInterval(previewRenderWatchdog.timerId);
-            previewRenderWatchdog.timerId = null;
-        }
-        if (previewRenderWatchdog.frameCallbackId && typeof previewVideo?.cancelVideoFrameCallback === 'function') {
-            previewVideo.cancelVideoFrameCallback(previewRenderWatchdog.frameCallbackId);
-        }
-        previewRenderWatchdog.frameCallbackId = null;
     }
 
     function showPreview(blob) {
@@ -2946,32 +2789,16 @@
        previewVideo.src = previewObjectURL;
        syncOriginalMuteState();
        previewVideo.preload = 'auto';
-       previewVideo.loop = true;
-       previewVideo.currentTime = 0;
        previewVideo.style.transform = recordedFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
-       let previewActivated = false;
-       previewVideo.oncanplay = () => {
-          if (previewActivated) return;
-          previewActivated = true;
-          previewVideo.oncanplay = null;
-          requestAnimationFrame(() => {
-             previewOverlay.classList.add('active');
-             document.body.classList.add('showing-preview');
-             previewVideo.play().catch(() => {});
-          });
-       };
-       if (previewVideo.readyState >= 3) {
-          previewVideo.oncanplay?.();
-       } else {
-          previewVideo.load();
-       }
+       previewVideo.load();
+       previewOverlay.classList.add('active');
+       document.body.classList.add('showing-preview');
 
        // Sélection par défaut à chaque nouvelle preview
        resetThumbnailDefaults();
        resetMusicDefaults();
        closeFilterSheet();
        closeMusicSheet();
-       closeThumbnailSheet();
 
        syncOriginalMuteState();
        updateMusicSelectionUI();
@@ -2983,11 +2810,9 @@
             clearTimeout(previewTimeout);
             previewTimeout = null;
         }
-        stopPreviewRenderWatchdog();
         stopMusicPreview({ hard: true });
         invalidateMusicSession();
         resetThumbnailDefaults();
-        previewVideo.pause();
         previewVideo.src = '';
         if (previewObjectURL) {
             URL.revokeObjectURL(previewObjectURL);
@@ -3026,13 +2851,6 @@
         restartPreviewIfPlaying();
     };
 
-    previewVideo.addEventListener('play', syncOriginalMuteState);
-    previewVideo.addEventListener('pause', syncOriginalMuteState);
-    previewVideo.addEventListener('play', startPreviewRenderWatchdog);
-    previewVideo.addEventListener('pause', stopPreviewRenderWatchdog);
-    previewVideo.addEventListener('ended', stopPreviewRenderWatchdog);
-    previewVideo.addEventListener('emptied', stopPreviewRenderWatchdog);
-
     flashBtn.onclick = toggleFlash;
     
     switchBtn.onclick = () => {
@@ -3065,7 +2883,6 @@
         shouldCheckDuration = false;
 
         // 💥 VIDE LES SOURCES VIDÉO AVANT hidePreview()
-        previewVideo.pause();
         previewVideo.src = '';
         if (previewObjectURL) {
             URL.revokeObjectURL(previewObjectURL);
@@ -3112,8 +2929,6 @@
 
     nextBtn.onclick = async () => {
        // Couper immédiatement la preview pour éviter le son pendant l'upload
-       previewVideo.pause();
-       previewVideo.currentTime = 0;
        stopMusicPreview({ hard: true });
        let uploadPhaseTimeout = null;
        let uploadSuccessNotified = false;
@@ -3303,22 +3118,16 @@
     previewOverlay.onclick = async (e) => {
       const tappedAction = e.target.closest('.action-btn') || e.target.closest('#preview-actions');
       const tappedSheet = e.target.closest('.sheet');
-      if ((musicSheet.classList.contains('active') || musicFilterSheet.classList.contains('active') || thumbnailSheet.classList.contains('active')) && !tappedSheet) {
+      if (musicFilterSheet.classList.contains('active') && !tappedSheet) {
          if (musicFilterSheet.classList.contains('active')) {
             closeFilterSheet();
-         } else if (thumbnailSheet.classList.contains('active')) {
-            closeThumbnailSheet();
          } else {
             closeMusicSheet();
          }
          return;
       }
-      if(!tappedAction) {
-         if (previewVideo.paused) {
-            previewVideo.play().catch(()=>{});
-         } else {
-            previewVideo.pause();
-         }
+      if (!tappedAction) {
+         return;
       }
     };
 
