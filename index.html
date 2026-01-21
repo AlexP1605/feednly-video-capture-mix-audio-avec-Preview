@@ -197,28 +197,6 @@
       background: #000;
     }
 
-    #preview-replay-btn {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 12;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 12px 20px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.25);
-      background: rgba(15,15,15,0.7);
-      color: #fff;
-      font-weight: 700;
-      font-size: 14px;
-      cursor: pointer;
-      box-shadow: 0 12px 28px rgba(0,0,0,0.35);
-    }
-    #preview-replay-btn.active { display: inline-flex; }
-
     .preview-audio-controls {
       position: absolute;
       top: var(--preview-top-control-offset);
@@ -743,7 +721,7 @@
   <div id="recording-timer">0:00</div>
 
   <div id="camera-container">
-    <video id="camera-preview" playsinline webkit-playsinline muted autoplay></video>
+    <video id="camera-preview" playsinline muted autoplay></video>
     
     <div class="controls">
       <div class="top-bar">
@@ -796,8 +774,7 @@
             <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M24 104a8 8 0 0 1 8-8h40l48-48a8 8 0 0 1 13.66 5.66v144.68A8 8 0 0 1 120 206l-48-48H32a8 8 0 0 1-8-8Zm176 24a32 32 0 0 1-18.75 29.08 8 8 0 1 1-6.5-14.6 16 16 0 0 0 0-28.96 8 8 0 1 1 6.5-14.6A32 32 0 0 1 200 128Zm32 0a64 64 0 0 1-37.5 58.16 8 8 0 0 1-6.5-14.6 48 48 0 0 0 0-87.12 8 8 0 0 1 6.5-14.6A64 64 0 0 1 232 128Z"></path></svg>
           </button>
         </div>
-        <video id="preview-video" playsinline webkit-playsinline preload="auto"></video>
-        <button type="button" id="preview-replay-btn" aria-label="Relancer la vidéo">Play / Replay</button>
+        <video id="preview-video" playsinline webkit-playsinline loop preload="auto"></video>
         <button type="button" id="thumbnail-button" class="thumbnail-button" aria-label="Choisir une miniature"></button>
       </div>
       <div id="sheet-backdrop" class="sheet-backdrop"></div>
@@ -942,7 +919,6 @@
     const sheetBackdrop = document.getElementById('sheet-backdrop');
     const waveformVisual = document.getElementById('waveform-visual');
     const thumbnailButton = document.getElementById('thumbnail-button');
-    const previewReplayBtn = document.getElementById('preview-replay-btn');
     const thumbnailSheet = document.getElementById('thumbnail-sheet');
     const selectedThumbnailPreview = document.getElementById('selected-thumbnail-preview');
     const thumbnailStrip = document.getElementById('thumbnail-strip');
@@ -997,17 +973,6 @@
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
-
-    function stopCameraStream() {
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(track => {
-          try { track.stop(); } catch (e) {}
-        });
-        mediaStream = null;
-      }
-      try { cameraPreview.pause(); } catch (e) {}
-      cameraPreview.srcObject = null;
-    }
 
     // --- AJOUT MUSIQUE (prévisualisation uniquement) : catalogue et configuration ---
     const DEFAULT_MUSIC_OPTIONS = [
@@ -1178,6 +1143,7 @@
     const THUMBNAIL_TIME_TOLERANCE = 0.08;
     let thumbnailGenerationId = 0;
     let isThumbnailScrubbing = false;
+    let lastPreviewSeek = 0;
     function getThumbnailFrameTimes(durationSeconds) {
         const duration = Math.max(0.1, Number(durationSeconds) || 0.1);
         const step = Math.max(THUMBNAIL_MIN_STEP, Math.min(THUMBNAIL_MAX_STEP, duration / (THUMBNAIL_MAX_FRAMES - 1)));
@@ -1275,6 +1241,10 @@
             }
         });
         items.forEach((item) => item.classList.toggle('active', item === closestItem));
+        if (seekPreview && previewVideo?.readyState) {
+            const safeTime = Math.min(Math.max(0, nextTime), Math.max(previewVideo.duration || nextTime, 0));
+            safeSeekPreview(safeTime);
+        }
     }
 
     function renderThumbnailStrip(frames) {
@@ -1347,6 +1317,13 @@
         const snapped = selectNearestThumbnailFrame(time)?.time ?? time;
         // UI scrub: met à jour la sélection sans seek vidéo pendant le drag.
         setSelectedThumbnail(snapped, { seekPreview: false });
+    }
+
+    function safeSeekPreview(timeSeconds) {
+        const now = performance.now();
+        if (now - lastPreviewSeek < 33) return;
+        lastPreviewSeek = now;
+        previewVideo.currentTime = timeSeconds;
     }
 
     function seekVideoToTime(video, timeSeconds) {
@@ -2889,6 +2866,18 @@
         const now = performance.now();
         if (now - previewRenderWatchdog.lastKickAt < PREVIEW_KICK_MIN_INTERVAL_MS) return;
         previewRenderWatchdog.lastKickAt = now;
+        const currentTime = previewVideo.currentTime || 0;
+        const duration = Number(previewVideo.duration) || 0;
+        const maxSafe = duration ? Math.max(0, duration - 0.05) : currentTime + 0.01;
+        const bumpedTime = Math.min(currentTime + 0.001, maxSafe);
+        if (Number.isFinite(bumpedTime) && bumpedTime !== currentTime) {
+            previewVideo.currentTime = bumpedTime;
+            Promise.resolve().then(() => {
+                if (!previewVideo || previewVideo.paused) return;
+                previewVideo.currentTime = currentTime;
+            });
+            return;
+        }
         const baseTransform = previewVideo.style.transform || '';
         previewVideo.style.transform = `${baseTransform} translateZ(0)`;
         requestAnimationFrame(() => {
@@ -2950,17 +2939,14 @@
     }
 
     function showPreview(blob) {
-       stopCameraStream();
-       previewVideo.pause();
-       previewVideo.removeAttribute('src');
-       previewVideo.load();
        if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
        previewObjectURL = URL.createObjectURL(blob);
        lockPreviewViewport();
-       previewReplayBtn?.classList.remove('active');
        previewVideo.src = previewObjectURL;
        syncOriginalMuteState();
        previewVideo.preload = 'auto';
+       previewVideo.loop = true;
+       previewVideo.currentTime = 0;
        previewVideo.style.transform = recordedFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
        let previewActivated = false;
        previewVideo.oncanplay = () => {
@@ -2973,9 +2959,10 @@
              previewVideo.play().catch(() => {});
           });
        };
-       previewVideo.load();
        if (previewVideo.readyState >= 3) {
           previewVideo.oncanplay?.();
+       } else {
+          previewVideo.load();
        }
 
        // Sélection par défaut à chaque nouvelle preview
@@ -3001,7 +2988,6 @@
         resetThumbnailDefaults();
         previewVideo.pause();
         previewVideo.src = '';
-        previewReplayBtn?.classList.remove('active');
         if (previewObjectURL) {
             URL.revokeObjectURL(previewObjectURL);
             previewObjectURL = null;
@@ -3043,21 +3029,8 @@
     previewVideo.addEventListener('pause', syncOriginalMuteState);
     previewVideo.addEventListener('play', startPreviewRenderWatchdog);
     previewVideo.addEventListener('pause', stopPreviewRenderWatchdog);
-    previewVideo.addEventListener('ended', () => {
-        stopPreviewRenderWatchdog();
-        previewReplayBtn?.classList.add('active');
-    });
+    previewVideo.addEventListener('ended', stopPreviewRenderWatchdog);
     previewVideo.addEventListener('emptied', stopPreviewRenderWatchdog);
-    previewVideo.addEventListener('play', () => {
-        previewReplayBtn?.classList.remove('active');
-    });
-
-    previewReplayBtn?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        previewReplayBtn.classList.remove('active');
-        previewVideo.currentTime = 0;
-        previewVideo.play().catch(() => {});
-    });
 
     flashBtn.onclick = toggleFlash;
     
