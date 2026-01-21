@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -35,7 +36,7 @@
 
     video {
       width: 100%; height: 100%; object-fit: cover; display: block;
-      transform: scaleX(1); pointer-events: none;
+      pointer-events: none;
     }
     video::-webkit-media-controls { display: none !important; }
 
@@ -114,13 +115,32 @@
     /* --- PREVIEW UI --- */
     #preview-overlay { position: fixed; inset: 0; z-index: 50; background: #000; display: none; opacity: 0; flex-direction: column; transition: opacity 0.2s ease; }
     #preview-overlay.active { display: flex; opacity: 1; }
-    .preview-video-container { flex: 1; position: relative; overflow: hidden; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; background: #000; }
-    #preview-video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+    .preview-video-container {
+      aspect-ratio: 9 / 16;
+      width: 1080px;
+      height: 1920px;
+      max-width: 100%;
+      max-height: 100%;
+      margin: auto;
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      border-bottom-left-radius: 24px;
+      border-bottom-right-radius: 24px;
+      background: #000;
+    }
+    #preview-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      background: #000;
+    }
 
     .music-overlay {
       position: absolute; left: 50%; transform: translateX(-50%);
       padding: 0 14px;
-      top: calc(env(safe-area-inset-top) + 2px);
+      top: calc(env(safe-area-inset-top) - 4px);
       z-index: 10;
       display: flex; align-items: center; gap: 12px;
       background: linear-gradient(135deg, rgba(15,15,15,0.9), rgba(25,25,25,0.9));
@@ -156,15 +176,46 @@
       opacity: 0; pointer-events: none; transition: opacity 0.25s ease; z-index: 60;
     }
     .sheet-backdrop.active { opacity: 1; pointer-events: auto; }
-    .sheet { position: absolute; left: 0; right: 0; bottom: 0; padding: 24px 18px 32px; display: flex; flex-direction: column; gap: 18px; background: rgba(10,10,10,0.96); color: #fff; border-top-left-radius: 26px; border-top-right-radius: 26px; transform: translateY(110%); transition: transform 0.28s ease; z-index: 80; box-shadow: 0 -18px 40px rgba(0,0,0,0.55); height: 80dvh; max-height: 80dvh; overflow-y: auto; }
+    .sheet { position: absolute; left: 0; right: 0; bottom: 0; padding: 20px 18px 0; display: flex; flex-direction: column; gap: 18px; background: rgba(10,10,10,0.96); color: #fff; border-top-left-radius: 26px; border-top-right-radius: 26px; transform: translateY(110%); transition: transform 0.28s ease; z-index: 80; box-shadow: 0 -18px 40px rgba(0,0,0,0.55); height: 80dvh; max-height: 80dvh; overflow: hidden; }
     .sheet.active { transform: translateY(0); }
+    #music-filter-sheet { height: 30dvh; max-height: 30dvh; }
     .sheet .sheet-handle { width: 70px; height: 6px; border-radius: 10px; background: #2f2f2f; align-self: center; margin-bottom: 4px; }
+    .sheet-content { display: flex; flex-direction: column; gap: 18px; flex: 1; overflow-y: auto; padding-bottom: 90px; }
     .sheet header { display: flex; align-items: center; justify-content: center; gap: 10px; }
-    .sheet .title { font-size: 16px; font-weight: 800; letter-spacing: 0.3px; text-align: center; }
+    .sheet .title { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; font-weight: 800; letter-spacing: 0.3px; text-align: center; }
     .sheet label { font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .sheet input[type="search"] { width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid #2b2b2d; background: #131316; color: #fff; font-size: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
     .sheet select, .sheet input[type="range"] { flex: 1; padding: 8px 10px; border-radius: 12px; border: 1px solid #2b2b2d; background: #151519; color: #fff; }
     .sheet .toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; background: rgba(255,255,255,0.04); padding: 12px; border-radius: 14px; border: 1px solid #1f1f24; }
+    .music-search-row { display: flex; gap: 10px; align-items: center; }
+    .music-filter-btn {
+      height: 44px;
+      min-width: 44px;
+      padding: 0 12px;
+      border-radius: 14px;
+      border: 1px solid #2b2b2d;
+      background: #151519;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+    .music-filter-btn svg { width: 18px; height: 18px; fill: currentColor; }
+    .tag-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+    .tag-chip {
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .tag-chip.active {
+      background: rgba(255,255,255,0.22);
+      border-color: rgba(255,255,255,0.4);
+    }
     #music-list {
       flex: 1;
       min-height: 0;
@@ -302,38 +353,69 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
     }
 
+    .sheet-footer {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 10px 18px calc(18px + env(safe-area-inset-bottom));
+      background: rgba(10,10,10,0.98);
+      z-index: 20;
+    }
+
     .tab-bar {
       display: flex;
       gap: 10px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      padding: 6px;
-      border-radius: 14px;
+      background: rgba(20,20,20,0.9);
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 6px 10px;
+      border-radius: 16px;
+      justify-content: space-between;
     }
 
     .tab-btn {
       flex: 1;
-      height: 42px;
+      height: 46px;
       border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.05);
-      color: #fff;
-      font-weight: 800;
-      letter-spacing: 0.2px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: rgba(255,255,255,0.7);
       cursor: pointer;
       transition: all 0.2s ease;
+      display: grid;
+      place-items: center;
+    }
+
+    .tab-btn svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
     }
 
     .tab-btn.active {
-      background: #fff;
-      color: #000;
-      border-color: #fff;
-      box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+      background: rgba(255,255,255,0.18);
+      color: #fff;
+      border-color: rgba(255,255,255,0.35);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.35);
+    }
+
+    .tab-btn .tab-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     .tab-panel { display: none; flex-direction: column; gap: 14px; }
     .tab-panel.active { display: flex; }
-    .audio-tab-title { font-size: 15px; font-weight: 800; text-align: center; margin: 4px 0; }
+    .audio-tab-title { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 800; text-align: center; margin: 4px 0; }
+    .audio-tab-title svg,
+    .sheet header .title svg { width: 18px; height: 18px; fill: currentColor; }
 
     /* --- UPLOAD --- */
     #upload-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.2s; }
@@ -353,18 +435,46 @@
     }
     #error-toast.active { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+    #recording-timer {
+      position: fixed;
+      top: calc(env(safe-area-inset-top) + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 45;
+      padding: 8px 14px;
+      border-radius: 20px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+    }
+    body.recording #recording-timer { opacity: 1; }
+
     input[type="file"] { display: none; }
     body.showing-preview .controls { display: none !important; }
+
+    #preview-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      background: #000;
+    }
   </style>
 </head>
 <body>
 
   <div id="countdown-display"></div>
   <div id="error-toast">Erreur</div>
+  <div id="recording-timer">0:00</div>
 
   <div id="camera-container">
     <video id="camera-preview" playsinline muted autoplay></video>
-    <canvas id="recording-canvas" style="display:none;"></canvas>
     
     <div class="controls">
       <div class="top-bar">
@@ -417,50 +527,80 @@
       <div id="sheet-backdrop" class="sheet-backdrop"></div>
         <div id="music-controls" class="sheet">
           <div class="sheet-handle"></div>
-          <header>
-            <div class="title">Musique</div>
-          </header>
-          <p style="margin: 0; opacity: 0.6; font-size: 12px; text-align: center;">La musique sera ajoutée automatiquement au moment de la publication de la vidéo.</p>
-          <div class="tab-bar" id="music-tab-bar">
-            <button type="button" class="tab-btn active" id="tab-btn-music">Musique</button>
-            <button type="button" class="tab-btn" id="tab-btn-waveform">Waveforme</button>
-            <button type="button" class="tab-btn" id="tab-btn-audio">Son</button>
-          </div>
-          <div id="tab-music" class="tab-panel active">
-            <input id="music-search" type="search" placeholder="Rechercher un titre ou un artiste" />
-            <div id="music-list"></div>
-          </div>
-          <div id="tab-waveform" class="tab-panel">
-            <div class="timeline-row">
-              <div class="timeline-header">
-                <span>Choisir le passage</span>
-                <div class="time-actions">
-                  <span class="time-chip" id="music-position-label">0:00 – 0:00 / 0:00</span>
+          <div class="sheet-content">
+            <header>
+              <div class="title">Musique</div>
+            </header>
+            <p style="margin: 0; opacity: 0.6; font-size: 12px; text-align: center;">La musique sera ajoutée automatiquement au moment de la publication de la vidéo.</p>
+            <div id="tab-music" class="tab-panel active">
+              <div class="music-search-row">
+                <input id="music-search" type="search" placeholder="Rechercher un titre ou un artiste" />
+                <button type="button" id="music-filter-btn" class="music-filter-btn" aria-label="Filtre">
+                  <svg viewBox="0 0 256 256" aria-hidden="true">
+                    <path d="M40 64a8 8 0 0 1 8-8h160a8 8 0 0 1 0 16h-24v112a8 8 0 0 1-8 8h-40a8 8 0 0 1-8-8V72h-24v64a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V72h-0a8 8 0 0 1-8-8Zm24 8v56h24V72Zm80 0v104h24V72Z"></path>
+                  </svg>
+                </button>
+              </div>
+              <div id="music-list"></div>
+            </div>
+            <div id="tab-waveform" class="tab-panel">
+              <div class="timeline-row">
+                <div class="timeline-header">
+                  <span>Choisir le passage</span>
+                  <div class="time-actions">
+                    <span class="time-chip" id="music-position-label">0:00 – 0:00 / 0:00</span>
+                  </div>
+                </div>
+                <div id="waveform-visual" class="waveform-visual" role="presentation">
                 </div>
               </div>
-              <div id="waveform-visual" class="waveform-visual" role="presentation">
+            </div>
+            <div id="tab-audio" class="tab-panel">
+              <div class="timeline-row" id="volume-row">
+                <label>
+                  <div class="slider-meta">
+                    <span>Son original</span>
+                    <span class="value-chip" id="original-volume-value">50</span>
+                  </div>
+                  <input id="original-volume" type="range" min="0" max="1" step="0.01" value="0.5" />
+                </label>
+                <label>
+                  <div class="slider-meta">
+                    <span>Musique</span>
+                    <span class="value-chip" id="music-volume-value">50</span>
+                  </div>
+                  <input id="music-volume" type="range" min="0" max="1" step="0.01" value="0.5" />
+                </label>
               </div>
             </div>
           </div>
-          <div id="tab-audio" class="tab-panel">
-            <div class="audio-tab-title">Volume sonore</div>
-            <div class="timeline-row" id="volume-row">
-              <label>
-                <div class="slider-meta">
-                  <span>Son original</span>
-                  <span class="value-chip" id="original-volume-value">50</span>
-                </div>
-                <input id="original-volume" type="range" min="0" max="1" step="0.01" value="0.5" />
-              </label>
-              <label>
-                <div class="slider-meta">
-                  <span>Musique</span>
-                  <span class="value-chip" id="music-volume-value">50</span>
-                </div>
-                <input id="music-volume" type="range" min="0" max="1" step="0.01" value="0.5" />
-              </label>
-              <p class="mixing-hint">Le mixage audio sera appliqué automatiquement lors de la publication.</p>
+          <div class="sheet-footer">
+            <div class="tab-bar" id="music-tab-bar">
+              <button type="button" class="tab-btn active" id="tab-btn-music" aria-label="Musique">
+                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M211.79 35.48a8 8 0 0 0-6.62-1.43l-96 20a8 8 0 0 0-6.54 7.86V168a28 28 0 1 0 16 25.45V121.89l80-16.67V152a28 28 0 1 0 16 25.45V43.91a8 8 0 0 0-3.38-6.63ZM88 216a12 12 0 1 1 12-12 12 12 0 0 1-12 12Zm28-106.67V79.12l80-16.67v30.22Zm80 106.67a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
+                <span class="tab-label">Musique</span>
+              </button>
+              <button type="button" class="tab-btn" id="tab-btn-waveform" aria-label="Waveform">
+                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M56 64a8 8 0 0 1 8 8v112a8 8 0 0 1-16 0V72a8 8 0 0 1 8-8Zm36 24a8 8 0 0 1 8 8v64a8 8 0 0 1-16 0V96a8 8 0 0 1 8-8Zm36-40a8 8 0 0 1 8 8v144a8 8 0 0 1-16 0V56a8 8 0 0 1 8-8Zm36 32a8 8 0 0 1 8 8v96a8 8 0 0 1-16 0V88a8 8 0 0 1 8-8Zm36-24a8 8 0 0 1 8 8v144a8 8 0 0 1-16 0V64a8 8 0 0 1 8-8Z"></path></svg>
+                <span class="tab-label">Waveform</span>
+              </button>
+              <button type="button" class="tab-btn" id="tab-btn-audio" aria-label="Son">
+                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M32 96v64a16 16 0 0 0 16 16h32l48 48a8 8 0 0 0 13.66-5.66V37.66A8 8 0 0 0 128 32L80 80H48a16 16 0 0 0-16 16Zm136 8a8 8 0 0 1 8 8v32a8 8 0 0 1-16 0v-32a8 8 0 0 1 8-8Zm32-24a8 8 0 0 1 8 8v80a8 8 0 0 1-16 0V88a8 8 0 0 1 8-8Z"></path></svg>
+                <span class="tab-label">Son</span>
+              </button>
             </div>
+          </div>
+        </div>
+        <div id="music-filter-sheet" class="sheet">
+          <div class="sheet-handle"></div>
+          <div class="sheet-content">
+            <header>
+              <div class="title">
+                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M40 64a8 8 0 0 1 8-8h160a8 8 0 0 1 0 16h-24v112a8 8 0 0 1-8 8h-40a8 8 0 0 1-8-8V72h-24v64a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V72h0a8 8 0 0 1-8-8Zm24 8v56h24V72Zm80 0v104h24V72Z"></path></svg>
+                <span>Filtres</span>
+              </div>
+            </header>
+            <div id="music-filter-tags" class="tag-grid"></div>
           </div>
         </div>
     <div id="preview-actions">
@@ -472,8 +612,6 @@
   <div id="upload-overlay"><div class="spinner"></div><div id="upload-text">Préparation...</div></div>
   <input type="file" id="camera-input" accept="video/*" capture="environment" />
   <input type="file" id="galleryInput" accept="video/*" />
-  <audio id="music-preview" playsinline
-    style="position:fixed;left:-9999px;width:1px;height:1px;opacity:0;"></audio>
 
   <script>
     const cameraPreview = document.getElementById('camera-preview');
@@ -490,12 +628,11 @@
     const restartBtn = document.getElementById('restart-button');
     const nextBtn = document.getElementById('next-button');
     const galleryInput = document.getElementById('galleryInput');
-    const musicPreviewAudio = document.getElementById('music-preview');
     const uploadOverlay = document.getElementById('upload-overlay');
     const uploadText = document.getElementById('upload-text');
     const progressCircle = document.getElementById('record-progress-circle');
     const errorToast = document.getElementById('error-toast');
-    const recordingCanvas = document.getElementById('recording-canvas');
+    const recordingTimer = document.getElementById('recording-timer');
     const musicOverlay = document.getElementById('music-overlay');
     const musicOverlayTitle = musicOverlay.querySelector('.music-title');
     const musicOverlayArtist = musicOverlay.querySelector('.music-artist');
@@ -509,6 +646,9 @@
     const originalVolumeValue = document.getElementById('original-volume-value');
     const musicPositionLabel = document.getElementById('music-position-label');
     const musicSheet = document.getElementById('music-controls');
+    const musicFilterSheet = document.getElementById('music-filter-sheet');
+    const musicFilterBtn = document.getElementById('music-filter-btn');
+    const musicFilterTags = document.getElementById('music-filter-tags');
     const sheetBackdrop = document.getElementById('sheet-backdrop');
     const waveformVisual = document.getElementById('waveform-visual');
     let waveformHandleStart = null;
@@ -520,7 +660,6 @@
     const tabBtnWaveform = document.getElementById('tab-btn-waveform');
     const tabBtnAudio = document.getElementById('tab-btn-audio');
     let currentlyPlayingMusicId = null;
-    let loopRAF = null;
     let isDraggingWaveform = false;
     let videoDurationSeconds = 0;
     cameraPreview.onloadedmetadata = () => {
@@ -557,37 +696,22 @@
     let musicStartTime = 0; // Début sélection musique (s)
     let selectedMusicId = null; // Musique choisie pour la preview
     let currentMusicDuration = 30; // Durée connue pour le slider (s)
+    let activeTag = null;
     const WAVEFORM_BAR_COUNT = 32;
+    const TAG_OPTIONS = ['Chill', 'Rap', 'Pop', 'Electro', 'Cinematic', 'Rock'];
 
     async function preloadSelectedMusic() {
         const music = getSelectedMusic();
-        if (!music || !music.url || !musicPreviewAudio) return null;
-
-        return new Promise((resolve) => {
-            const onLoaded = () => {
-                if (Number.isFinite(musicPreviewAudio.duration)) {
-                    setSeekLimits(Math.floor(musicPreviewAudio.duration));
-                }
-                cleanup();
-                resolve(musicPreviewAudio.duration || null);
-            };
-
-            const onError = () => {
-                cleanup();
-                resolve(null);
-            };
-
-            const cleanup = () => {
-                musicPreviewAudio.removeEventListener('loadedmetadata', onLoaded);
-                musicPreviewAudio.removeEventListener('error', onError);
-            };
-
-            musicPreviewAudio.addEventListener('loadedmetadata', onLoaded);
-            musicPreviewAudio.addEventListener('error', onError);
-            musicPreviewAudio.preload = 'auto';
-            musicPreviewAudio.src = music.url;
-            musicPreviewAudio.load();
-        });
+        if (!music || !music.url || !musicEngine) return null;
+        try {
+            const duration = await musicEngine.load(music.url);
+            if (Number.isFinite(duration)) {
+                setSeekLimits(Math.floor(duration));
+            }
+            return duration || null;
+        } catch (error) {
+            return null;
+        }
     }
     
     let facingMode = 'environment';
@@ -601,8 +725,6 @@
     let shouldCheckDuration = false;
     let isToggleLocked = false;
     let isSwitching = false;
-    let recordingStream = null;
-    let stopCanvasDrawing = null;
 
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
     const PATH_FLASH_OFF = "M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z";
@@ -626,6 +748,13 @@
         return `${m}:${s}`;
     }
 
+    function formatElapsedTime(milliseconds) {
+        const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+        const m = Math.floor(totalSeconds / 60).toString();
+        const s = (totalSeconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
     function clampStartForVideoDuration() {
         const clipDuration = Math.max(0, videoDurationSeconds || 0);
         const maxStart = Math.max(0, currentMusicDuration - clipDuration);
@@ -635,6 +764,12 @@
     function getSelectionEnd() {
         const clipDuration = Math.max(0, videoDurationSeconds || 0);
         return Math.min(currentMusicDuration, musicStartTime + clipDuration);
+    }
+
+    function getLoopBounds() {
+        const start = Math.max(0, Math.min(musicStartTime, currentMusicDuration));
+        const end = Math.max(start + 0.05, getSelectionEnd());
+        return { start, end };
     }
 
     function updatePositionLabel() {
@@ -711,11 +846,57 @@
         clampStartForVideoDuration();
         updateWaveformProgress();
         updatePositionLabel();
-        restartPreviewIfPlaying();
+        const { start, end } = getLoopBounds();
+        if (musicEngine?.isPlaying) {
+            musicEngine.updateLoop(start, end);
+            musicEngine.play(start, end).catch(() => {});
+        }
     }
 
     function handleWaveformInteraction(clientX) {
         updateStartFromClientX(clientX);
+    }
+
+    function normalizeTag(tag) {
+        return String(tag || '').trim().toLowerCase();
+    }
+
+    function getTrackTags(opt) {
+        const tagList = [];
+        const rawTags = opt?.tags;
+        const rawGenre = opt?.genre;
+        if (Array.isArray(rawTags)) {
+            tagList.push(...rawTags);
+        } else if (typeof rawTags === 'string') {
+            tagList.push(...rawTags.split(','));
+        }
+        if (Array.isArray(rawGenre)) {
+            tagList.push(...rawGenre);
+        } else if (typeof rawGenre === 'string') {
+            tagList.push(...rawGenre.split(','));
+        }
+        return tagList.map(normalizeTag).filter(Boolean);
+    }
+
+    function renderFilterTags() {
+        if (!musicFilterTags) return;
+        musicFilterTags.innerHTML = '';
+        TAG_OPTIONS.forEach((tag) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'tag-chip';
+            btn.textContent = tag;
+            const normalized = normalizeTag(tag);
+            if (activeTag === normalized) {
+                btn.classList.add('active');
+            }
+            btn.onclick = () => {
+                activeTag = activeTag === normalized ? null : normalized;
+                renderFilterTags();
+                renderMusicList(musicSearchInput.value);
+            };
+            musicFilterTags.appendChild(btn);
+        });
     }
 
     function renderMusicList(filter = '') {
@@ -723,7 +904,9 @@
         musicListEl.innerHTML = '';
         const items = musicOptions.filter(opt => {
             const hay = `${opt.title} ${opt.artist}`.toLowerCase();
-            return hay.includes(query);
+            const tags = getTrackTags(opt);
+            const matchesTag = !activeTag || tags.some((tag) => tag.includes(activeTag) || activeTag.includes(tag));
+            return hay.includes(query) && matchesTag;
         });
         if (!items.length) {
             const empty = document.createElement('div');
@@ -762,11 +945,11 @@
             const playBtn = document.createElement('button');
             playBtn.type = 'button';
             playBtn.className = 'icon-btn';
-            const isPlayingThis = currentlyPlayingMusicId === opt.id && musicPreviewAudio && !musicPreviewAudio.paused && !musicPreviewAudio.ended;
+            const isPlayingThis = currentlyPlayingMusicId === opt.id && musicEngine?.isPlaying;
             playBtn.innerHTML = isPlayingThis ? playIconPause() : playIconPlay();
             playBtn.onclick = (e) => {
                 e.stopPropagation();
-                const alreadyPlaying = currentlyPlayingMusicId === opt.id && musicPreviewAudio && !musicPreviewAudio.paused && !musicPreviewAudio.ended;
+                const alreadyPlaying = currentlyPlayingMusicId === opt.id && musicEngine?.isPlaying;
                 if (alreadyPlaying) {
                     stopMusicPreview();
                     return;
@@ -877,24 +1060,7 @@
     }
 
     loadMusicCatalog();
-
-    function rampVolume(mediaEl, targetVolume, duration = 180) {
-        if (!mediaEl) return;
-        const startVolume = typeof mediaEl.volume === 'number' ? mediaEl.volume : 0;
-        const delta = targetVolume - startVolume;
-        if (Math.abs(delta) < 0.001 || duration <= 0) {
-            mediaEl.volume = targetVolume;
-            return;
-        }
-
-        const startTime = performance.now();
-        const step = (now) => {
-            const progress = Math.min(1, (now - startTime) / duration);
-            mediaEl.volume = startVolume + delta * progress;
-            if (progress < 1) requestAnimationFrame(step);
-        };
-        requestAnimationFrame(step);
-    }
+    renderFilterTags();
 
     async function updateMusicSelectionUI() {
         const volumeVal = parseFloat(musicVolumeInput.value);
@@ -902,27 +1068,15 @@
         clampStartForVideoDuration();
         updatePositionLabel();
         updateWaveformProgress();
-        const originalVolumeVal = parseFloat(originalVolumeInput.value);
-        originalVolume = Number.isNaN(originalVolumeVal) ? 0.5 : originalVolumeVal;
-        syncVolumeLabels();
+        applyOriginalVolume();
         await preloadSelectedMusic();
-        if (musicPreviewAudio) {
-            rampVolume(musicPreviewAudio, musicVolume);
-        }
-        previewVideo.muted = false;
-        rampVolume(previewVideo, originalVolume);
-
-        // Si le son s'est arrêté pendant l'ajustement, on relance immédiatement
-        if (currentlyPlayingMusicId) {
-            const current = musicOptions.find(opt => opt.id === currentlyPlayingMusicId);
-            if (current && (musicPreviewAudio.paused || musicPreviewAudio.ended)) {
-                startMusicPreview(current);
-            }
+        if (musicEngine) {
+            musicEngine.updateVolume(musicVolume);
         }
     }
 
     musicVolumeInput.oninput = updateMusicSelectionUI;
-    originalVolumeInput.oninput = updateMusicSelectionUI;
+    originalVolumeInput.oninput = applyOriginalVolume;
     if (waveformVisual) {
         waveformVisual.addEventListener('pointerdown', (e) => {
             isDraggingWaveform = true;
@@ -959,24 +1113,57 @@
         tabBtnAudio?.classList.toggle('active', showAudio);
     }
 
-    function openSheet(sheet) {
-        if (!sheet) return;
-        closeSheets();
-        if (sheet === musicSheet) {
-            setActiveTab('music');
-        }
-        sheet.classList.add('active');
-        sheetBackdrop?.classList.add('active');
+    function updateSheetBackdrop() {
+        const hasActiveSheet = musicSheet?.classList.contains('active') || musicFilterSheet?.classList.contains('active');
+        sheetBackdrop?.classList.toggle('active', hasActiveSheet);
     }
 
-    function closeSheets() {
+    function openMusicSheet() {
+        if (!musicSheet) return;
+        setActiveTab('music');
+        musicSheet.classList.add('active');
+        updateSheetBackdrop();
+    }
+
+    function openFilterSheet() {
+        if (!musicFilterSheet) return;
+        musicFilterSheet.classList.add('active');
+        updateSheetBackdrop();
+    }
+
+    function closeMusicSheet() {
         musicSheet?.classList.remove('active');
-        sheetBackdrop?.classList.remove('active');
+        updateSheetBackdrop();
+    }
+
+    function closeFilterSheet() {
+        musicFilterSheet?.classList.remove('active');
+        updateSheetBackdrop();
     }
 
     function syncVolumeLabels() {
         if (musicVolumeValue) musicVolumeValue.textContent = Math.round((parseFloat(musicVolumeInput.value) || 0) * 100);
         if (originalVolumeValue) originalVolumeValue.textContent = Math.round((parseFloat(originalVolumeInput.value) || 0) * 100);
+    }
+
+    function clamp01(value) {
+        return Math.min(1, Math.max(0, value));
+    }
+
+    function applyOriginalVolume() {
+        const originalVolumeVal = parseFloat(originalVolumeInput.value);
+        const sanitized = clamp01(Number.isNaN(originalVolumeVal) ? 0.5 : originalVolumeVal);
+        originalVolume = sanitized;
+        if (originalVolumeInput.value !== String(sanitized)) {
+            originalVolumeInput.value = sanitized;
+        }
+        syncVolumeLabels();
+        if (previewVideo) {
+            previewVideo.volume = originalVolume;
+            if (previewVideo.muted) {
+                previewVideo.muted = false;
+            }
+        }
     }
 
     tabBtnMusic?.addEventListener('click', () => setActiveTab('music'));
@@ -987,28 +1174,53 @@
     });
     tabBtnAudio?.addEventListener('click', () => setActiveTab('audio'));
 
-    musicOverlay.onclick = (e) => { e.stopPropagation(); setActiveTab('music'); openSheet(musicSheet); };
+    musicOverlay.onclick = (e) => { e.stopPropagation(); openMusicSheet(); };
     musicClearBtn.onclick = (e) => { e.stopPropagation(); clearMusicSelection(); };
     musicSearchInput.oninput = (e) => renderMusicList(e.target.value);
+    musicFilterBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (musicFilterSheet?.classList.contains('active')) {
+            closeFilterSheet();
+            return;
+        }
+        openFilterSheet();
+    });
     musicSheet.onclick = (e) => e.stopPropagation();
-    sheetBackdrop.onclick = () => closeSheets();
+    musicFilterSheet.onclick = (e) => e.stopPropagation();
+    sheetBackdrop.onclick = () => {
+        if (musicFilterSheet?.classList.contains('active')) {
+            closeFilterSheet();
+            return;
+        }
+        closeMusicSheet();
+    };
 
     document.addEventListener('click', (e) => {
         if (!sheetBackdrop.classList.contains('active')) return;
-        if (e.target === sheetBackdrop) closeSheets();
+        if (e.target === sheetBackdrop) {
+            if (musicFilterSheet?.classList.contains('active')) {
+                closeFilterSheet();
+                return;
+            }
+            closeMusicSheet();
+        }
     });
 
     let sheetTouchStartY = null;
-    [musicSheet].forEach(sheet => {
+    [musicSheet, musicFilterSheet].forEach((sheet) => {
         sheet?.addEventListener('touchstart', (e) => {
             sheetTouchStartY = e.touches[0]?.clientY ?? null;
         }, { passive: true });
 
         sheet?.addEventListener('touchend', (e) => {
-            if (sheetTouchStartY === null) return;
+            if (sheetTouchStartY === null || !sheet?.classList.contains('active')) return;
             const endY = e.changedTouches[0]?.clientY ?? 0;
             if (endY - sheetTouchStartY > 60) {
-                closeSheets();
+                if (sheet === musicFilterSheet) {
+                    closeFilterSheet();
+                } else {
+                    closeMusicSheet();
+                }
             }
             sheetTouchStartY = null;
         });
@@ -1019,6 +1231,7 @@
 
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     let audioCtx = null;
+    let musicEngine = null;
 
     // --- AJOUT MUSIQUE : lecteur HTML pour l'aperçu ---
 
@@ -1036,7 +1249,12 @@
                 stopMusicPreview({ hard: true });
             }
         } else {
-            if (!mediaStream && !isRecording && !isCountingDown) {
+            if (
+                !mediaStream &&
+                !isRecording &&
+                !isCountingDown &&
+                !previewOverlay.classList.contains('active')
+            ) {
                 startCamera();
             }
         }
@@ -1070,6 +1288,10 @@
         }
     }
 
+    document.addEventListener('pointerdown', () => {
+        ensureAudioReady();
+    }, { once: true });
+
     function unlockAudioContext() {
         if (!audioCtx) {
             const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -1094,46 +1316,104 @@
         };
     }
 
-    let isForcingLoop = false;
+    function createMusicEngine() {
+        let buffer = null;
+        let source = null;
+        let gainNode = null;
+        let currentUrl = '';
+        let isPlaying = false;
 
-    function forceLoopAudio(audio, startTime, volume) {
-        if (!audio || isForcingLoop) return;
-        isForcingLoop = true;
+        const ensureContext = async () => {
+            unlockAudioContext();
+            if (!audioCtx) return false;
+            if (audioCtx.state === 'suspended') {
+                try { await audioCtx.resume(); } catch (error) {}
+            }
+            if (!gainNode) {
+                gainNode = audioCtx.createGain();
+                gainNode.gain.value = musicVolume;
+                gainNode.connect(audioCtx.destination);
+            }
+            return true;
+        };
 
-        const src = audio.src;
+        const load = async (url) => {
+            if (!url) return null;
+            if (currentUrl === url && buffer) return buffer.duration || null;
+            const ready = await ensureContext();
+            if (!ready) return null;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('music fetch failed');
+            const arrayBuffer = await res.arrayBuffer();
+            buffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+            currentUrl = url;
+            return buffer.duration || null;
+        };
 
-        audio.pause();
-        audio.onended = null;
-        audio.ontimeupdate = null;
+        const stop = () => {
+            if (source) {
+                try { source.stop(0); } catch (error) {}
+                try { source.disconnect(); } catch (error) {}
+            }
+            source = null;
+            isPlaying = false;
+        };
 
-        // 🔥 reset dur (OBLIGATOIRE sur iOS)
-        audio.src = '';
-        audio.load();
+        const play = async (startTime, endTime) => {
+            const ready = await ensureContext();
+            if (!ready || !buffer) return false;
+            stop();
+            source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.loop = true;
+            source.loopStart = Math.max(0, startTime || 0);
+            source.loopEnd = Math.max(source.loopStart + 0.05, endTime || buffer.duration || 0);
+            source.connect(gainNode);
+            source.start(0, source.loopStart);
+            isPlaying = true;
+            source.onended = () => {
+                isPlaying = false;
+            };
+            return true;
+        };
 
-        audio.src = src;
-        audio.currentTime = startTime;
-        audio.volume = volume;
+        const updateLoop = (startTime, endTime) => {
+            if (!source) return;
+            source.loopStart = Math.max(0, startTime || 0);
+            source.loopEnd = Math.max(source.loopStart + 0.05, endTime || source.buffer?.duration || 0);
+        };
 
-        audio.play().catch(() => {});
+        const updateVolume = (value) => {
+            if (gainNode) {
+                gainNode.gain.value = value;
+            }
+        };
 
-        setTimeout(() => {
-            isForcingLoop = false;
-        }, 100);
+        const clearBuffer = () => {
+            buffer = null;
+            currentUrl = '';
+        };
+
+        return {
+            load,
+            play,
+            stop,
+            updateLoop,
+            updateVolume,
+            clearBuffer,
+            get isPlaying() { return isPlaying; },
+            get hasBuffer() { return !!buffer; }
+        };
     }
 
+    musicEngine = createMusicEngine();
+
     function stopMusicPreview({ hard = false } = {}) {
-        if (!musicPreviewAudio) return;
-
-        musicPreviewAudio.pause();
-
-        musicPreviewAudio.onended = null;
-        musicPreviewAudio.ontimeupdate = null;
-
+        if (!musicEngine) return;
+        musicEngine.stop();
         if (hard) {
-            musicPreviewAudio.src = '';
-            musicPreviewAudio.load();
+            musicEngine.clearBuffer();
         }
-
         currentlyPlayingMusicId = null;
         renderMusicList(musicSearchInput.value);
     }
@@ -1142,13 +1422,13 @@
         if (!currentlyPlayingMusicId) return;
         const music = musicOptions.find(opt => opt.id === currentlyPlayingMusicId);
         if (!music) return;
-        if (musicPreviewAudio && !musicPreviewAudio.paused && !musicPreviewAudio.ended) {
+        if (musicEngine?.isPlaying) {
             startMusicPreview(music);
         }
     }
 
     async function startMusicPreview(opt) {
-        if (!opt || !musicPreviewAudio) return;
+        if (!opt || !musicEngine) return;
 
         stopMusicPreview({ hard: false });
 
@@ -1165,32 +1445,19 @@
         updatePositionLabel();
         updateWaveformProgress();
 
-        const getLoopBounds = () => {
-            const start = Math.max(0, Math.min(musicStartTime, currentMusicDuration));
-            const end = Math.max(start + 0.05, getSelectionEnd());
-            return { start, end };
-        };
-
-        const { start } = getLoopBounds();
-
-        musicPreviewAudio.src = opt.url;
-        musicPreviewAudio.currentTime = start;
-        musicPreviewAudio.volume = musicVolume;
-
-        musicPreviewAudio.play().catch(() => {});
-
-        // ✅ LOOP GARANTI
-        musicPreviewAudio.ontimeupdate = () => {
-            const { start, end } = getLoopBounds();
-            if (musicPreviewAudio.currentTime >= end || musicPreviewAudio.ended) {
-                forceLoopAudio(musicPreviewAudio, start, musicVolume);
+        const { start, end } = getLoopBounds();
+        await ensureAudioReady();
+        try {
+            await musicEngine.load(opt.url);
+            musicEngine.updateVolume(musicVolume);
+            const started = await musicEngine.play(start, end);
+            if (!started) {
+                currentlyPlayingMusicId = null;
             }
-        };
-
-        musicPreviewAudio.onended = () => {
-            const { start } = getLoopBounds();
-            forceLoopAudio(musicPreviewAudio, start, musicVolume);
-        };
+        } catch (error) {
+            currentlyPlayingMusicId = null;
+            musicEngine.stop();
+        }
 
         renderMusicList(musicSearchInput.value);
     }
@@ -1324,7 +1591,7 @@
 
         cameraPreview.play().catch(e=>{});
         
-        cameraPreview.style.transform = (facingMode === 'user') ? "scaleX(-1)" : "scaleX(1)";
+        cameraPreview.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
 
         torchEnabled = false;
         updateFlashUI();
@@ -1339,70 +1606,6 @@
       } catch (error) { console.error(error); }
     }
 
-    function getRecordingStream() {
-      if (!recordingCanvas) return mediaStream;
-
-      if (recordingStream) {
-        recordingStream.getTracks().forEach(t => t.stop());
-      }
-      if (stopCanvasDrawing) {
-        stopCanvasDrawing();
-        stopCanvasDrawing = null;
-      }
-
-      const ctx = recordingCanvas.getContext('2d');
-      const updateCanvasSize = () => {
-        if (cameraPreview.videoWidth && cameraPreview.videoHeight) {
-          if (recordingCanvas.width !== cameraPreview.videoWidth || recordingCanvas.height !== cameraPreview.videoHeight) {
-            recordingCanvas.width = cameraPreview.videoWidth;
-            recordingCanvas.height = cameraPreview.videoHeight;
-          }
-        }
-      };
-
-      let drawing = true;
-      const drawFrame = () => {
-        if (!drawing) return;
-        updateCanvasSize();
-        if (!recordingCanvas.width || !recordingCanvas.height) {
-          requestAnimationFrame(drawFrame);
-          return;
-        }
-        ctx.save();
-        ctx.clearRect(0, 0, recordingCanvas.width, recordingCanvas.height);
-        if (facingMode === 'user') {
-          ctx.translate(recordingCanvas.width, 0);
-          ctx.scale(-1, 1);
-        }
-        ctx.drawImage(cameraPreview, 0, 0, recordingCanvas.width, recordingCanvas.height);
-        ctx.restore();
-        requestAnimationFrame(drawFrame);
-      };
-
-      drawFrame();
-
-      stopCanvasDrawing = () => { drawing = false; };
-
-      recordingStream = recordingCanvas.captureStream(30);
-      if (mediaStream) {
-        mediaStream.getAudioTracks().forEach(track => recordingStream.addTrack(track));
-      }
-      return recordingStream;
-    }
-    
-    async function addAudioTrack(currentStream) {
-        if (!navigator.mediaDevices || !currentStream) return false;
-        try {
-            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            const audioTrack = audioStream.getAudioTracks()[0];
-            currentStream.addTrack(audioTrack);
-            return true;
-        } catch (error) {
-            console.error("Erreur lors de l'ajout du micro:", error);
-            return false;
-        }
-    }
-    
     // --- LOGIQUE BOUTON ROBUSTE ---
     recordWrapBtn.onclick = async (e) => {
       e.stopPropagation();
@@ -1424,21 +1627,12 @@
       const audioMissing = !mediaStream || mediaStream.getAudioTracks().length === 0;
 
       if (audioMissing) {
-        const videoExists = mediaStream && mediaStream.getVideoTracks().length > 0;
-        
-        if (videoExists) {
-            const added = await addAudioTrack(mediaStream);
-            if (!added) {
-                await startCamera();
-            }
-        } else {
-             await startCamera();
-        }
+         await startCamera();
       }
 
       const hasAudioTrack = mediaStream && mediaStream.getAudioTracks().length > 0;
       if (isRecording || !mediaStream || !hasAudioTrack) {
-          showError("Impossible de démarrer l'enregistrement (Micro indisponible).");
+          showError("Fonction d'enregistrement non disponible lors d'un appel téléphonique.");
           return;
       }
       
@@ -1447,14 +1641,14 @@
       
       let options = {
          mimeType: 'video/mp4',
-         videoBitsPerSecond: 2500000 
+         videoBitsPerSecond: facingMode === 'user' ? 6000000 : 10000000
       };
       
       if (!MediaRecorder.isTypeSupported('video/mp4')) {
-          options = { videoBitsPerSecond: 2500000 };
+          options = { videoBitsPerSecond: facingMode === 'user' ? 6000000 : 10000000 };
       }
 
-      const streamForRecording = getRecordingStream();
+      const streamForRecording = mediaStream;
 
       try { mediaRecorder = new MediaRecorder(streamForRecording, options); }
       catch(e) { mediaRecorder = new MediaRecorder(streamForRecording); }
@@ -1471,11 +1665,17 @@
       document.body.classList.add('recording');
       
       recordingStartTime = Date.now();
+      if (recordingTimer) {
+         recordingTimer.textContent = '0:00';
+      }
       progressCircle.style.strokeDashoffset = circumference;
       
       const tick = () => {
          if (!isRecording) return;
          const p = Math.min((Date.now() - recordingStartTime) / MAX_DURATION, 1);
+         if (recordingTimer) {
+           recordingTimer.textContent = formatElapsedTime(Date.now() - recordingStartTime);
+         }
          progressCircle.style.strokeDashoffset = circumference * (1 - p);
          if (p < 1) progressInterval = requestAnimationFrame(tick);
          else stopRecording();
@@ -1497,8 +1697,9 @@
        document.body.classList.remove('recording');
        progressCircle.style.strokeDashoffset = circumference;
        if (torchEnabled) toggleFlash();
-       if (stopCanvasDrawing) { stopCanvasDrawing(); stopCanvasDrawing = null; }
-       if (recordingStream) { recordingStream.getTracks().forEach(t => t.stop()); recordingStream = null; }
+       if (recordingTimer) {
+           recordingTimer.textContent = '0:00';
+       }
        shouldCheckDuration = false;
        if (previewTimeout) clearTimeout(previewTimeout);
        previewTimeout = setTimeout(() => { if(recordedBlob) showPreview(recordedBlob); }, 100);
@@ -1513,12 +1714,13 @@
        previewVideo.loop = true;
        previewVideo.currentTime = 0;
        previewVideo.play().catch(() => {});
+       previewVideo.style.transform = recordedFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
 
        // Sélection par défaut à chaque nouvelle preview
        resetMusicDefaults();
-        closeSheets();
+       closeFilterSheet();
+       closeMusicSheet();
 
-       previewVideo.style.transform = "scaleX(1)";
 
        previewOverlay.classList.add('active');
        document.body.classList.add('showing-preview');
@@ -1673,8 +1875,12 @@
     previewOverlay.onclick = async (e) => {
       const tappedAction = e.target.closest('.action-btn') || e.target.closest('#preview-actions');
       const tappedSheet = e.target.closest('.sheet');
-      if (musicSheet.classList.contains('active') && !tappedSheet) {
-         closeSheets();
+      if ((musicSheet.classList.contains('active') || musicFilterSheet.classList.contains('active')) && !tappedSheet) {
+         if (musicFilterSheet.classList.contains('active')) {
+            closeFilterSheet();
+         } else {
+            closeMusicSheet();
+         }
          return;
       }
       if(!tappedAction) {
