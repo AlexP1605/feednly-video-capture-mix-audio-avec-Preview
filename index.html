@@ -1,3 +1,6 @@
+
+
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -12,9 +15,26 @@
       --active-timer: #ffcc00;
       --flash-active: #ffcc00;
       --preview-audio-control-size: 52px;
+      --preview-top-control-offset: calc(env(safe-area-inset-top) - 4px);
     }
 
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-touch-callout: none; }
+    /* Désactivation globale de la sélection native pour un comportement "app-like". */
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    /* Exception explicite : les champs de saisie doivent rester sélectionnables. */
+    input,
+    textarea,
+    select {
+      user-select: auto;
+      -webkit-user-select: auto;
+      -webkit-touch-callout: default;
+    }
 
     html { width: 100%; height: 100%; background: #000; overflow: hidden; }
 
@@ -24,12 +44,18 @@
       position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden;
     }
 
+    body.camera-starting * {
+      transition: none !important;
+      animation: none !important;
+    }
+
     /* --- CAMERA --- */
     #camera-container { position: absolute; inset: 0; z-index: 1; background: #000; }
 
     #camera-preview {
       opacity: 0;
-      transition: opacity 0.25s ease;
+      transition: none;
+      will-change: opacity, transform;
     }
 
     video {
@@ -81,6 +107,7 @@
       transition: all 0.2s;
     }
     .btn:active { transform: scale(0.9); }
+    body.camera-starting .btn:active { transform: none !important; }
     
     .btn.flash-on { border-color: var(--flash-active); }
     .btn.flash-on svg { fill: var(--flash-active); }
@@ -94,21 +121,48 @@
 
     /* --- RECORD BUTTON (ZONE AGRANDIE) --- */
     .record-wrap { 
-      position: relative; width: 90px; height: 90px; 
+      position: relative;
+      width: 90px; height: 90px;
+      min-width: 90px; min-height: 90px;
+      max-width: 90px; max-height: 90px;
+      flex: 0 0 90px;
       display: flex; align-items: center; justify-content: center; 
       pointer-events: auto; cursor: pointer; 
       -webkit-tap-highlight-color: transparent;
     }
     
-    .record-progress { position: absolute; inset: -3px; width: 96px; height: 96px; transform: rotate(-90deg); pointer-events: none; }
+    .record-progress {
+      position: absolute; inset: -3px;
+      width: 96px; height: 96px;
+      min-width: 96px; min-height: 96px;
+      max-width: 96px; max-height: 96px;
+      flex: 0 0 96px;
+      display: block;
+      transform: rotate(-90deg);
+      pointer-events: none;
+    }
     .record-progress circle { fill: none; stroke: var(--primary); stroke-width: 5px; stroke-linecap: round; stroke-dasharray: 0 999; transition: stroke-dashoffset 0.1s linear; }
     
-    .record-button { width: 72px; height: 72px; border-radius: 50%; background: #fff; border: 4px solid rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; transition: all 0.2s; pointer-events: none; }
+    .record-button {
+      width: 72px; height: 72px;
+      min-width: 72px; min-height: 72px;
+      max-width: 72px; max-height: 72px;
+      border-radius: 50%;
+      background: #fff;
+      border: 4px solid rgba(255,255,255,0.4);
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s, border-color 0.2s;
+      pointer-events: none;
+    }
     
-    body.recording .record-button { background: var(--primary); transform: scale(1.15); border-color: rgba(255,255,255,0.6); animation: pulse 1.5s infinite; }
+    body.recording .record-button { background: var(--primary); border-color: rgba(255,255,255,0.6); animation: pulse 1.5s infinite; }
     body.recording .record-inner { width: 35%; height: 35%; background: #fff; border-radius: 6px; }
     .record-inner { width: 100%; height: 100%; border-radius: 50%; transition: all 0.2s; }
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.5); } 70% { box-shadow: 0 0 0 15px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } }
+    body.camera-starting .record-button {
+      animation: none !important;
+      box-shadow: none !important;
+    }
 
     /* --- PREVIEW UI --- */
     #preview-overlay {
@@ -146,17 +200,39 @@
       background: #000;
     }
 
+    #preview-replay-btn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 12;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(15,15,15,0.7);
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+    }
+    #preview-replay-btn.active { display: inline-flex; }
+
     .preview-audio-controls {
       position: absolute;
+      top: var(--preview-top-control-offset);
       left: 0;
       right: 0;
-      top: calc(env(safe-area-inset-top) - 4px);
       z-index: 10;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
       padding: 0 18px;
+      pointer-events: none;
     }
     .music-overlay {
       padding: 0 14px;
@@ -169,13 +245,21 @@
       min-height: var(--preview-audio-control-size);
       height: var(--preview-audio-control-size);
       max-width: 240px;
+      pointer-events: auto;
     }
     .music-overlay.hidden { display: none; }
+    .music-overlay.empty {
+      justify-content: center;
+    }
+    .music-overlay.empty .music-clear { display: none; }
     .music-meta { display: flex; flex-direction: column; min-width: 0; }
     .music-title { font-weight: 800; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
     .music-artist, .music-duration { display: none; }
-    .music-visual { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .music-icon { width: 22px; height: 22px; fill: #fff; flex-shrink: 0; }
+    .music-visual { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; }
+    .music-overlay.empty .music-visual { width: auto; justify-content: center; }
+    .music-overlay.empty .music-meta { flex: 1; min-width: 0; text-align: center; }
+    .music-overlay.empty .music-title { max-width: none; }
+    .music-icon { width: 22px; height: 22px; fill: #fff; flex-shrink: 0; display: block; }
 
     .music-clear {
       width: 26px; height: 26px; border-radius: 50%;
@@ -187,9 +271,10 @@
     }
     .music-clear svg { width: 12px; height: 12px; }
     .music-clear:active { transform: scale(0.92); }
-    .music-overlay.empty { gap: 10px; }
-    .music-overlay.empty .music-clear { display: none; }
     .preview-audio-toggle {
+      position: absolute;
+      right: 18px;
+      top: 0;
       width: var(--preview-audio-control-size);
       height: var(--preview-audio-control-size);
       border-radius: 50%;
@@ -202,11 +287,108 @@
       backdrop-filter: blur(14px);
       box-shadow: 0 12px 28px rgba(0,0,0,0.35);
       transition: transform 0.2s ease;
-      position: absolute;
-      right: 18px;
+      pointer-events: auto;
     }
     .preview-audio-toggle:active { transform: scale(0.92); }
     .preview-audio-toggle svg { width: 22px; height: 22px; fill: currentColor; }
+
+    .thumbnail-button {
+      position: absolute;
+      bottom: 18px;
+      left: 18px;
+      width: 62px;
+      height: 62px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(20,20,20,0.7);
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 12px 24px rgba(0,0,0,0.4);
+      cursor: pointer;
+      z-index: 8;
+      display: grid;
+      place-items: center;
+    }
+
+    .thumbnail-preview-wrap {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+    .thumbnail-preview {
+      width: min(190px, 58vw);
+      aspect-ratio: 9 / 16;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.08);
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 18px 30px rgba(0,0,0,0.45);
+      opacity: 0;
+      transform: scale(0.98);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .thumbnail-preview.ready {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .thumbnail-strip {
+      display: flex;
+      --thumb-count: 8;
+      --thumb-gap: 2px;
+      gap: var(--thumb-gap);
+      overflow-x: hidden;
+      overflow-y: visible; /* Fix: évite le clipping vertical de la frame active */
+      padding: 0; /* Fix: réserve l'espace pour l'agrandissement sans sauts */
+      touch-action: none;
+      overscroll-behavior: contain;
+      flex-wrap: nowrap;
+      align-items: center;
+      height: 82px; /* Fix: hauteur suffisante pour la miniature active */
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      width: 100%;
+      max-width: 100vw; /* Fix: ne jamais dépasser la largeur du téléphone */
+      margin: 0 auto; /* Fix: recentre la bande dans la feuille */
+    }
+    .thumbnail-strip::-webkit-scrollbar { display: none; }
+    .thumbnail-frame {
+      width: calc((100% - (var(--thumb-count) - 1) * var(--thumb-gap)) / var(--thumb-count));
+      aspect-ratio: 9 / 16;
+      height: auto;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      background-size: cover;
+      background-position: center;
+      flex: 0 0 auto;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+      position: relative;
+      opacity: 0.35;
+    }
+    .thumbnail-frame.active {
+      transform: scale(1.12); /* Fix: zoom plus doux pour la miniature active */
+      border-color: transparent; /* Fix: supprime le contour actif */
+      box-shadow: 0 12px 24px rgba(0,0,0,0.35);
+      opacity: 1;
+    }
+    .thumbnail-loading {
+      font-size: 13px;
+      opacity: 0.7;
+      text-align: center;
+      padding: 18px 0;
+    }
+
+    #thumbnail-sheet .sheet-content {
+      overflow: hidden;
+      padding-bottom: 24px;
+      align-items: center;
+    }
+    #thumbnail-sheet .sheet-content > * { width: 100%; }
 
     .sheet-backdrop {
       position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.75));
@@ -564,7 +746,7 @@
   <div id="recording-timer">0:00</div>
 
   <div id="camera-container">
-    <video id="camera-preview" playsinline muted autoplay></video>
+    <video id="camera-preview" playsinline webkit-playsinline muted autoplay></video>
     
     <div class="controls">
       <div class="top-bar">
@@ -617,7 +799,9 @@
             <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M24 104a8 8 0 0 1 8-8h40l48-48a8 8 0 0 1 13.66 5.66v144.68A8 8 0 0 1 120 206l-48-48H32a8 8 0 0 1-8-8Zm176 24a32 32 0 0 1-18.75 29.08 8 8 0 1 1-6.5-14.6 16 16 0 0 0 0-28.96 8 8 0 1 1 6.5-14.6A32 32 0 0 1 200 128Zm32 0a64 64 0 0 1-37.5 58.16 8 8 0 0 1-6.5-14.6 48 48 0 0 0 0-87.12 8 8 0 0 1 6.5-14.6A64 64 0 0 1 232 128Z"></path></svg>
           </button>
         </div>
-        <video id="preview-video" playsinline webkit-playsinline loop preload="auto"></video>
+        <video id="preview-video" playsinline webkit-playsinline preload="auto"></video>
+        <button type="button" id="preview-replay-btn" aria-label="Relancer la vidéo">Play / Replay</button>
+        <button type="button" id="thumbnail-button" class="thumbnail-button" aria-label="Choisir une miniature"></button>
       </div>
       <div id="sheet-backdrop" class="sheet-backdrop"></div>
         <div id="music-controls" class="sheet">
@@ -691,6 +875,20 @@
             <div id="music-filter-tags" class="tag-grid"></div>
           </div>
         </div>
+        <div id="thumbnail-sheet" class="sheet">
+          <div class="sheet-handle"></div>
+          <div class="sheet-content">
+            <header>
+              <div class="title">Miniature</div>
+            </header>
+            <p style="margin: 0; opacity: 0.65; font-size: 12px; text-align: center;">Sélectionnez l’image de couverture de votre vidéo.</p>
+            <div class="thumbnail-preview-wrap">
+              <div id="selected-thumbnail-preview" class="thumbnail-preview" role="img" aria-label="Miniature sélectionnée"></div>
+            </div>
+            <div id="thumbnail-strip" class="thumbnail-strip" role="listbox" aria-label="Choisir une miniature"></div>
+            <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
+          </div>
+        </div>
     <div id="preview-actions">
       <button type="button" id="restart-button" class="action-btn">Recommencer</button>
       <button type="button" id="next-button" class="action-btn">Suivant</button>
@@ -746,6 +944,12 @@
     const musicFilterTags = document.getElementById('music-filter-tags');
     const sheetBackdrop = document.getElementById('sheet-backdrop');
     const waveformVisual = document.getElementById('waveform-visual');
+    const thumbnailButton = document.getElementById('thumbnail-button');
+    const previewReplayBtn = document.getElementById('preview-replay-btn');
+    const thumbnailSheet = document.getElementById('thumbnail-sheet');
+    const selectedThumbnailPreview = document.getElementById('selected-thumbnail-preview');
+    const thumbnailStrip = document.getElementById('thumbnail-strip');
+    const thumbnailLoading = document.getElementById('thumbnail-loading');
     let waveformHandleStart = null;
     let waveformHandleEnd = null;
     const tabWaveform = document.getElementById('tab-waveform');
@@ -758,8 +962,9 @@
     let pendingMusicId = null;
     let isDraggingWaveform = false;
     let videoDurationSeconds = 0;
-    cameraPreview.onloadedmetadata = () => {
-      cameraPreview.style.objectFit = "cover";
+    const markCameraReady = () => {
+      if (cameraReady) return;
+      if (cameraPreview.readyState < 2) return;
       cameraPreview.style.opacity = "1"; // garantir affichage plein écran
       cameraReady = true;
       document.body.classList.remove('camera-starting');
@@ -768,6 +973,7 @@
           pendingRecordUI = false;
       }
     };
+    cameraPreview.addEventListener('loadeddata', markCameraReady);
 
     let mediaStream = null;
     let mediaRecorder = null;
@@ -775,9 +981,36 @@
     let isRecording = false;
     let recordedBlob = null;
     let previewObjectURL = null;
+    let selectedThumbnailTime = 0.5;
+    let thumbnailFrames = [];
+    let thumbnailFramesPromise = null;
+    // Watchdog léger pour réveiller le renderer vidéo iOS si les frames se figent
+    const previewRenderWatchdog = {
+        enabled: false,
+        frameCallbackId: null,
+        timerId: null,
+        lastFrameRenderedAt: 0,
+        lastFrameCount: 0,
+        lastCurrentTime: 0,
+        lastKickAt: 0
+    };
+    const PREVIEW_WATCHDOG_INTERVAL_MS = 1200;
+    const PREVIEW_FRAME_STALL_MS = 2000;
+    const PREVIEW_KICK_MIN_INTERVAL_MS = 1500;
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
+
+    function stopCameraStream() {
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => {
+          try { track.stop(); } catch (e) {}
+        });
+        mediaStream = null;
+      }
+      try { cameraPreview.pause(); } catch (e) {}
+      cameraPreview.srcObject = null;
+    }
 
     // --- AJOUT MUSIQUE (prévisualisation uniquement) : catalogue et configuration ---
     const DEFAULT_MUSIC_OPTIONS = [
@@ -800,10 +1033,18 @@
     let musicStartTime = 0; // Début sélection musique (s)
     let selectedMusicId = null; // Musique choisie pour la preview
     let currentMusicDuration = 30; // Durée connue pour le slider (s)
-    let activeTag = null;
+    const DEFAULT_TAG_LABEL = 'Aucun';
+    const DEFAULT_TAG_VALUE = 'aucun';
+    let activeTag = DEFAULT_TAG_VALUE;
     let isOriginalMuted = false;
+    let musicSessionId = 0;
     const WAVEFORM_BAR_COUNT = 32;
-    const TAG_OPTIONS = ['Chill', 'Rap', 'Pop', 'Electro', 'Cinematic', 'Rock'];
+    const TAG_OPTIONS = [DEFAULT_TAG_LABEL, 'Chill', 'Rap', 'Pop', 'Electro', 'Cinematic', 'Rock'];
+
+    function invalidateMusicSession() {
+        musicSessionId += 1;
+        return musicSessionId;
+    }
 
     function getCachedAudioBufferEntry(id, url) {
         if (id && audioBufferCache.has(id)) return audioBufferCache.get(id);
@@ -849,8 +1090,13 @@
     function preloadSelectedMusic() {
         const music = getSelectedMusic();
         if (!music || !music.url || !musicEngine) return Promise.resolve(null);
+        const sessionId = musicSessionId;
+        const expectedId = music.id;
         return preloadMusicBuffer(music.id, music.url)
             .then((buffer) => {
+                if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+                    return null;
+                }
                 if (buffer?.duration) {
                     setSeekLimits(Math.floor(buffer.duration));
                 }
@@ -924,6 +1170,352 @@
         const m = Math.floor(totalSeconds / 60).toString();
         const s = (totalSeconds % 60).toString().padStart(2, '0');
         return `${m}:${s}`;
+    }
+
+    // --- MINIATURES (Thumbnail picker) ---
+    const DEFAULT_THUMBNAIL_TIME = 0.5;
+    const THUMBNAIL_IMMEDIATE_TIMES = [0.3, 1];
+    const THUMBNAIL_MIN_STEP = 0.8;
+    const THUMBNAIL_MAX_STEP = 1;
+    const THUMBNAIL_MAX_FRAMES = 8;
+    const THUMBNAIL_TIME_TOLERANCE = 0.08;
+    let thumbnailGenerationId = 0;
+    let isThumbnailScrubbing = false;
+    function getThumbnailFrameTimes(durationSeconds) {
+        const duration = Math.max(0.1, Number(durationSeconds) || 0.1);
+        const step = Math.max(THUMBNAIL_MIN_STEP, Math.min(THUMBNAIL_MAX_STEP, duration / (THUMBNAIL_MAX_FRAMES - 1)));
+        const count = Math.min(THUMBNAIL_MAX_FRAMES, Math.max(2, Math.floor(duration / step) + 1));
+        const times = Array.from({ length: count }, (_, index) => Math.min(duration, index * step));
+        if (times.length) {
+            times[times.length - 1] = duration;
+        }
+        return times;
+    }
+
+    function getImmediateThumbnailTimes(durationSeconds) {
+        const duration = Math.max(0.1, Number(durationSeconds) || 0.1);
+        const times = THUMBNAIL_IMMEDIATE_TIMES
+            .map(time => Math.min(duration, Math.max(0, time)))
+            .filter(time => Number.isFinite(time));
+        return Array.from(new Set(times)).sort((a, b) => a - b);
+    }
+
+    function buildThumbnailTimeList(durationSeconds) {
+        const baseTimes = getThumbnailFrameTimes(durationSeconds);
+        const immediateTimes = getImmediateThumbnailTimes(durationSeconds);
+        const adjustedTimes = [...baseTimes];
+        immediateTimes.forEach((time) => {
+            let closestIndex = 0;
+            let closestDiff = Number.POSITIVE_INFINITY;
+            adjustedTimes.forEach((value, index) => {
+                const diff = Math.abs(value - time);
+                if (diff < closestDiff) {
+                    closestDiff = diff;
+                    closestIndex = index;
+                }
+            });
+            adjustedTimes[closestIndex] = time;
+        });
+        const sortedTimes = adjustedTimes.sort((a, b) => a - b);
+        return sortedTimes.reduce((acc, time) => {
+            const last = acc[acc.length - 1];
+            const isImmediate = immediateTimes.some(immediate => Math.abs(immediate - time) < THUMBNAIL_TIME_TOLERANCE);
+            if (acc.length && Math.abs(last - time) <= THUMBNAIL_TIME_TOLERANCE) {
+                if (isImmediate) acc[acc.length - 1] = time;
+                return acc;
+            }
+            acc.push(time);
+            return acc;
+        }, []);
+    }
+
+    function selectNearestThumbnailFrame(timeSeconds) {
+        if (!thumbnailFrames.length) return null;
+        const target = Math.max(0, timeSeconds || 0);
+        return thumbnailFrames.reduce((closest, frame) => {
+            if (!closest) return frame;
+            return Math.abs(frame.time - target) < Math.abs(closest.time - target) ? frame : closest;
+        }, null);
+    }
+
+    function updateThumbnailButtonPreview() {
+        if (!thumbnailButton) return;
+        const frame = selectNearestThumbnailFrame(selectedThumbnailTime);
+        if (frame?.url) {
+            thumbnailButton.style.backgroundImage = `url(${frame.url})`;
+        } else {
+            thumbnailButton.style.backgroundImage = '';
+        }
+    }
+
+    function updateSelectedThumbnailPreview() {
+        if (!selectedThumbnailPreview) return;
+        const frame = selectNearestThumbnailFrame(selectedThumbnailTime);
+        if (frame?.url) {
+            selectedThumbnailPreview.style.backgroundImage = `url(${frame.url})`;
+            selectedThumbnailPreview.classList.add('ready');
+        } else {
+            selectedThumbnailPreview.style.backgroundImage = '';
+            selectedThumbnailPreview.classList.remove('ready');
+        }
+    }
+
+    function setSelectedThumbnail(timeSeconds, { seekPreview = false } = {}) {
+        const nextTime = Math.max(0, Number.isFinite(timeSeconds) ? timeSeconds : DEFAULT_THUMBNAIL_TIME);
+        selectedThumbnailTime = nextTime;
+        updateThumbnailButtonPreview();
+        updateSelectedThumbnailPreview();
+        if (!thumbnailStrip) return;
+        const items = thumbnailStrip.querySelectorAll('.thumbnail-frame');
+        let closestItem = null;
+        let closestDiff = Number.POSITIVE_INFINITY;
+        items.forEach((item) => {
+            const itemTime = Number(item.dataset.time || 0);
+            const diff = Math.abs(itemTime - nextTime);
+            if (diff < closestDiff) {
+                closestDiff = diff;
+                closestItem = item;
+            }
+        });
+        items.forEach((item) => item.classList.toggle('active', item === closestItem));
+    }
+
+    function renderThumbnailStrip(frames) {
+        if (!thumbnailStrip) return;
+        thumbnailStrip.style.setProperty('--thumb-count', String(Math.max(frames.length, 1)));
+        if (!frames.length) {
+            thumbnailStrip.innerHTML = '';
+            return;
+        }
+        const existingItems = [...thumbnailStrip.querySelectorAll('.thumbnail-frame')];
+        const layoutMatches = existingItems.length === frames.length
+            && existingItems.every((item, index) => {
+                const itemTime = Number(item.dataset.time || 0);
+                return Math.abs(itemTime - frames[index].time) <= THUMBNAIL_TIME_TOLERANCE;
+            });
+        if (layoutMatches) {
+            // UX: évite les reflows en mettant à jour uniquement les images
+            frames.forEach((frame, index) => {
+                const button = existingItems[index];
+                if (!button) return;
+                button.style.backgroundImage = frame.url ? `url(${frame.url})` : '';
+            });
+            setSelectedThumbnail(selectedThumbnailTime);
+            return;
+        }
+        const previousScrollLeft = thumbnailStrip.scrollLeft;
+        thumbnailStrip.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+        frames.forEach((frame) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'thumbnail-frame';
+            button.dataset.time = String(frame.time);
+            button.style.backgroundImage = frame.url ? `url(${frame.url})` : '';
+            button.onclick = (e) => {
+                e.stopPropagation();
+                setSelectedThumbnail(frame.time, { seekPreview: true });
+            };
+            fragment.appendChild(button);
+        });
+        thumbnailStrip.appendChild(fragment);
+        thumbnailStrip.scrollLeft = previousScrollLeft;
+        setSelectedThumbnail(selectedThumbnailTime);
+    }
+
+    function getClosestThumbnailTimeByX(clientX) {
+        if (!thumbnailStrip) return null;
+        const items = thumbnailStrip.querySelectorAll('.thumbnail-frame');
+        if (!items.length) return null;
+        const rect = thumbnailStrip.getBoundingClientRect();
+        const targetX = Number.isFinite(clientX) ? clientX : rect.left + rect.width / 2;
+        // Calcule la frame la plus proche visuellement (centre des miniatures).
+        let closestTime = null;
+        let closestDistance = Number.POSITIVE_INFINITY;
+        items.forEach((item) => {
+            const itemRect = item.getBoundingClientRect();
+            const center = itemRect.left + itemRect.width / 2;
+            const distance = Math.abs(center - targetX);
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestTime = Number(item.dataset.time || 0);
+            }
+        });
+        return closestTime;
+    }
+
+    function handleThumbnailScrub(clientX) {
+        const time = getClosestThumbnailTimeByX(clientX);
+        if (!Number.isFinite(time)) return;
+        const snapped = selectNearestThumbnailFrame(time)?.time ?? time;
+        // UI scrub: met à jour la sélection sans seek vidéo pendant le drag.
+        setSelectedThumbnail(snapped, { seekPreview: false });
+    }
+
+    function seekVideoToTime(video, timeSeconds) {
+        return new Promise((resolve) => {
+            const handleSeek = () => {
+                video.removeEventListener('seeked', handleSeek);
+                resolve();
+            };
+            video.addEventListener('seeked', handleSeek, { once: true });
+            const safeTime = Math.min(Math.max(0, timeSeconds), Math.max(video.duration || timeSeconds, 0));
+            video.currentTime = safeTime;
+        });
+    }
+
+    async function extractThumbnailFrames(videoBlob) {
+        if (!videoBlob) return [];
+        if (thumbnailFramesPromise) return thumbnailFramesPromise;
+        if (thumbnailLoading) thumbnailLoading.hidden = false;
+
+        thumbnailFramesPromise = (async () => {
+            const tempVideo = document.createElement('video');
+            tempVideo.muted = true;
+            tempVideo.preload = 'auto';
+            const objectUrl = URL.createObjectURL(videoBlob);
+            tempVideo.src = objectUrl;
+            tempVideo.playsInline = true;
+            tempVideo.setAttribute('playsinline', '');
+            tempVideo.load();
+
+            await new Promise((resolve, reject) => {
+                tempVideo.onloadedmetadata = () => resolve();
+                tempVideo.onerror = () => reject(new Error('thumbnail metadata failed'));
+            });
+
+            const duration = Math.max(0.1, Number(tempVideo.duration) || videoDurationSeconds || 0.1);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return [];
+
+            const aspect = tempVideo.videoWidth && tempVideo.videoHeight
+                ? tempVideo.videoWidth / tempVideo.videoHeight
+                : 9 / 16;
+            canvas.width = 160;
+            canvas.height = Math.round(canvas.width / aspect);
+
+            thumbnailGenerationId += 1;
+            const currentGeneration = thumbnailGenerationId;
+            let frames = [];
+            let renderScheduled = false;
+
+            const scheduleThumbnailRender = () => {
+                if (renderScheduled) return;
+                renderScheduled = true;
+                requestAnimationFrame(() => {
+                    renderScheduled = false;
+                    if (currentGeneration !== thumbnailGenerationId) return;
+                    if (thumbnailSheet?.classList.contains('active')) {
+                        renderThumbnailStrip(frames);
+                    }
+                    updateThumbnailButtonPreview();
+                    updateSelectedThumbnailPreview();
+                });
+            };
+
+            const captureFrameAt = async (time) => {
+                await seekVideoToTime(tempVideo, time);
+                ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+                const url = canvas.toDataURL('image/jpeg', 0.7);
+                return { time, url };
+            };
+
+            const pushFrame = (frame) => {
+                if (!frame) return;
+                const index = frames.findIndex(
+                    item => Math.abs(item.time - frame.time) <= THUMBNAIL_TIME_TOLERANCE
+                );
+                if (index >= 0) {
+                    frames = frames.map((item, idx) => (idx === index ? frame : item));
+                } else {
+                    frames = [...frames, frame].sort((a, b) => a.time - b.time);
+                }
+                thumbnailFrames = frames;
+                scheduleThumbnailRender();
+            };
+
+            const times = buildThumbnailTimeList(duration);
+            // UX: réserver toute la bande pour éviter les sauts visuels pendant le chargement
+            frames = times.map(time => ({ time, url: '' }));
+            thumbnailFrames = frames;
+            if (thumbnailSheet?.classList.contains('active')) {
+                renderThumbnailStrip(frames);
+            }
+            const immediateTimes = getImmediateThumbnailTimes(duration);
+            const remainingTimes = times.filter(
+                time => !immediateTimes.some(immediate => Math.abs(immediate - time) < THUMBNAIL_TIME_TOLERANCE),
+            );
+
+            for (const time of immediateTimes) {
+                if (currentGeneration !== thumbnailGenerationId) break;
+                const frame = await captureFrameAt(time);
+                pushFrame(frame);
+            }
+
+            await new Promise((resolve) => {
+                const processQueue = async () => {
+                    if (currentGeneration !== thumbnailGenerationId) {
+                        resolve();
+                        return;
+                    }
+                    if (!remainingTimes.length) {
+                        resolve();
+                        return;
+                    }
+                    const time = remainingTimes.shift();
+                    try {
+                        const frame = await captureFrameAt(time);
+                        pushFrame(frame);
+                    } catch (error) {
+                        // ignore single frame failures
+                    }
+                    scheduleIdleTask(processQueue, { timeout: 400, fallbackDelay: 120 });
+                };
+                scheduleIdleTask(processQueue, { timeout: 400, fallbackDelay: 120 });
+            });
+
+            canvas.width = 0;
+            canvas.height = 0;
+            tempVideo.removeAttribute('src');
+            tempVideo.load();
+            URL.revokeObjectURL(objectUrl);
+            return frames;
+        })()
+            .then((frames) => {
+                thumbnailFrames = frames;
+                return frames;
+            })
+            .catch(() => [])
+            .finally(() => {
+                if (thumbnailLoading) thumbnailLoading.hidden = true;
+                thumbnailFramesPromise = null;
+            });
+
+        return thumbnailFramesPromise;
+    }
+
+    function openThumbnailPicker() {
+        if (!thumbnailSheet) return;
+        closeMusicSheet();
+        thumbnailSheet.classList.add('active');
+        updateSheetBackdrop();
+        updateSelectedThumbnailPreview();
+        extractThumbnailFrames(recordedBlob).then((frames) => {
+            renderThumbnailStrip(frames || []);
+            updateThumbnailButtonPreview();
+        });
+    }
+
+    function prepareThumbnailPreview() {
+        if (!recordedBlob) return;
+        extractThumbnailFrames(recordedBlob).then((frames) => {
+            updateThumbnailButtonPreview();
+            updateSelectedThumbnailPreview();
+            if (thumbnailSheet?.classList.contains('active')) {
+                renderThumbnailStrip(frames || []);
+            }
+        });
     }
 
     // UX: progression en % (réelle ou estimée) pour l'overlay d'upload
@@ -1108,6 +1700,16 @@
         return String(tag || '').trim().toLowerCase();
     }
 
+    function isDefaultTag(tag) {
+        return !tag || tag === DEFAULT_TAG_VALUE;
+    }
+
+    function resetFilterTag() {
+        activeTag = DEFAULT_TAG_VALUE;
+        renderFilterTags();
+        renderMusicList(musicSearchInput.value);
+    }
+
     function getTrackTags(opt) {
         const tagList = [];
         const rawTags = opt?.tags;
@@ -1138,7 +1740,11 @@
                 btn.classList.add('active');
             }
             btn.onclick = () => {
-                activeTag = activeTag === normalized ? null : normalized;
+                if (normalized === DEFAULT_TAG_VALUE) {
+                    activeTag = DEFAULT_TAG_VALUE;
+                } else {
+                    activeTag = activeTag === normalized ? DEFAULT_TAG_VALUE : normalized;
+                }
                 renderFilterTags();
                 renderMusicList(musicSearchInput.value);
             };
@@ -1152,7 +1758,7 @@
         const items = musicOptions.filter(opt => {
             const hay = `${opt.title} ${opt.artist}`.toLowerCase();
             const tags = getTrackTags(opt);
-            const matchesTag = !activeTag || tags.some((tag) => tag.includes(activeTag) || activeTag.includes(tag));
+            const matchesTag = isDefaultTag(activeTag) || tags.some((tag) => tag.includes(activeTag) || activeTag.includes(tag));
             return hay.includes(query) && matchesTag;
         });
         if (!items.length) {
@@ -1279,7 +1885,8 @@
         syncVolumeLabels();
         renderMusicList(musicSearchInput.value);
         updateMusicOverlay();
-        stopMusicPreview();
+        stopMusicPreview({ hard: true });
+        invalidateMusicSession();
         updateMusicSelectionUI();
     }
 
@@ -1296,6 +1903,8 @@
         updateMusicOverlay();
         renderMusicList(musicSearchInput.value);
         updateMusicSelectionUI();
+        stopMusicPreview({ hard: true });
+        invalidateMusicSession();
     }
 
     const MAX_PRELOAD_ITEMS = 2;
@@ -1447,6 +2056,29 @@
         }, { passive: true });
     }
 
+    if (thumbnailStrip) {
+        thumbnailStrip.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            isThumbnailScrubbing = true;
+            // La timelapse est un picker UI passif : aucune action audio/vidéo.
+            thumbnailStrip.setPointerCapture?.(e.pointerId);
+            handleThumbnailScrub(e.clientX);
+        });
+        thumbnailStrip.addEventListener('pointermove', (e) => {
+            if (!isThumbnailScrubbing) return;
+            e.preventDefault();
+            handleThumbnailScrub(e.clientX);
+        });
+        const endThumbnailScrub = (e) => {
+            if (!isThumbnailScrubbing) return;
+            isThumbnailScrubbing = false;
+            thumbnailStrip.releasePointerCapture?.(e.pointerId);
+            // La timelapse n'affecte jamais la vidéo, elle sert uniquement au choix de la minia.
+        };
+        thumbnailStrip.addEventListener('pointerup', endThumbnailScrub);
+        thumbnailStrip.addEventListener('pointercancel', endThumbnailScrub);
+    }
+
     function setActiveTab(tabKey = 'music') {
         const showMusic = tabKey === 'music';
         const showWaveform = tabKey === 'waveform';
@@ -1460,12 +2092,15 @@
     }
 
     function updateSheetBackdrop() {
-        const hasActiveSheet = musicSheet?.classList.contains('active') || musicFilterSheet?.classList.contains('active');
+        const hasActiveSheet = musicSheet?.classList.contains('active')
+            || musicFilterSheet?.classList.contains('active')
+            || thumbnailSheet?.classList.contains('active');
         sheetBackdrop?.classList.toggle('active', hasActiveSheet);
     }
 
     function openMusicSheet() {
         if (!musicSheet) return;
+        closeThumbnailSheet();
         setActiveTab('music');
         musicSheet.classList.add('active');
         updateSheetBackdrop();
@@ -1479,12 +2114,23 @@
 
     function closeMusicSheet() {
         musicSheet?.classList.remove('active');
-        musicFilterSheet?.classList.remove('active');
+        if (musicFilterSheet?.classList.contains('active')) {
+            musicFilterSheet.classList.remove('active');
+            resetFilterTag();
+        }
         updateSheetBackdrop();
     }
 
     function closeFilterSheet() {
-        musicFilterSheet?.classList.remove('active');
+        if (musicFilterSheet?.classList.contains('active')) {
+            musicFilterSheet.classList.remove('active');
+            resetFilterTag();
+        }
+        updateSheetBackdrop();
+    }
+
+    function closeThumbnailSheet() {
+        thumbnailSheet?.classList.remove('active');
         updateSheetBackdrop();
     }
 
@@ -1549,9 +2195,19 @@
     });
     musicSheet.onclick = (e) => e.stopPropagation();
     musicFilterSheet.onclick = (e) => e.stopPropagation();
-    sheetBackdrop.onclick = () => {
+    thumbnailSheet.onclick = (e) => e.stopPropagation();
+    thumbnailButton?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openThumbnailPicker();
+    });
+    sheetBackdrop.onclick = (e) => {
+        e.stopPropagation();
         if (musicFilterSheet?.classList.contains('active')) {
             closeFilterSheet();
+            return;
+        }
+        if (thumbnailSheet?.classList.contains('active')) {
+            closeThumbnailSheet();
             return;
         }
         closeMusicSheet();
@@ -1564,12 +2220,16 @@
                 closeFilterSheet();
                 return;
             }
+            if (thumbnailSheet?.classList.contains('active')) {
+                closeThumbnailSheet();
+                return;
+            }
             closeMusicSheet();
         }
     });
 
     let sheetTouchStartY = null;
-    [musicSheet, musicFilterSheet].forEach((sheet) => {
+    [musicSheet, musicFilterSheet, thumbnailSheet].forEach((sheet) => {
         sheet?.addEventListener('touchstart', (e) => {
             sheetTouchStartY = e.touches[0]?.clientY ?? null;
         }, { passive: true });
@@ -1580,6 +2240,8 @@
             if (endY - sheetTouchStartY > 60) {
                 if (sheet === musicFilterSheet) {
                     closeFilterSheet();
+                } else if (sheet === thumbnailSheet) {
+                    closeThumbnailSheet();
                 } else {
                     closeMusicSheet();
                 }
@@ -1825,6 +2487,9 @@
 
     async function startMusicPreview(opt) {
         if (!opt || !musicEngine) return;
+        const sessionId = musicSessionId;
+        const expectedId = opt.id;
+        const shouldResumePreview = previewOverlay.classList.contains('active') && previewVideo && !previewVideo.paused && !previewVideo.ended;
 
         if (currentlyPlayingMusicId && currentlyPlayingMusicId !== opt.id) {
             stopMusicPreview({ hard: false });
@@ -1845,10 +2510,20 @@
         const { start, end } = getLoopBounds();
         try {
             await ensureAudioReady();
+            if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+                return;
+            }
             if (audioCtx?.state === 'suspended') {
                 await audioCtx.resume().catch(() => {});
             }
             const duration = await musicEngine.load(opt.url, { id: opt.id });
+            if (shouldResumePreview && previewVideo.paused) {
+                previewVideo.play().catch(() => {});
+            }
+            if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+                musicEngine.stop();
+                return;
+            }
             if (Number.isFinite(duration)) {
                 setSeekLimits(Math.floor(duration));
             }
@@ -1857,6 +2532,10 @@
                 await audioCtx.resume().catch(() => {});
             }
             const started = await musicEngine.play(start, end);
+            if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+                musicEngine.stop();
+                return;
+            }
             if (!started) {
                 currentlyPlayingMusicId = null;
             }
@@ -2006,15 +2685,7 @@
         cameraPreview.srcObject = mediaStream;
         cameraPreview.play().catch(e=>{});
 
-        if (cameraPreview.readyState >= 2) {
-          cameraPreview.style.opacity = "1";
-          cameraReady = true;
-          document.body.classList.remove('camera-starting');
-          if (pendingRecordUI && isRecording) {
-              document.body.classList.add('recording');
-              pendingRecordUI = false;
-          }
-        }
+        markCameraReady();
         
         cameraPreview.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
 
@@ -2050,15 +2721,7 @@
         cameraPreview.play().catch(e=>{});
         mediaStream = stream;
 
-        if (cameraPreview.readyState >= 2) {
-          cameraPreview.style.opacity = "1";
-          cameraReady = true;
-          document.body.classList.remove('camera-starting');
-          if (pendingRecordUI && isRecording) {
-              document.body.classList.add('recording');
-              pendingRecordUI = false;
-          }
-        }
+        markCameraReady();
         
         cameraPreview.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
 
@@ -2078,7 +2741,6 @@
 
       } catch (error) {
         console.error(error);
-        document.body.classList.remove('camera-starting');
       } finally {
         startCamera.isStarting = false;
       }
@@ -2201,15 +2863,107 @@
        previewOverlay.style.removeProperty('--preview-viewport-width');
     }
 
+    function resetThumbnailDefaults() {
+       selectedThumbnailTime = DEFAULT_THUMBNAIL_TIME;
+       thumbnailFrames = [];
+       thumbnailFramesPromise = null;
+       if (thumbnailStrip) thumbnailStrip.innerHTML = '';
+       if (thumbnailButton) thumbnailButton.style.backgroundImage = '';
+       if (selectedThumbnailPreview) {
+           selectedThumbnailPreview.style.backgroundImage = '';
+           selectedThumbnailPreview.classList.remove('ready');
+       }
+       if (thumbnailLoading) thumbnailLoading.hidden = true;
+    }
+
+    function getPreviewFrameCount() {
+        if (!previewVideo) return null;
+        if (typeof previewVideo.getVideoPlaybackQuality === 'function') {
+            return previewVideo.getVideoPlaybackQuality().totalVideoFrames || 0;
+        }
+        if (typeof previewVideo.webkitDecodedFrameCount === 'number') {
+            return previewVideo.webkitDecodedFrameCount;
+        }
+        return null;
+    }
+
+    function kickPreviewRenderer() {
+        if (!previewVideo || previewVideo.readyState < 2 || previewVideo.paused) return;
+        const now = performance.now();
+        if (now - previewRenderWatchdog.lastKickAt < PREVIEW_KICK_MIN_INTERVAL_MS) return;
+        previewRenderWatchdog.lastKickAt = now;
+        const baseTransform = previewVideo.style.transform || '';
+        previewVideo.style.transform = `${baseTransform} translateZ(0)`;
+        requestAnimationFrame(() => {
+            if (!previewVideo) return;
+            previewVideo.style.transform = baseTransform;
+        });
+    }
+
+    function startPreviewRenderWatchdog() {
+        if (!previewVideo || previewRenderWatchdog.enabled) return;
+        previewRenderWatchdog.enabled = true;
+        previewRenderWatchdog.lastFrameRenderedAt = performance.now();
+        previewRenderWatchdog.lastFrameCount = getPreviewFrameCount() || 0;
+        previewRenderWatchdog.lastCurrentTime = previewVideo.currentTime || 0;
+        const hasFrameCallback = typeof previewVideo.requestVideoFrameCallback === 'function';
+        const trackFrame = () => {
+            if (!previewRenderWatchdog.enabled) return;
+            previewRenderWatchdog.lastFrameRenderedAt = performance.now();
+            const frameCount = getPreviewFrameCount();
+            if (frameCount !== null) {
+                previewRenderWatchdog.lastFrameCount = frameCount;
+            }
+            previewRenderWatchdog.frameCallbackId = previewVideo.requestVideoFrameCallback(trackFrame);
+        };
+        if (hasFrameCallback) {
+            previewRenderWatchdog.frameCallbackId = previewVideo.requestVideoFrameCallback(trackFrame);
+        }
+        previewRenderWatchdog.timerId = setInterval(() => {
+            if (!previewRenderWatchdog.enabled || !previewVideo) return;
+            if (previewVideo.paused || previewVideo.ended || previewVideo.readyState < 2) return;
+            if (!previewOverlay.classList.contains('active')) return;
+            const now = performance.now();
+            const currentTime = previewVideo.currentTime || 0;
+            const timeAdvanced = currentTime > previewRenderWatchdog.lastCurrentTime + 0.01;
+            const frameCount = getPreviewFrameCount();
+            if (frameCount !== null && frameCount !== previewRenderWatchdog.lastFrameCount) {
+                previewRenderWatchdog.lastFrameCount = frameCount;
+                previewRenderWatchdog.lastFrameRenderedAt = now;
+            }
+            if (timeAdvanced && now - previewRenderWatchdog.lastFrameRenderedAt > PREVIEW_FRAME_STALL_MS) {
+                kickPreviewRenderer();
+                previewRenderWatchdog.lastFrameRenderedAt = now;
+            }
+            previewRenderWatchdog.lastCurrentTime = currentTime;
+        }, PREVIEW_WATCHDOG_INTERVAL_MS);
+    }
+
+    function stopPreviewRenderWatchdog() {
+        if (!previewRenderWatchdog.enabled) return;
+        previewRenderWatchdog.enabled = false;
+        if (previewRenderWatchdog.timerId) {
+            clearInterval(previewRenderWatchdog.timerId);
+            previewRenderWatchdog.timerId = null;
+        }
+        if (previewRenderWatchdog.frameCallbackId && typeof previewVideo?.cancelVideoFrameCallback === 'function') {
+            previewVideo.cancelVideoFrameCallback(previewRenderWatchdog.frameCallbackId);
+        }
+        previewRenderWatchdog.frameCallbackId = null;
+    }
+
     function showPreview(blob) {
+       stopCameraStream();
+       previewVideo.pause();
+       previewVideo.removeAttribute('src');
+       previewVideo.load();
        if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
        previewObjectURL = URL.createObjectURL(blob);
        lockPreviewViewport();
+       previewReplayBtn?.classList.remove('active');
        previewVideo.src = previewObjectURL;
        syncOriginalMuteState();
        previewVideo.preload = 'auto';
-       previewVideo.loop = true;
-       previewVideo.currentTime = 0;
        previewVideo.style.transform = recordedFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
        let previewActivated = false;
        previewVideo.oncanplay = () => {
@@ -2222,19 +2976,21 @@
              previewVideo.play().catch(() => {});
           });
        };
+       previewVideo.load();
        if (previewVideo.readyState >= 3) {
           previewVideo.oncanplay?.();
-       } else {
-          previewVideo.load();
        }
 
        // Sélection par défaut à chaque nouvelle preview
+       resetThumbnailDefaults();
        resetMusicDefaults();
        closeFilterSheet();
        closeMusicSheet();
+       closeThumbnailSheet();
 
        syncOriginalMuteState();
        updateMusicSelectionUI();
+       prepareThumbnailPreview();
     }
 
     function resetPreviewState() {
@@ -2242,9 +2998,13 @@
             clearTimeout(previewTimeout);
             previewTimeout = null;
         }
+        stopPreviewRenderWatchdog();
         stopMusicPreview({ hard: true });
+        invalidateMusicSession();
+        resetThumbnailDefaults();
         previewVideo.pause();
         previewVideo.src = '';
+        previewReplayBtn?.classList.remove('active');
         if (previewObjectURL) {
             URL.revokeObjectURL(previewObjectURL);
             previewObjectURL = null;
@@ -2274,6 +3034,9 @@
             }
             shouldCheckDuration = false;
         }
+        if (videoDurationSeconds && selectedThumbnailTime > videoDurationSeconds) {
+            setSelectedThumbnail(videoDurationSeconds);
+        }
         setSeekLimits(currentMusicDuration);
         updateMusicOverlay();
         restartPreviewIfPlaying();
@@ -2281,6 +3044,23 @@
 
     previewVideo.addEventListener('play', syncOriginalMuteState);
     previewVideo.addEventListener('pause', syncOriginalMuteState);
+    previewVideo.addEventListener('play', startPreviewRenderWatchdog);
+    previewVideo.addEventListener('pause', stopPreviewRenderWatchdog);
+    previewVideo.addEventListener('ended', () => {
+        stopPreviewRenderWatchdog();
+        previewReplayBtn?.classList.add('active');
+    });
+    previewVideo.addEventListener('emptied', stopPreviewRenderWatchdog);
+    previewVideo.addEventListener('play', () => {
+        previewReplayBtn?.classList.remove('active');
+    });
+
+    previewReplayBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        previewReplayBtn.classList.remove('active');
+        previewVideo.currentTime = 0;
+        previewVideo.play().catch(() => {});
+    });
 
     flashBtn.onclick = toggleFlash;
     
@@ -2345,6 +3125,7 @@
        recordedBlob = file;
        shouldCheckDuration = true;
        showPreview(file);
+       extractThumbnailFrames(file);
        e.target.value = '';
     }
 
@@ -2440,6 +3221,7 @@
          formData.append('facingMode', recordedFacingMode);
          formData.append('audioMode', audioMode);
          formData.append('muxUploadUrl', muxUploadUrl);
+         formData.append('thumbnailTime', String(Number.isFinite(selectedThumbnailTime) ? selectedThumbnailTime : DEFAULT_THUMBNAIL_TIME));
          if (selectedMusic) {
             formData.append('musicUrl', selectedMusic.url || '');
             formData.append('musicStart', String(musicStartTime || 0));
@@ -2550,9 +3332,11 @@
     previewOverlay.onclick = async (e) => {
       const tappedAction = e.target.closest('.action-btn') || e.target.closest('#preview-actions');
       const tappedSheet = e.target.closest('.sheet');
-      if ((musicSheet.classList.contains('active') || musicFilterSheet.classList.contains('active')) && !tappedSheet) {
+      if ((musicSheet.classList.contains('active') || musicFilterSheet.classList.contains('active') || thumbnailSheet.classList.contains('active')) && !tappedSheet) {
          if (musicFilterSheet.classList.contains('active')) {
             closeFilterSheet();
+         } else if (thumbnailSheet.classList.contains('active')) {
+            closeThumbnailSheet();
          } else {
             closeMusicSheet();
          }
