@@ -175,7 +175,7 @@
       transition: opacity 0.2s ease;
       width: var(--preview-viewport-width, 100%);
       height: var(--preview-viewport-height, 100dvh);
-      overflow-y: auto;
+      overflow: hidden;
     }
     #preview-overlay.active { display: flex; opacity: 1; }
     .preview-video-container {
@@ -192,7 +192,7 @@
       flex-direction: column;
       align-items: center;
       gap: 16px;
-      padding: max(16px, env(safe-area-inset-top)) 18px calc(140px + env(safe-area-inset-bottom));
+      padding: max(16px, env(safe-area-inset-top)) 18px max(24px, env(safe-area-inset-bottom));
     }
     #preview-video {
       display: none;
@@ -203,13 +203,18 @@
       background: #000;
     }
 
+    .thumbnail-strip-group {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
     .music-overlay-row {
       width: 100%;
       display: flex;
       justify-content: center;
     }
     .music-overlay {
-      margin-top: 12px;
       padding: 0 14px;
       z-index: 10;
       display: flex; align-items: center; gap: 12px;
@@ -549,7 +554,7 @@
       line-height: 1.5;
     }
     .visually-hidden { position: absolute !important; height: 1px; width: 1px; overflow: hidden; clip: rect(1px, 1px, 1px, 1px); white-space: nowrap; }
-    #preview-actions { height: 110px; min-height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px; z-index: 90; pointer-events: auto; position: fixed; left: 0; right: 0; bottom: 0; }
+    #preview-actions { width: 100%; height: 110px; min-height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px calc(env(safe-area-inset-bottom) + 10px); pointer-events: auto; position: relative; }
     .action-btn { flex: 1; height: 54px; font-size: 16px; font-weight: 700; border: none; cursor: pointer; border-radius: 14px; }
     #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
     #next-button { background: #fff; color: #000; }
@@ -786,19 +791,21 @@
           <div id="selected-thumbnail-preview" class="thumbnail-preview" role="img" aria-label="Miniature sélectionnée"></div>
         </div>
         <div class="thumbnail-label">Miniature sélectionnée</div>
-        <div id="thumbnail-strip" class="thumbnail-strip" role="listbox" aria-label="Choisir une miniature"></div>
-        <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
-        <div class="music-overlay-row">
-          <div id="music-overlay" class="music-overlay empty">
-            <div class="music-visual">
-              <svg class="music-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M211.79 35.48a8 8 0 0 0-6.62-1.43l-96 20a8 8 0 0 0-6.54 7.86V168a28 28 0 1 0 16 25.45V121.89l80-16.67V152a28 28 0 1 0 16 25.45V43.91a8 8 0 0 0-3.38-6.63ZM88 216a12 12 0 1 1 12-12 12 12 0 0 1-12 12Zm28-106.67V79.12l80-16.67v30.22Zm80 106.67a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
-            </div>
-            <div class="music-meta">
-              <span class="music-title">Ajouter un son</span>
-              <span class="music-artist"></span>
-              <span class="music-duration" id="music-duration"></span>
+        <div class="thumbnail-strip-group">
+          <div id="thumbnail-strip" class="thumbnail-strip" role="listbox" aria-label="Choisir une miniature"></div>
+          <div class="music-overlay-row">
+            <div id="music-overlay" class="music-overlay">
+              <div class="music-visual">
+                <svg class="music-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M211.79 35.48a8 8 0 0 0-6.62-1.43l-96 20a8 8 0 0 0-6.54 7.86V168a28 28 0 1 0 16 25.45V121.89l80-16.67V152a28 28 0 1 0 16 25.45V43.91a8 8 0 0 0-3.38-6.63ZM88 216a12 12 0 1 1 12-12 12 12 0 0 1-12 12Zm28-106.67V79.12l80-16.67v30.22Zm80 106.67a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
+              </div>
+              <div class="music-meta">
+                <span class="music-title">Ajouter un son</span>
+                <span class="music-artist"></span>
+                <span class="music-duration" id="music-duration"></span>
+              </div>
             </div>
           </div>
+          <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
         </div>
         <video id="preview-video" playsinline webkit-playsinline preload="auto"></video>
         <div id="music-controls" class="sheet inline-music-controls">
@@ -858,6 +865,10 @@
           </div>
         </div>
       </div>
+      <div id="preview-actions">
+        <button type="button" id="restart-button" class="action-btn">Recommencer</button>
+        <button type="button" id="next-button" class="action-btn">Suivant</button>
+      </div>
       <div id="sheet-backdrop" class="sheet-backdrop"></div>
       <div id="music-filter-sheet" class="sheet">
         <div class="sheet-handle"></div>
@@ -871,10 +882,6 @@
           <div id="music-filter-tags" class="tag-grid"></div>
         </div>
       </div>
-    <div id="preview-actions">
-      <button type="button" id="restart-button" class="action-btn">Recommencer</button>
-      <button type="button" id="next-button" class="action-btn">Suivant</button>
-    </div>
   </div>
 
   <div id="upload-overlay">
@@ -964,6 +971,8 @@
     let selectedThumbnailTime = 0.5;
     let thumbnailFrames = [];
     let thumbnailFramesPromise = null;
+    let selectedPreviewCache = new Map();
+    let selectedPreviewRenderId = 0;
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
@@ -1195,22 +1204,82 @@
         }, null);
     }
 
-    function updateSelectedThumbnailPreview() {
-        if (!selectedThumbnailPreview) return;
-        const frame = selectNearestThumbnailFrame(selectedThumbnailTime);
-        if (frame?.url) {
-            selectedThumbnailPreview.style.backgroundImage = `url(${frame.url})`;
-            selectedThumbnailPreview.classList.add('ready');
-        } else {
-            selectedThumbnailPreview.style.backgroundImage = '';
-            selectedThumbnailPreview.classList.remove('ready');
+    function getSelectedPreviewCacheKey(timeSeconds) {
+        return Number(timeSeconds || 0).toFixed(2);
+    }
+
+    function applySelectedThumbnailPreview(url) {
+        if (!selectedThumbnailPreview || !url) return;
+        selectedThumbnailPreview.style.backgroundImage = `url(${url})`;
+        selectedThumbnailPreview.classList.add('ready');
+    }
+
+    async function captureSelectedThumbnailPreview(timeSeconds) {
+        if (!recordedBlob || !selectedThumbnailPreview) return null;
+        const tempVideo = document.createElement('video');
+        tempVideo.muted = true;
+        tempVideo.preload = 'auto';
+        const objectUrl = URL.createObjectURL(recordedBlob);
+        tempVideo.src = objectUrl;
+        tempVideo.playsInline = true;
+        tempVideo.setAttribute('playsinline', '');
+        tempVideo.load();
+
+        await new Promise((resolve, reject) => {
+            tempVideo.onloadedmetadata = () => resolve();
+            tempVideo.onerror = () => reject(new Error('selected thumbnail metadata failed'));
+        });
+
+        const rect = selectedThumbnailPreview.getBoundingClientRect();
+        const displayWidth = Math.max(1, rect.width || 200);
+        const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
+        const scale = Math.max(2, pixelRatio);
+        const aspect = tempVideo.videoWidth && tempVideo.videoHeight
+            ? tempVideo.videoWidth / tempVideo.videoHeight
+            : 2 / 3;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        canvas.width = Math.round(displayWidth * scale);
+        canvas.height = Math.round(canvas.width / aspect);
+
+        await seekVideoToTime(tempVideo, timeSeconds);
+        ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+        const url = canvas.toDataURL('image/jpeg', 0.9);
+
+        canvas.width = 0;
+        canvas.height = 0;
+        tempVideo.removeAttribute('src');
+        tempVideo.load();
+        URL.revokeObjectURL(objectUrl);
+        return url;
+    }
+
+    function requestSelectedThumbnailPreview(timeSeconds) {
+        if (!selectedThumbnailPreview || !recordedBlob) return;
+        const key = getSelectedPreviewCacheKey(timeSeconds);
+        const cached = selectedPreviewCache.get(key);
+        if (cached) {
+            applySelectedThumbnailPreview(cached);
+            return;
         }
+        const requestId = ++selectedPreviewRenderId;
+        scheduleIdleTask(async () => {
+            try {
+                const url = await captureSelectedThumbnailPreview(timeSeconds);
+                if (!url || requestId !== selectedPreviewRenderId) return;
+                selectedPreviewCache.set(key, url);
+                applySelectedThumbnailPreview(url);
+            } catch (error) {
+                // ignore capture failures
+            }
+        }, { timeout: 500, fallbackDelay: 80 });
     }
 
     function setSelectedThumbnail(timeSeconds, { seekPreview = false } = {}) {
         const nextTime = Math.max(0, Number.isFinite(timeSeconds) ? timeSeconds : DEFAULT_THUMBNAIL_TIME);
         selectedThumbnailTime = nextTime;
-        updateSelectedThumbnailPreview();
+        requestSelectedThumbnailPreview(nextTime);
         if (!thumbnailStrip) return;
         const items = thumbnailStrip.querySelectorAll('.thumbnail-frame');
         let closestItem = null;
@@ -1364,7 +1433,7 @@
                     renderScheduled = false;
                     if (currentGeneration !== thumbnailGenerationId) return;
                     renderThumbnailStrip(frames);
-                    updateSelectedThumbnailPreview();
+                    requestSelectedThumbnailPreview(selectedThumbnailTime);
                 });
             };
 
@@ -1450,7 +1519,7 @@
     function prepareThumbnailPreview() {
         if (!recordedBlob) return;
         extractThumbnailFrames(recordedBlob).then((frames) => {
-            updateSelectedThumbnailPreview();
+            requestSelectedThumbnailPreview(selectedThumbnailTime);
             renderThumbnailStrip(frames || []);
         });
     }
@@ -1792,7 +1861,7 @@
 
     function updateMusicOverlay() {
         const music = getSelectedMusic();
-        musicOverlay.classList.toggle('empty', !music);
+        musicOverlay.classList.toggle('empty', !selectedMusicId);
         if (!music) {
             musicOverlayTitle.textContent = 'Ajouter un son';
             musicOverlayArtist.textContent = '';
@@ -2781,6 +2850,8 @@
        selectedThumbnailTime = DEFAULT_THUMBNAIL_TIME;
        thumbnailFrames = [];
        thumbnailFramesPromise = null;
+       selectedPreviewCache = new Map();
+       selectedPreviewRenderId = 0;
        if (thumbnailStrip) thumbnailStrip.innerHTML = '';
        if (selectedThumbnailPreview) {
            selectedThumbnailPreview.style.backgroundImage = '';
