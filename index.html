@@ -1017,12 +1017,32 @@
         return null;
     }
 
+    function acquirePreloadSlot() {
+        if (activePreloadCount < MAX_PARALLEL_PRELOADS) {
+            activePreloadCount += 1;
+            return Promise.resolve();
+        }
+        return new Promise(resolve => {
+            preloadQueue.push(() => {
+                activePreloadCount += 1;
+                resolve();
+            });
+        });
+    }
+
+    function releasePreloadSlot() {
+        activePreloadCount = Math.max(0, activePreloadCount - 1);
+        const next = preloadQueue.shift();
+        if (next) next();
+    }
+
     async function preloadMusicBuffer(id, url) {
         if (!id && !url) return null;
         const cacheKey = url || id;
         const existing = getCachedAudioBufferEntry(id, url);
         if (existing?.buffer) return existing.buffer;
         if (existing?.promise) return existing.promise;
+        if (!url) return null;
 
         const entry = existing || { buffer: null, promise: null, url };
         audioBufferCache.set(cacheKey, entry);
@@ -1031,14 +1051,25 @@
         }
 
         entry.promise = (async () => {
-            await ensureAudioReady();
-            if (!audioCtx || !url) return null;
-            const res = await fetch(url);
-            if (!res.ok) throw new Error('music fetch failed');
-            const arrayBuffer = await res.arrayBuffer();
-            const decoded = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
-            entry.buffer = decoded;
-            return decoded;
+            await acquirePreloadSlot();
+            try {
+                if (!audioCtx) {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioContextClass) return null;
+                    audioCtx = new AudioContextClass();
+                }
+                if (audioCtx.state === 'suspended') {
+                    try { await audioCtx.resume(); } catch(e){}
+                }
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('music fetch failed');
+                const arrayBuffer = await res.arrayBuffer();
+                const decoded = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+                entry.buffer = decoded;
+                return decoded;
+            } finally {
+                releasePreloadSlot();
+            }
         })();
 
         try {
@@ -1730,7 +1761,7 @@
                     stopMusicPreview();
                     return;
                 }
-                await ensureAudioReady();
+                unlockAudioContext();
                 startMusicPreview(opt);
             };
             item.appendChild(playBtn);
@@ -1762,7 +1793,7 @@
         updateMusicOverlay();
         updateSeekDurationFromMeta(opt);
         renderMusicList(musicSearchInput.value);
-        ensureAudioReady();
+        unlockAudioContext();
         preloadSelectedMusic();
         updateMusicSelectionUI();
     }
@@ -2215,6 +2246,10 @@
     let audioCtx = null;
     let musicEngine = null;
     const audioBufferCache = new Map();
+    const MAX_PARALLEL_PRELOADS = 2;
+    let activePreloadCount = 0;
+    const preloadQueue = [];
+    let audioUnlocked = false;
 
     // --- AJOUT MUSIQUE : lecteur HTML pour l'aperçu ---
 
@@ -2264,22 +2299,30 @@
     }
 
     async function ensureAudioReady() {
-        unlockAudioContext();
+        if (!audioCtx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) return;
+            audioCtx = new AudioContextClass();
+        }
         if (!audioCtx) return;
         if (audioCtx.state === 'suspended') {
             try { await audioCtx.resume(); } catch(e){}
         }
     }
 
-    document.addEventListener('pointerdown', () => {
-        ensureAudioReady();
-    }, { once: true });
+    const handleFirstAudioInteraction = () => {
+        unlockAudioContext();
+    };
+    document.addEventListener('pointerdown', handleFirstAudioInteraction, { once: true, passive: true });
+    document.addEventListener('touchstart', handleFirstAudioInteraction, { once: true, passive: true });
+    document.addEventListener('click', handleFirstAudioInteraction, { once: true, passive: true });
 
     function unlockAudioContext() {
         if (!audioCtx) {
             const AudioContextClass = window.AudioContext || window.webkitAudioContext;
             if (!AudioContextClass) return;
             audioCtx = new AudioContextClass();
+            audioUnlocked = false;
         }
         if (!audioCtx) return;
 
@@ -2287,13 +2330,16 @@
             audioCtx.resume().catch(() => {});
         }
 
-        const bufferLength = Math.max(1, Math.ceil(audioCtx.sampleRate * 0.05));
+        if (audioUnlocked) return;
+        audioUnlocked = true;
+        // iOS: silent buffer to force unlock once per AudioContext (20–50 ms).
+        const bufferLength = Math.max(1, Math.ceil(audioCtx.sampleRate * 0.03));
         const buffer = audioCtx.createBuffer(1, bufferLength, audioCtx.sampleRate);
         const source = audioCtx.createBufferSource();
         source.buffer = buffer;
         source.connect(audioCtx.destination);
         source.start(audioCtx.currentTime);
-        source.stop(audioCtx.currentTime + 0.05);
+        source.stop(audioCtx.currentTime + 0.03);
         source.onended = () => {
             try { source.disconnect(); } catch (_) {}
         };
@@ -2371,6 +2417,12 @@
             isPlaying = false;
         };
 
+        const setBuffer = (nextBuffer, url = '') => {
+            if (!nextBuffer) return;
+            buffer = nextBuffer;
+            currentUrl = url || currentUrl;
+        };
+
         const play = async (startTime, endTime) => {
             const ready = await ensureContext();
             if (!ready || !buffer) return false;
@@ -2414,6 +2466,7 @@
             stop,
             updateLoop,
             updateVolume,
+            setBuffer,
             clearBuffer,
             get isPlaying() { return isPlaying; },
             get hasBuffer() { return !!buffer; }
@@ -2464,26 +2517,47 @@
         updateWaveformProgress();
 
         const { start, end } = getLoopBounds();
+        unlockAudioContext();
+
+        const cachedEntry = getCachedAudioBufferEntry(opt.id, opt.url);
+        if (cachedEntry?.buffer) {
+            musicEngine.setBuffer(cachedEntry.buffer, opt.url);
+            if (cachedEntry.buffer.duration) {
+                setSeekLimits(Math.floor(cachedEntry.buffer.duration));
+            }
+            try {
+                musicEngine.updateVolume(musicVolume);
+                const started = await musicEngine.play(start, end);
+                if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+                    musicEngine.stop();
+                    return;
+                }
+                if (!started) {
+                    currentlyPlayingMusicId = null;
+                }
+            } catch (error) {
+                currentlyPlayingMusicId = null;
+                musicEngine.stop();
+            } finally {
+                pendingMusicId = null;
+                renderMusicList(musicSearchInput.value);
+            }
+            return;
+        }
+
         try {
-            await ensureAudioReady();
-            if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
-                return;
-            }
-            if (audioCtx?.state === 'suspended') {
-                await audioCtx.resume().catch(() => {});
-            }
-            const duration = await musicEngine.load(opt.url, { id: opt.id });
+            const decoded = await preloadMusicBuffer(opt.id, opt.url);
             if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
                 musicEngine.stop();
                 return;
             }
-            if (Number.isFinite(duration)) {
-                setSeekLimits(Math.floor(duration));
+            if (decoded) {
+                musicEngine.setBuffer(decoded, opt.url);
+                if (decoded.duration) {
+                    setSeekLimits(Math.floor(decoded.duration));
+                }
             }
             musicEngine.updateVolume(musicVolume);
-            if (audioCtx && audioCtx.state === 'suspended') {
-                await audioCtx.resume().catch(() => {});
-            }
             const started = await musicEngine.play(start, end);
             if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
                 musicEngine.stop();
@@ -2497,9 +2571,8 @@
             musicEngine.stop();
         } finally {
             pendingMusicId = null;
+            renderMusicList(musicSearchInput.value);
         }
-
-        renderMusicList(musicSearchInput.value);
     }
 
     function playIconPlay() {
