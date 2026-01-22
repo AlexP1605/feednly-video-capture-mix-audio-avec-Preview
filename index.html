@@ -203,8 +203,10 @@
     }
 
     .preview-audio-controls {
-      position: sticky;
+      position: absolute;
       top: max(16px, env(safe-area-inset-top));
+      left: 0;
+      right: 0;
       z-index: 10;
       display: flex;
       align-items: center;
@@ -381,6 +383,11 @@
     }
     .inline-music-controls.hidden { display: none; }
     .original-audio-row {
+      position: absolute;
+      top: calc(max(16px, env(safe-area-inset-top)) + var(--preview-audio-control-size) + 12px);
+      left: 0;
+      right: 0;
+      z-index: 9;
       width: 100%;
       display: flex;
       align-items: center;
@@ -953,6 +960,7 @@
     const tabBtnMusic = document.getElementById('tab-btn-music');
     const tabBtnWaveform = document.getElementById('tab-btn-waveform');
     const tabBtnAudio = document.getElementById('tab-btn-audio');
+    const musicTabBar = document.getElementById('music-tab-bar');
     let currentlyPlayingMusicId = null;
     let pendingMusicId = null;
     let isDraggingWaveform = false;
@@ -2055,6 +2063,7 @@
         setActiveTab('music');
         musicSheet.classList.remove('hidden');
         musicSheet.classList.add('active');
+        musicTabBar?.removeAttribute('hidden');
     }
 
     function openFilterSheet() {
