@@ -202,20 +202,13 @@
       background: #000;
     }
 
-    .preview-audio-controls {
-      position: absolute;
-      top: max(16px, env(safe-area-inset-top));
-      left: 0;
-      right: 0;
-      z-index: 10;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 18px;
-      pointer-events: none;
+    .music-overlay-row {
       width: 100%;
+      display: flex;
+      justify-content: center;
     }
     .music-overlay {
+      margin-top: 12px;
       padding: 0 14px;
       z-index: 10;
       display: flex; align-items: center; gap: 12px;
@@ -383,19 +376,18 @@
     }
     .inline-music-controls.hidden { display: none; }
     .original-audio-row {
-      position: absolute;
-      top: calc(max(16px, env(safe-area-inset-top)) + var(--preview-audio-control-size) + 12px);
-      left: 0;
-      right: 0;
-      z-index: 9;
-      width: 100%;
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
       gap: 10px;
       color: #fff;
       font-size: 13px;
       font-weight: 600;
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.05);
     }
     .original-audio-row input[type="checkbox"] {
       width: 18px;
@@ -412,7 +404,7 @@
     .sheet.active { transform: translateY(0); }
     #music-filter-sheet { height: 30dvh; max-height: 30dvh; }
     .sheet .sheet-handle { width: 70px; height: 6px; border-radius: 10px; background: #2f2f2f; align-self: center; margin-bottom: 4px; }
-    .sheet-content { display: flex; flex-direction: column; gap: 18px; flex: 1; overflow-y: auto; padding-bottom: 90px; }
+    .sheet-content { display: flex; flex-direction: column; gap: 18px; flex: 1; overflow-y: auto; padding-bottom: 24px; }
     .sheet header { display: flex; align-items: center; justify-content: center; gap: 10px; }
     .sheet .title { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; font-weight: 800; letter-spacing: 0.3px; text-align: center; }
     .sheet label { font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -569,6 +561,11 @@
       padding: 12px; border-radius: 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
       display: flex; flex-direction: column; gap: 10px;
     }
+    #volume-row {
+      padding: 0;
+      border: none;
+      background: transparent;
+    }
     #volume-row label .slider-meta {
       display: flex; justify-content: space-between; align-items: center; gap: 10px;
       font-weight: 800; font-size: 13px; letter-spacing: 0.2px;
@@ -607,16 +604,6 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
     }
 
-    .sheet-footer {
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      padding: 10px 18px calc(18px + env(safe-area-inset-bottom));
-      background: rgba(10,10,10,0.98);
-      z-index: 20;
-    }
-
     .tab-bar {
       display: flex;
       gap: 10px;
@@ -625,6 +612,9 @@
       padding: 6px 10px;
       border-radius: 16px;
       justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
 
     .tab-btn {
@@ -667,9 +657,6 @@
 
     .tab-panel { display: none; flex-direction: column; gap: 14px; }
     .tab-panel.active { display: flex; }
-    .audio-tab-title { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 800; text-align: center; margin: 4px 0; }
-    #tab-audio .audio-tab-title { visibility: hidden; }
-    .audio-tab-title svg,
     .sheet header .title svg { width: 18px; height: 18px; fill: currentColor; }
 
     /* --- UPLOAD --- */
@@ -801,7 +788,7 @@
         <div class="thumbnail-label">Miniature sélectionnée</div>
         <div id="thumbnail-strip" class="thumbnail-strip" role="listbox" aria-label="Choisir une miniature"></div>
         <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
-        <div class="preview-audio-controls">
+        <div class="music-overlay-row">
           <div id="music-overlay" class="music-overlay hidden">
             <div class="music-visual">
               <svg class="music-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M211.79 35.48a8 8 0 0 0-6.62-1.43l-96 20a8 8 0 0 0-6.54 7.86V168a28 28 0 1 0 16 25.45V121.89l80-16.67V152a28 28 0 1 0 16 25.45V43.91a8 8 0 0 0-3.38-6.63ZM88 216a12 12 0 1 1 12-12 12 12 0 0 1-12 12Zm28-106.67V79.12l80-16.67v30.22Zm80 106.67a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
@@ -811,23 +798,26 @@
               <span class="music-artist"></span>
               <span class="music-duration" id="music-duration"></span>
             </div>
-            <button type="button" id="music-clear-btn" class="music-clear" aria-label="Supprimer la musique">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4-1.4L12 9.17 7.1 4.3a1 1 0 1 0-1.4 1.4L10.83 12l-5.13 4.9a1 1 0 0 0 1.4 1.45L12 14.83l4.9 5.12a1 1 0 0 0 1.45-1.4L13.17 12Z"/></svg>
-            </button>
           </div>
-        </div>
-        <div class="original-audio-row">
-          <span>Couper le son original de la vidéo</span>
-          <input type="checkbox" id="original-mute-toggle" aria-label="Couper le son original" />
         </div>
         <video id="preview-video" playsinline webkit-playsinline preload="auto"></video>
         <div id="music-controls" class="sheet inline-music-controls hidden">
           <div class="sheet-handle"></div>
           <div class="sheet-content">
-            <header>
-              <div class="title">Musique</div>
-            </header>
-            <p style="margin: 0; opacity: 0.6; font-size: 12px; text-align: center;">La musique sera ajoutée automatiquement au moment de la publication de la vidéo.</p>
+            <div class="tab-bar" id="music-tab-bar">
+              <button type="button" class="tab-btn active" id="tab-btn-music" aria-label="Musique">
+                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M211.79 35.48a8 8 0 0 0-6.62-1.43l-96 20a8 8 0 0 0-6.54 7.86V168a28 28 0 1 0 16 25.45V121.89l80-16.67V152a28 28 0 1 0 16 25.45V43.91a8 8 0 0 0-3.38-6.63ZM88 216a12 12 0 1 1 12-12 12 12 0 0 1-12 12Zm28-106.67V79.12l80-16.67v30.22Zm80 106.67a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
+                <span class="tab-label">Musique</span>
+              </button>
+              <button type="button" class="tab-btn" id="tab-btn-waveform" aria-label="Waveform">
+                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M56 64a8 8 0 0 1 8 8v112a8 8 0 0 1-16 0V72a8 8 0 0 1 8-8Zm36 24a8 8 0 0 1 8 8v64a8 8 0 0 1-16 0V96a8 8 0 0 1 8-8Zm36-40a8 8 0 0 1 8 8v144a8 8 0 0 1-16 0V56a8 8 0 0 1 8-8Zm36 32a8 8 0 0 1 8 8v96a8 8 0 0 1-16 0V88a8 8 0 0 1 8-8Zm36-24a8 8 0 0 1 8 8v144a8 8 0 0 1-16 0V64a8 8 0 0 1 8-8Z"></path></svg>
+                <span class="tab-label">Waveform</span>
+              </button>
+              <button type="button" class="tab-btn" id="tab-btn-audio" aria-label="Son">
+                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M32 96v64a16 16 0 0 0 16 16h32l48 48a8 8 0 0 0 13.66-5.66V37.66A8 8 0 0 0 128 32L80 80H48a16 16 0 0 0-16 16Zm136 8a8 8 0 0 1 8 8v32a8 8 0 0 1-16 0v-32a8 8 0 0 1 8-8Zm32-24a8 8 0 0 1 8 8v80a8 8 0 0 1-16 0V88a8 8 0 0 1 8-8Z"></path></svg>
+                <span class="tab-label">Son</span>
+              </button>
+            </div>
             <div id="tab-music" class="tab-panel active">
               <div class="music-search-row">
                 <input id="music-search" type="search" placeholder="Rechercher un titre ou un artiste" />
@@ -852,7 +842,10 @@
               </div>
             </div>
             <div id="tab-audio" class="tab-panel">
-              <div class="audio-tab-title">Musique</div>
+              <div class="original-audio-row">
+                <span>Couper le son original de la vidéo</span>
+                <input type="checkbox" id="original-mute-toggle" aria-label="Couper le son original" />
+              </div>
               <div class="timeline-row" id="volume-row">
                 <label>
                   <div class="slider-meta">
@@ -861,22 +854,6 @@
                   <input id="music-volume" type="range" min="0" max="1" step="0.01" value="0.5" />
                 </label>
               </div>
-            </div>
-          </div>
-          <div class="sheet-footer">
-            <div class="tab-bar" id="music-tab-bar">
-              <button type="button" class="tab-btn active" id="tab-btn-music" aria-label="Musique">
-                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M211.79 35.48a8 8 0 0 0-6.62-1.43l-96 20a8 8 0 0 0-6.54 7.86V168a28 28 0 1 0 16 25.45V121.89l80-16.67V152a28 28 0 1 0 16 25.45V43.91a8 8 0 0 0-3.38-6.63ZM88 216a12 12 0 1 1 12-12 12 12 0 0 1-12 12Zm28-106.67V79.12l80-16.67v30.22Zm80 106.67a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
-                <span class="tab-label">Musique</span>
-              </button>
-              <button type="button" class="tab-btn" id="tab-btn-waveform" aria-label="Waveform">
-                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M56 64a8 8 0 0 1 8 8v112a8 8 0 0 1-16 0V72a8 8 0 0 1 8-8Zm36 24a8 8 0 0 1 8 8v64a8 8 0 0 1-16 0V96a8 8 0 0 1 8-8Zm36-40a8 8 0 0 1 8 8v144a8 8 0 0 1-16 0V56a8 8 0 0 1 8-8Zm36 32a8 8 0 0 1 8 8v96a8 8 0 0 1-16 0V88a8 8 0 0 1 8-8Zm36-24a8 8 0 0 1 8 8v144a8 8 0 0 1-16 0V64a8 8 0 0 1 8-8Z"></path></svg>
-                <span class="tab-label">Waveform</span>
-              </button>
-              <button type="button" class="tab-btn" id="tab-btn-audio" aria-label="Son">
-                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M32 96v64a16 16 0 0 0 16 16h32l48 48a8 8 0 0 0 13.66-5.66V37.66A8 8 0 0 0 128 32L80 80H48a16 16 0 0 0-16 16Zm136 8a8 8 0 0 1 8 8v32a8 8 0 0 1-16 0v-32a8 8 0 0 1 8-8Zm32-24a8 8 0 0 1 8 8v80a8 8 0 0 1-16 0V88a8 8 0 0 1 8-8Z"></path></svg>
-                <span class="tab-label">Son</span>
-              </button>
             </div>
           </div>
         </div>
@@ -1822,7 +1799,7 @@
             musicOverlayDuration.textContent = '';
             applyMusicVolume(0.5);
             syncVolumeLabels();
-            musicOverlay.classList.remove('hidden');
+            setMusicOverlayVisibility();
             buildWaveformBars();
             if (musicClearBtn) musicClearBtn.style.display = 'none';
             return;
@@ -1833,7 +1810,7 @@
         const trackDurationSeconds = music.duration ? Math.floor(Number(music.duration) / 1000) : 0;
         const overlayDuration = trackDurationSeconds || currentMusicDuration;
         musicOverlayDuration.textContent = formatTimeLabel(Math.floor(overlayDuration));
-        musicOverlay.classList.remove('hidden');
+        setMusicOverlayVisibility();
         buildWaveformBars();
     }
 
@@ -2054,8 +2031,15 @@
     }
 
     function updateSheetBackdrop() {
-        const hasActiveSheet = musicFilterSheet?.classList.contains('active');
+        const hasActiveSheet = musicSheet?.classList.contains('active')
+            || musicFilterSheet?.classList.contains('active');
         sheetBackdrop?.classList.toggle('active', hasActiveSheet);
+    }
+
+    function setMusicOverlayVisibility() {
+        if (!musicOverlay) return;
+        const shouldShowOverlay = !musicSheet?.classList.contains('active');
+        musicOverlay.classList.toggle('hidden', !shouldShowOverlay);
     }
 
     function openMusicSheet() {
@@ -2064,6 +2048,8 @@
         musicSheet.classList.remove('hidden');
         musicSheet.classList.add('active');
         musicTabBar?.removeAttribute('hidden');
+        updateSheetBackdrop();
+        setMusicOverlayVisibility();
     }
 
     function openFilterSheet() {
@@ -2080,6 +2066,7 @@
             resetFilterTag();
         }
         updateSheetBackdrop();
+        setMusicOverlayVisibility();
     }
 
     function closeFilterSheet() {
@@ -2088,6 +2075,7 @@
             resetFilterTag();
         }
         updateSheetBackdrop();
+        setMusicOverlayVisibility();
     }
 
     function syncVolumeLabels() {
@@ -2129,7 +2117,9 @@
         e.stopPropagation();
         toggleOriginalMute(Boolean(e.target.checked));
     });
-    musicClearBtn.onclick = (e) => { e.stopPropagation(); clearMusicSelection(); };
+    if (musicClearBtn) {
+        musicClearBtn.onclick = (e) => { e.stopPropagation(); clearMusicSelection(); };
+    }
     musicSearchInput.oninput = (e) => renderMusicList(e.target.value);
     musicFilterBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
