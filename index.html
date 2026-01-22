@@ -960,6 +960,7 @@
           document.body.classList.add('recording');
           pendingRecordUI = false;
       }
+      scheduleSafeMusicPreload();
     };
     cameraPreview.addEventListener('loadeddata', markCameraReady);
 
@@ -1172,6 +1173,85 @@
                 return buffer?.duration || null;
             })
             .catch(() => null);
+    }
+
+    const SAFE_PRELOAD_IDLE_TIMEOUT = 2000;
+    const SAFE_PRELOAD_FALLBACK_DELAY = 1200;
+    const USER_IDLE_GRACE_MS = 1200;
+    let lastUserInteractionAt = 0;
+    let safeMusicPreloadHandle = null;
+    let safeMusicPreloadScheduled = false;
+    let safeMusicPreloadInFlight = false;
+    let safeMusicPreloadCompleted = false;
+
+    const markUserInteraction = () => {
+        lastUserInteractionAt = performance.now();
+    };
+
+    ['pointerdown', 'touchstart', 'keydown', 'wheel'].forEach((eventName) => {
+        document.addEventListener(eventName, markUserInteraction, { passive: true });
+    });
+
+    function isUserIdleEnough() {
+        if (!lastUserInteractionAt) return true;
+        return performance.now() - lastUserInteractionAt >= USER_IDLE_GRACE_MS;
+    }
+
+    function isPreviewOpen() {
+        return previewOverlay?.classList.contains('active') || document.body.classList.contains('showing-preview');
+    }
+
+    function canRunSafeMusicPreload() {
+        return (
+            mediaStream?.active === true &&
+            !isRecording &&
+            !isCountingDown &&
+            !isPreviewOpen() &&
+            isUserIdleEnough()
+        );
+    }
+
+    function runSafeMusicPreload(deadline) {
+        safeMusicPreloadScheduled = false;
+        safeMusicPreloadHandle = null;
+
+        if (safeMusicPreloadCompleted || safeMusicPreloadInFlight) return;
+        if (deadline?.didTimeout) return;
+        if (navigator?.scheduling?.isInputPending?.()) return;
+        if (!canRunSafeMusicPreload()) return;
+
+        const music = musicOptions?.[0];
+        if (!music?.url) return;
+
+        const cachedEntry = getCachedAudioBufferEntry(music.id, music.url);
+        if (cachedEntry?.buffer || cachedEntry?.promise) {
+            safeMusicPreloadCompleted = Boolean(cachedEntry?.buffer);
+            return;
+        }
+
+        safeMusicPreloadInFlight = true;
+        preloadMusicBuffer(music.id, music.url)
+            .then(() => {
+                safeMusicPreloadCompleted = true;
+            })
+            .catch(() => {
+                safeMusicPreloadCompleted = false;
+            })
+            .finally(() => {
+                safeMusicPreloadInFlight = false;
+            });
+    }
+
+    function scheduleSafeMusicPreload() {
+        if (safeMusicPreloadCompleted || safeMusicPreloadInFlight || safeMusicPreloadScheduled) return;
+        if (!mediaStream?.active || isRecording || isCountingDown || isPreviewOpen()) return;
+
+        safeMusicPreloadScheduled = true;
+        if (typeof requestIdleCallback === 'function') {
+            safeMusicPreloadHandle = requestIdleCallback(runSafeMusicPreload, { timeout: SAFE_PRELOAD_IDLE_TIMEOUT });
+        } else {
+            safeMusicPreloadHandle = setTimeout(() => runSafeMusicPreload(), SAFE_PRELOAD_FALLBACK_DELAY);
+        }
     }
 
     function clampVolume(value) {
