@@ -559,7 +559,7 @@
     #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
     #next-button { background: #fff; color: #000; }
 
-    #music-controls { position: absolute; left: 0; right: 0; bottom: 0; height: 75dvh; max-height: 75dvh; }
+    #music-controls { position: absolute; left: 0; right: 0; bottom: 0; height: 75dvh; max-height: 75dvh; pointer-events: auto; }
     #music-controls header { justify-content: center; }
     #music-controls .title { text-align: center; }
     #volume-row { gap: 12px; }
@@ -1723,13 +1723,14 @@
                 playBtn.disabled = true;
                 playBtn.setAttribute('aria-busy', 'true');
             }
-            playBtn.onclick = (e) => {
+            playBtn.onclick = async (e) => {
                 e.stopPropagation();
                 const alreadyPlaying = currentlyPlayingMusicId === opt.id && (musicEngine?.isPlaying || pendingMusicId === opt.id);
                 if (alreadyPlaying) {
                     stopMusicPreview();
                     return;
                 }
+                await ensureAudioReady();
                 startMusicPreview(opt);
             };
             item.appendChild(playBtn);
@@ -2380,7 +2381,7 @@
             source.loopStart = Math.max(0, startTime || 0);
             source.loopEnd = Math.max(source.loopStart + 0.05, endTime || buffer.duration || 0);
             source.connect(gainNode);
-            source.start(0, source.loopStart);
+            source.start(audioCtx.currentTime, source.loopStart);
             isPlaying = true;
             source.onended = () => {
                 isPlaying = false;
