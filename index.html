@@ -2508,6 +2508,7 @@
         let htmlAudioStartPerf = 0;
         let htmlAudioFadeRaf = null;
         let htmlAudioLoopSyncAt = 0;
+        let htmlAudioPlaySession = 0;
 
         const ensureContext = async () => {
             unlockAudioContext();
@@ -2671,8 +2672,9 @@
             gainNode.gain.linearRampToValueAtTime(clampVolume(value), now + durationSeconds);
         };
 
-        const playHtmlAudio = async (url, startTime, endTime) => {
-            if (!url) return false;
+        const playHtmlAudio = (url, startTime, endTime) => {
+            if (!url) return Promise.resolve(false);
+            const session = ++htmlAudioPlaySession;
             stopHtmlAudio({ resetSrc: true });
             htmlAudioLoopStart = Math.max(0, startTime || 0);
             htmlAudioLoopEnd = Math.max(htmlAudioLoopStart + 0.05, endTime || 0);
@@ -2690,13 +2692,21 @@
                 }
             };
             htmlAudio.addEventListener('loadedmetadata', updateLoopFromMeta, { once: true });
-            try {
-                await htmlAudio.play();
-                return true;
-            } catch (error) {
-                stopHtmlAudio({ resetSrc: false });
-                return false;
+            const playPromise = htmlAudio.play();
+            if (!playPromise || typeof playPromise.then !== 'function') {
+                return Promise.resolve(true);
             }
+            return playPromise
+                .then(() => {
+                    if (session !== htmlAudioPlaySession) return false;
+                    return true;
+                })
+                .catch(() => {
+                    if (session === htmlAudioPlaySession) {
+                        stopHtmlAudio({ resetSrc: false });
+                    }
+                    return false;
+                });
         };
 
         const crossfadeHtmlToWebAudio = (durationMs = FAST_START_CROSSFADE_MS) => {
@@ -2772,7 +2782,9 @@
         const safeCurrent = Number.isFinite(currentTime) ? currentTime : loopStart;
         const relative = safeCurrent - loopStart;
         const normalized = ((relative % loopDuration) + loopDuration) % loopDuration;
-        return loopStart + normalized;
+        const offset = loopStart + normalized;
+        if (loopEnd - offset <= 0.03) return loopStart;
+        return offset;
     }
 
     function logAudioPerf(payload) {
@@ -2804,6 +2816,23 @@
 
         const { start, end } = getLoopBounds();
         unlockAudioContext();
+
+        let htmlStarted = false;
+        let htmlStartPerf = 0;
+        const htmlStartPromise = musicEngine.playHtmlAudio(opt.url, start, end)
+            .then((started) => {
+                htmlStarted = started;
+                if (started) {
+                    const htmlState = musicEngine.getHtmlAudioState();
+                    htmlStartPerf = htmlState.startPerf || performance.now();
+                    if (perf) {
+                        perf.tSoundStart = htmlStartPerf;
+                        logAudioPerf({ ...perf });
+                    }
+                }
+                return started;
+            });
+        htmlStartPromise.catch(() => {});
 
         const cachedEntry = getCachedAudioBufferEntry(opt.id, opt.url);
         if (cachedEntry?.buffer) {
@@ -2841,23 +2870,6 @@
             }
             return;
         }
-
-        let htmlStarted = false;
-        let htmlStartPerf = 0;
-        const htmlStartPromise = musicEngine.playHtmlAudio(opt.url, start, end)
-            .then((started) => {
-                htmlStarted = started;
-                if (started) {
-                    const htmlState = musicEngine.getHtmlAudioState();
-                    htmlStartPerf = htmlState.startPerf || performance.now();
-                    if (perf) {
-                        perf.tSoundStart = htmlStartPerf;
-                        logAudioPerf({ ...perf });
-                    }
-                }
-                return started;
-            });
-        htmlStartPromise.catch(() => {});
 
         try {
             const decoded = await preloadMusicBuffer(opt.id, opt.url);
