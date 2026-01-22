@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -174,7 +175,7 @@
       transition: opacity 0.2s ease;
       width: var(--preview-viewport-width, 100%);
       height: var(--preview-viewport-height, 100dvh);
-      overflow: hidden;
+      overflow-y: auto;
     }
     #preview-overlay.active { display: flex; opacity: 1; }
     .preview-video-container {
@@ -191,17 +192,7 @@
       flex-direction: column;
       align-items: center;
       gap: 16px;
-      padding: max(16px, env(safe-area-inset-top)) 18px 18px;
-      min-height: 0;
-    }
-    .preview-static-area {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-      flex: 0 0 auto;
-      overflow: hidden;
+      padding: max(16px, env(safe-area-inset-top)) 18px calc(140px + env(safe-area-inset-bottom));
     }
     #preview-video {
       display: none;
@@ -212,14 +203,13 @@
       background: #000;
     }
 
-    .thumbnail-strip-group {
+    .music-overlay-row {
       width: 100%;
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
+      justify-content: center;
     }
     .music-overlay {
+      margin-top: 12px;
       padding: 0 14px;
       z-index: 10;
       display: flex; align-items: center; gap: 12px;
@@ -374,10 +364,10 @@
       padding: 18px 0;
     }
     .inline-music-controls {
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      position: relative;
+      left: auto;
+      right: auto;
+      bottom: auto;
       transform: none;
       height: auto;
       max-height: none;
@@ -559,19 +549,7 @@
       line-height: 1.5;
     }
     .visually-hidden { position: absolute !important; height: 1px; width: 1px; overflow: hidden; clip: rect(1px, 1px, 1px, 1px); white-space: nowrap; }
-    #preview-actions {
-      min-height: 96px;
-      background: #000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 15px;
-      padding: 12px 24px calc(20px + env(safe-area-inset-bottom));
-      z-index: 90;
-      pointer-events: auto;
-      position: relative;
-      width: 100%;
-    }
+    #preview-actions { height: 110px; min-height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px; z-index: 90; pointer-events: auto; position: fixed; left: 0; right: 0; bottom: 0; }
     .action-btn { flex: 1; height: 54px; font-size: 16px; font-weight: 700; border: none; cursor: pointer; border-radius: 14px; }
     #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
     #next-button { background: #fff; color: #000; }
@@ -804,23 +782,21 @@
 
     <div id="preview-overlay">
       <div class="preview-video-container">
-        <div class="preview-static-area">
-          <div class="thumbnail-preview-wrap">
-            <div id="selected-thumbnail-preview" class="thumbnail-preview" role="img" aria-label="Miniature sélectionnée"></div>
-          </div>
-          <div class="thumbnail-label">Miniature sélectionnée</div>
-          <div class="thumbnail-strip-group">
-            <div id="thumbnail-strip" class="thumbnail-strip" role="listbox" aria-label="Choisir une miniature"></div>
-            <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
-            <div id="music-overlay" class="music-overlay">
-              <div class="music-visual">
-                <svg class="music-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M211.79 35.48a8 8 0 0 0-6.62-1.43l-96 20a8 8 0 0 0-6.54 7.86V168a28 28 0 1 0 16 25.45V121.89l80-16.67V152a28 28 0 1 0 16 25.45V43.91a8 8 0 0 0-3.38-6.63ZM88 216a12 12 0 1 1 12-12 12 12 0 0 1-12 12Zm28-106.67V79.12l80-16.67v30.22Zm80 106.67a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
-              </div>
-              <div class="music-meta">
-                <span class="music-title">Ajouter un son</span>
-                <span class="music-artist"></span>
-                <span class="music-duration" id="music-duration"></span>
-              </div>
+        <div class="thumbnail-preview-wrap">
+          <div id="selected-thumbnail-preview" class="thumbnail-preview" role="img" aria-label="Miniature sélectionnée"></div>
+        </div>
+        <div class="thumbnail-label">Miniature sélectionnée</div>
+        <div id="thumbnail-strip" class="thumbnail-strip" role="listbox" aria-label="Choisir une miniature"></div>
+        <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
+        <div class="music-overlay-row">
+          <div id="music-overlay" class="music-overlay empty">
+            <div class="music-visual">
+              <svg class="music-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M211.79 35.48a8 8 0 0 0-6.62-1.43l-96 20a8 8 0 0 0-6.54 7.86V168a28 28 0 1 0 16 25.45V121.89l80-16.67V152a28 28 0 1 0 16 25.45V43.91a8 8 0 0 0-3.38-6.63ZM88 216a12 12 0 1 1 12-12 12 12 0 0 1-12 12Zm28-106.67V79.12l80-16.67v30.22Zm80 106.67a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
+            </div>
+            <div class="music-meta">
+              <span class="music-title">Ajouter un son</span>
+              <span class="music-artist"></span>
+              <span class="music-duration" id="music-duration"></span>
             </div>
           </div>
         </div>
@@ -988,9 +964,6 @@
     let selectedThumbnailTime = 0.5;
     let thumbnailFrames = [];
     let thumbnailFramesPromise = null;
-    const highResThumbnailCache = new Map();
-    const highResThumbnailRequests = new Map();
-    let highResThumbnailGeneration = 0;
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
@@ -1222,22 +1195,16 @@
         }, null);
     }
 
-    function getHighResThumbnailKey(timeSeconds) {
-        return Number(timeSeconds || 0).toFixed(3);
-    }
-
     function updateSelectedThumbnailPreview() {
         if (!selectedThumbnailPreview) return;
-        const key = getHighResThumbnailKey(selectedThumbnailTime);
-        const highResUrl = highResThumbnailCache.get(key);
-        if (highResUrl) {
-            selectedThumbnailPreview.style.backgroundImage = `url(${highResUrl})`;
+        const frame = selectNearestThumbnailFrame(selectedThumbnailTime);
+        if (frame?.url) {
+            selectedThumbnailPreview.style.backgroundImage = `url(${frame.url})`;
             selectedThumbnailPreview.classList.add('ready');
-            return;
+        } else {
+            selectedThumbnailPreview.style.backgroundImage = '';
+            selectedThumbnailPreview.classList.remove('ready');
         }
-        selectedThumbnailPreview.style.backgroundImage = '';
-        selectedThumbnailPreview.classList.remove('ready');
-        requestHighResThumbnail(selectedThumbnailTime);
     }
 
     function setSelectedThumbnail(timeSeconds, { seekPreview = false } = {}) {
@@ -1354,76 +1321,6 @@
         });
     }
 
-    async function generateHighResThumbnail(timeSeconds) {
-        if (!recordedBlob) return null;
-        const tempVideo = document.createElement('video');
-        tempVideo.muted = true;
-        tempVideo.preload = 'auto';
-        const objectUrl = URL.createObjectURL(recordedBlob);
-        tempVideo.src = objectUrl;
-        tempVideo.playsInline = true;
-        tempVideo.setAttribute('playsinline', '');
-        tempVideo.load();
-
-        await new Promise((resolve, reject) => {
-            tempVideo.onloadedmetadata = () => resolve();
-            tempVideo.onerror = () => reject(new Error('high-res thumbnail metadata failed'));
-        });
-
-        const sourceWidth = tempVideo.videoWidth || 0;
-        const sourceHeight = tempVideo.videoHeight || 0;
-        const aspect = sourceWidth && sourceHeight ? sourceWidth / sourceHeight : 9 / 16;
-        const displayWidth = selectedThumbnailPreview
-            ? selectedThumbnailPreview.getBoundingClientRect().width
-            : 200;
-        const maxTargetWidth = sourceWidth ? Math.min(1080, sourceWidth) : 1080;
-        const minTargetWidth = Math.ceil(displayWidth * 2);
-        const targetWidth = sourceWidth
-            ? Math.min(sourceWidth, Math.max(maxTargetWidth, minTargetWidth))
-            : Math.max(maxTargetWidth, minTargetWidth);
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return null;
-
-        canvas.width = Math.max(1, Math.round(targetWidth));
-        canvas.height = Math.max(1, Math.round(canvas.width / aspect));
-
-        await seekVideoToTime(tempVideo, timeSeconds);
-        ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
-        const url = canvas.toDataURL('image/jpeg', 0.9);
-
-        canvas.width = 0;
-        canvas.height = 0;
-        tempVideo.removeAttribute('src');
-        tempVideo.load();
-        URL.revokeObjectURL(objectUrl);
-
-        return url;
-    }
-
-    function requestHighResThumbnail(timeSeconds) {
-        if (!recordedBlob || !selectedThumbnailPreview) return;
-        const key = getHighResThumbnailKey(timeSeconds);
-        if (highResThumbnailCache.has(key) || highResThumbnailRequests.has(key)) return;
-        const generation = ++highResThumbnailGeneration;
-        const promise = generateHighResThumbnail(timeSeconds)
-            .then((url) => {
-                if (!url || generation !== highResThumbnailGeneration) return null;
-                highResThumbnailCache.set(key, url);
-                if (Math.abs(selectedThumbnailTime - timeSeconds) <= THUMBNAIL_TIME_TOLERANCE) {
-                    selectedThumbnailPreview.style.backgroundImage = `url(${url})`;
-                    selectedThumbnailPreview.classList.add('ready');
-                }
-                return url;
-            })
-            .catch(() => null)
-            .finally(() => {
-                highResThumbnailRequests.delete(key);
-            });
-        highResThumbnailRequests.set(key, promise);
-    }
-
     async function extractThumbnailFrames(videoBlob) {
         if (!videoBlob) return [];
         if (thumbnailFramesPromise) return thumbnailFramesPromise;
@@ -1453,7 +1350,7 @@
                 ? tempVideo.videoWidth / tempVideo.videoHeight
                 : 9 / 16;
             canvas.width = 160;
-            canvas.height = Math.max(1, Math.round(canvas.width / aspect));
+            canvas.height = Math.round(canvas.width / aspect);
 
             thumbnailGenerationId += 1;
             const currentGeneration = thumbnailGenerationId;
@@ -1552,8 +1449,6 @@
 
     function prepareThumbnailPreview() {
         if (!recordedBlob) return;
-        highResThumbnailCache.clear();
-        highResThumbnailRequests.clear();
         extractThumbnailFrames(recordedBlob).then((frames) => {
             updateSelectedThumbnailPreview();
             renderThumbnailStrip(frames || []);
