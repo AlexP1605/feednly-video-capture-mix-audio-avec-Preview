@@ -324,10 +324,11 @@
       --thumb-count: 8;
       --thumb-gap: 2px;
       gap: var(--thumb-gap);
-      overflow-x: hidden;
+      overflow-x: auto;
       overflow-y: visible; /* Fix: évite le clipping vertical de la frame active */
       padding: 0; /* Fix: réserve l'espace pour l'agrandissement sans sauts */
-      touch-action: none;
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x mandatory;
       overscroll-behavior: contain;
       flex-wrap: nowrap;
       align-items: center;
@@ -352,6 +353,7 @@
       background-size: cover;
       background-position: center;
       flex: 0 0 auto;
+      scroll-snap-align: center;
       transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
       position: relative;
       opacity: 0.35;
@@ -971,8 +973,7 @@
     let selectedThumbnailTime = 0.5;
     let thumbnailFrames = [];
     let thumbnailFramesPromise = null;
-    let selectedPreviewCache = new Map();
-    let selectedPreviewRenderId = 0;
+    let thumbnailItems = [];
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
@@ -1145,8 +1146,6 @@
     const THUMBNAIL_MAX_FRAMES = 8;
     const THUMBNAIL_TIME_TOLERANCE = 0.08;
     let thumbnailGenerationId = 0;
-    let isThumbnailScrubbing = false;
-    let lastPreviewSeek = 0;
     function getThumbnailFrameTimes(durationSeconds) {
         const duration = Math.max(0.1, Number(durationSeconds) || 0.1);
         const step = Math.max(THUMBNAIL_MIN_STEP, Math.min(THUMBNAIL_MAX_STEP, duration / (THUMBNAIL_MAX_FRAMES - 1)));
@@ -1204,84 +1203,25 @@
         }, null);
     }
 
-    function getSelectedPreviewCacheKey(timeSeconds) {
-        return Number(timeSeconds || 0).toFixed(2);
-    }
-
     function applySelectedThumbnailPreview(url) {
-        if (!selectedThumbnailPreview || !url) return;
+        if (!selectedThumbnailPreview) return;
+        if (!url) {
+            selectedThumbnailPreview.style.backgroundImage = '';
+            selectedThumbnailPreview.classList.remove('ready');
+            return;
+        }
         selectedThumbnailPreview.style.backgroundImage = `url(${url})`;
         selectedThumbnailPreview.classList.add('ready');
     }
 
-    async function captureSelectedThumbnailPreview(timeSeconds) {
-        if (!recordedBlob || !selectedThumbnailPreview) return null;
-        const tempVideo = document.createElement('video');
-        tempVideo.muted = true;
-        tempVideo.preload = 'auto';
-        const objectUrl = URL.createObjectURL(recordedBlob);
-        tempVideo.src = objectUrl;
-        tempVideo.playsInline = true;
-        tempVideo.setAttribute('playsinline', '');
-        tempVideo.load();
-
-        await new Promise((resolve, reject) => {
-            tempVideo.onloadedmetadata = () => resolve();
-            tempVideo.onerror = () => reject(new Error('selected thumbnail metadata failed'));
-        });
-
-        const rect = selectedThumbnailPreview.getBoundingClientRect();
-        const displayWidth = Math.max(1, rect.width || 200);
-        const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
-        const scale = Math.max(2, pixelRatio);
-        const aspect = tempVideo.videoWidth && tempVideo.videoHeight
-            ? tempVideo.videoWidth / tempVideo.videoHeight
-            : 2 / 3;
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return null;
-        canvas.width = Math.round(displayWidth * scale);
-        canvas.height = Math.round(canvas.width / aspect);
-
-        await seekVideoToTime(tempVideo, timeSeconds);
-        ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
-        const url = canvas.toDataURL('image/jpeg', 0.9);
-
-        canvas.width = 0;
-        canvas.height = 0;
-        tempVideo.removeAttribute('src');
-        tempVideo.load();
-        URL.revokeObjectURL(objectUrl);
-        return url;
-    }
-
-    function requestSelectedThumbnailPreview(timeSeconds) {
-        if (!selectedThumbnailPreview || !recordedBlob) return;
-        const key = getSelectedPreviewCacheKey(timeSeconds);
-        const cached = selectedPreviewCache.get(key);
-        if (cached) {
-            applySelectedThumbnailPreview(cached);
-            return;
-        }
-        const requestId = ++selectedPreviewRenderId;
-        scheduleIdleTask(async () => {
-            try {
-                const url = await captureSelectedThumbnailPreview(timeSeconds);
-                if (!url || requestId !== selectedPreviewRenderId) return;
-                selectedPreviewCache.set(key, url);
-                applySelectedThumbnailPreview(url);
-            } catch (error) {
-                // ignore capture failures
-            }
-        }, { timeout: 500, fallbackDelay: 80 });
-    }
-
-    function setSelectedThumbnail(timeSeconds, { seekPreview = false } = {}) {
+    function setSelectedThumbnail(timeSeconds) {
         const nextTime = Math.max(0, Number.isFinite(timeSeconds) ? timeSeconds : DEFAULT_THUMBNAIL_TIME);
+        if (Math.abs(selectedThumbnailTime - nextTime) < THUMBNAIL_TIME_TOLERANCE) return;
         selectedThumbnailTime = nextTime;
-        requestSelectedThumbnailPreview(nextTime);
+        const frame = selectNearestThumbnailFrame(nextTime);
+        applySelectedThumbnailPreview(frame?.url || '');
         if (!thumbnailStrip) return;
-        const items = thumbnailStrip.querySelectorAll('.thumbnail-frame');
+        const items = thumbnailItems.length ? thumbnailItems : thumbnailStrip.querySelectorAll('.thumbnail-frame');
         let closestItem = null;
         let closestDiff = Number.POSITIVE_INFINITY;
         items.forEach((item) => {
@@ -1293,10 +1233,6 @@
             }
         });
         items.forEach((item) => item.classList.toggle('active', item === closestItem));
-        if (seekPreview && previewVideo?.readyState) {
-            const safeTime = Math.min(Math.max(0, nextTime), Math.max(previewVideo.duration || nextTime, 0));
-            safeSeekPreview(safeTime);
-        }
     }
 
     function renderThumbnailStrip(frames) {
@@ -1304,6 +1240,7 @@
         thumbnailStrip.style.setProperty('--thumb-count', String(Math.max(frames.length, 1)));
         if (!frames.length) {
             thumbnailStrip.innerHTML = '';
+            thumbnailItems = [];
             return;
         }
         const existingItems = [...thumbnailStrip.querySelectorAll('.thumbnail-frame')];
@@ -1319,7 +1256,9 @@
                 if (!button) return;
                 button.style.backgroundImage = frame.url ? `url(${frame.url})` : '';
             });
+            thumbnailItems = existingItems;
             setSelectedThumbnail(selectedThumbnailTime);
+            requestAnimationFrame(updateActiveThumbnail);
             return;
         }
         const previousScrollLeft = thumbnailStrip.scrollLeft;
@@ -1333,49 +1272,15 @@
             button.style.backgroundImage = frame.url ? `url(${frame.url})` : '';
             button.onclick = (e) => {
                 e.stopPropagation();
-                setSelectedThumbnail(frame.time, { seekPreview: false });
+                setSelectedThumbnail(frame.time);
             };
             fragment.appendChild(button);
         });
         thumbnailStrip.appendChild(fragment);
+        thumbnailItems = [...thumbnailStrip.querySelectorAll('.thumbnail-frame')];
         thumbnailStrip.scrollLeft = previousScrollLeft;
         setSelectedThumbnail(selectedThumbnailTime);
-    }
-
-    function getClosestThumbnailTimeByX(clientX) {
-        if (!thumbnailStrip) return null;
-        const items = thumbnailStrip.querySelectorAll('.thumbnail-frame');
-        if (!items.length) return null;
-        const rect = thumbnailStrip.getBoundingClientRect();
-        const targetX = Number.isFinite(clientX) ? clientX : rect.left + rect.width / 2;
-        // Calcule la frame la plus proche visuellement (centre des miniatures).
-        let closestTime = null;
-        let closestDistance = Number.POSITIVE_INFINITY;
-        items.forEach((item) => {
-            const itemRect = item.getBoundingClientRect();
-            const center = itemRect.left + itemRect.width / 2;
-            const distance = Math.abs(center - targetX);
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closestTime = Number(item.dataset.time || 0);
-            }
-        });
-        return closestTime;
-    }
-
-    function handleThumbnailScrub(clientX) {
-        const time = getClosestThumbnailTimeByX(clientX);
-        if (!Number.isFinite(time)) return;
-        const snapped = selectNearestThumbnailFrame(time)?.time ?? time;
-        // UI scrub: met à jour la sélection sans seek vidéo pendant le drag.
-        setSelectedThumbnail(snapped, { seekPreview: false });
-    }
-
-    function safeSeekPreview(timeSeconds) {
-        const now = performance.now();
-        if (now - lastPreviewSeek < 33) return;
-        lastPreviewSeek = now;
-        previewVideo.currentTime = timeSeconds;
+        requestAnimationFrame(updateActiveThumbnail);
     }
 
     function seekVideoToTime(video, timeSeconds) {
@@ -1390,35 +1295,41 @@
         });
     }
 
+    function onceLoadedMetadata(video) {
+        return new Promise((resolve, reject) => {
+            const onLoaded = () => resolve();
+            const onError = () => reject(new Error('thumbnail metadata failed'));
+            video.addEventListener('loadedmetadata', onLoaded, { once: true });
+            video.addEventListener('error', onError, { once: true });
+        });
+    }
+
     async function extractThumbnailFrames(videoBlob) {
         if (!videoBlob) return [];
         if (thumbnailFramesPromise) return thumbnailFramesPromise;
         if (thumbnailLoading) thumbnailLoading.hidden = false;
 
         thumbnailFramesPromise = (async () => {
-            const tempVideo = document.createElement('video');
-            tempVideo.muted = true;
-            tempVideo.preload = 'auto';
+            const thumbVideo = document.createElement('video');
+            thumbVideo.muted = true;
+            thumbVideo.preload = 'auto';
             const objectUrl = URL.createObjectURL(videoBlob);
-            tempVideo.src = objectUrl;
-            tempVideo.playsInline = true;
-            tempVideo.setAttribute('playsinline', '');
-            tempVideo.load();
+            thumbVideo.src = objectUrl;
+            thumbVideo.playsInline = true;
+            thumbVideo.setAttribute('playsinline', '');
+            thumbVideo.load();
+            await onceLoadedMetadata(thumbVideo);
 
-            await new Promise((resolve, reject) => {
-                tempVideo.onloadedmetadata = () => resolve();
-                tempVideo.onerror = () => reject(new Error('thumbnail metadata failed'));
-            });
-
-            const duration = Math.max(0.1, Number(tempVideo.duration) || videoDurationSeconds || 0.1);
+            const duration = Math.max(0.1, Number(thumbVideo.duration) || videoDurationSeconds || 0.1);
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             if (!ctx) return [];
 
-            const aspect = tempVideo.videoWidth && tempVideo.videoHeight
-                ? tempVideo.videoWidth / tempVideo.videoHeight
+            const aspect = thumbVideo.videoWidth && thumbVideo.videoHeight
+                ? thumbVideo.videoWidth / thumbVideo.videoHeight
                 : 9 / 16;
-            canvas.width = 160;
+            const maxWidth = 160;
+            canvas.width = Math.min(maxWidth, Math.max(1, thumbVideo.videoWidth || maxWidth));
             canvas.height = Math.round(canvas.width / aspect);
 
             thumbnailGenerationId += 1;
@@ -1433,14 +1344,14 @@
                     renderScheduled = false;
                     if (currentGeneration !== thumbnailGenerationId) return;
                     renderThumbnailStrip(frames);
-                    requestSelectedThumbnailPreview(selectedThumbnailTime);
+                    setSelectedThumbnail(selectedThumbnailTime);
                 });
             };
 
             const captureFrameAt = async (time) => {
-                await seekVideoToTime(tempVideo, time);
-                ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
-                const url = canvas.toDataURL('image/jpeg', 0.7);
+                await seekVideoToTime(thumbVideo, time);
+                ctx.drawImage(thumbVideo, 0, 0, canvas.width, canvas.height);
+                const url = canvas.toDataURL('image/jpeg', 0.65);
                 return { time, url };
             };
 
@@ -1498,9 +1409,10 @@
 
             canvas.width = 0;
             canvas.height = 0;
-            tempVideo.removeAttribute('src');
-            tempVideo.load();
+            thumbVideo.removeAttribute('src');
+            thumbVideo.load();
             URL.revokeObjectURL(objectUrl);
+            thumbVideo.remove();
             return frames;
         })()
             .then((frames) => {
@@ -1519,7 +1431,6 @@
     function prepareThumbnailPreview() {
         if (!recordedBlob) return;
         extractThumbnailFrames(recordedBlob).then((frames) => {
-            requestSelectedThumbnailPreview(selectedThumbnailTime);
             renderThumbnailStrip(frames || []);
         });
     }
@@ -1930,6 +1841,29 @@
         }
     }
 
+    function throttle(fn, wait = 50) {
+        let lastCall = 0;
+        let timeoutId = null;
+        return (...args) => {
+            const now = performance.now();
+            const remaining = wait - (now - lastCall);
+            if (remaining <= 0 || remaining > wait) {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+                lastCall = now;
+                fn(...args);
+            } else if (!timeoutId) {
+                timeoutId = setTimeout(() => {
+                    lastCall = performance.now();
+                    timeoutId = null;
+                    fn(...args);
+                }, remaining);
+            }
+        };
+    }
+
     function enqueueMusicPreload(id, url) {
         if (!id || !url || selectedMusicId) return;
         const cached = getCachedAudioBufferEntry(id, url);
@@ -2064,27 +1998,32 @@
         }, { passive: true });
     }
 
+    function updateActiveThumbnail() {
+        if (!thumbnailStrip) return;
+        const items = thumbnailItems.length ? thumbnailItems : thumbnailStrip.querySelectorAll('.thumbnail-frame');
+        if (!items.length) return;
+        const stripCenter = thumbnailStrip.scrollLeft + thumbnailStrip.clientWidth / 2;
+        let closestItem = null;
+        let closestDistance = Number.POSITIVE_INFINITY;
+        items.forEach((item) => {
+            const center = item.offsetLeft + item.offsetWidth / 2;
+            const distance = Math.abs(center - stripCenter);
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestItem = item;
+            }
+        });
+        if (!closestItem) return;
+        items.forEach((item) => item.classList.toggle('active', item === closestItem));
+        const time = Number(closestItem.dataset.time || 0);
+        if (Math.abs(selectedThumbnailTime - time) >= THUMBNAIL_TIME_TOLERANCE) {
+            setSelectedThumbnail(time);
+        }
+    }
+
     if (thumbnailStrip) {
-        thumbnailStrip.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            isThumbnailScrubbing = true;
-            // La timelapse est un picker UI passif : aucune action audio/vidéo.
-            thumbnailStrip.setPointerCapture?.(e.pointerId);
-            handleThumbnailScrub(e.clientX);
-        });
-        thumbnailStrip.addEventListener('pointermove', (e) => {
-            if (!isThumbnailScrubbing) return;
-            e.preventDefault();
-            handleThumbnailScrub(e.clientX);
-        });
-        const endThumbnailScrub = (e) => {
-            if (!isThumbnailScrubbing) return;
-            isThumbnailScrubbing = false;
-            thumbnailStrip.releasePointerCapture?.(e.pointerId);
-            // La timelapse n'affecte jamais la vidéo, elle sert uniquement au choix de la minia.
-        };
-        thumbnailStrip.addEventListener('pointerup', endThumbnailScrub);
-        thumbnailStrip.addEventListener('pointercancel', endThumbnailScrub);
+        const throttledUpdateActiveThumbnail = throttle(updateActiveThumbnail, 50);
+        thumbnailStrip.addEventListener('scroll', throttledUpdateActiveThumbnail, { passive: true });
     }
 
     function setActiveTab(tabKey = 'music') {
@@ -2847,11 +2786,10 @@
     }
 
     function resetThumbnailDefaults() {
-       selectedThumbnailTime = DEFAULT_THUMBNAIL_TIME;
+       selectedThumbnailTime = Number.NaN;
        thumbnailFrames = [];
        thumbnailFramesPromise = null;
-       selectedPreviewCache = new Map();
-       selectedPreviewRenderId = 0;
+       thumbnailItems = [];
        if (thumbnailStrip) thumbnailStrip.innerHTML = '';
        if (selectedThumbnailPreview) {
            selectedThumbnailPreview.style.backgroundImage = '';
