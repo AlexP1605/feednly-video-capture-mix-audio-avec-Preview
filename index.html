@@ -1018,6 +1018,8 @@
             promise: null,
             url: url || '',
             duration: null,
+            isPartial: false,
+            partialSeconds: 0,
             lastUsedAt: 0,
             ids: new Set(),
             keys: new Set()
@@ -1103,12 +1105,21 @@
         if (next) next();
     }
 
-    async function preloadMusicBuffer(id, url) {
+    function createAbortError() {
+        try {
+            return new DOMException('Aborted', 'AbortError');
+        } catch (error) {
+            return new Error('Aborted');
+        }
+    }
+
+    async function preloadMusicBuffer(id, url, { signal, partialDurationSec = 0, forceFull = false } = {}) {
         if (!id && !url) return null;
         const cacheKey = url || id;
         const existing = getCachedAudioBufferEntry(id, url);
-        if (existing?.buffer) return existing.buffer;
-        if (existing?.promise) return existing.promise;
+        const wantsFull = forceFull || !partialDurationSec;
+        if (existing?.buffer && (!existing.isPartial || !wantsFull)) return existing.buffer;
+        if (existing?.promise && (!wantsFull || !existing.isPartial)) return existing.promise;
         if (!url) return null;
 
         const entry = existing || createCacheEntry({ id, url });
@@ -1123,12 +1134,49 @@
             try {
                 await ensureAudioReady();
                 if (!audioCtx) return null;
-                const res = await fetch(url);
+                let res = null;
+                if (!wantsFull) {
+                    const durationHintSeconds = Number.isFinite(partialDurationSec) && partialDurationSec > 0
+                        ? partialDurationSec
+                        : null;
+                    const requestedBytes = await (async () => {
+                        if (!durationHintSeconds) return null;
+                        try {
+                            const headRes = await fetch(url, { method: 'HEAD' });
+                            if (!headRes.ok) return null;
+                            const length = parseInt(headRes.headers.get('Content-Length') || '', 10);
+                            if (!Number.isFinite(length) || length <= 0) return null;
+                            const opt = musicOptions.find(opt => opt.id === id || opt.url === url);
+                            const durationMs = Number(opt?.duration);
+                            if (!Number.isFinite(durationMs) || durationMs <= 0) return null;
+                            const durationSeconds = durationMs / 1000;
+                            const ratio = Math.min(1, durationHintSeconds / durationSeconds);
+                            return Math.max(64 * 1024, Math.ceil(length * ratio));
+                        } catch (error) {
+                            return null;
+                        }
+                    })();
+                    const cappedBytes = Math.min(requestedBytes || 768 * 1024, 2 * 1024 * 1024);
+                    res = await fetch(url, {
+                        headers: { Range: `bytes=0-${cappedBytes - 1}` },
+                        signal
+                    });
+                    if (res.status !== 206) {
+                        await res.body?.cancel?.();
+                        throw new Error('partial preload unsupported');
+                    }
+                } else {
+                    res = signal ? await fetch(url, { signal }) : await fetch(url);
+                }
                 if (!res.ok) throw new Error('music fetch failed');
                 const arrayBuffer = await res.arrayBuffer();
+                if (signal?.aborted) throw createAbortError();
                 const decoded = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+                if (signal?.aborted) throw createAbortError();
                 entry.buffer = decoded;
                 entry.duration = decoded?.duration || entry.duration;
+                entry.isPartial = !wantsFull;
+                entry.partialSeconds = wantsFull ? 0 : (partialDurationSec || entry.partialSeconds || 0);
                 touchCacheEntry(entry);
                 enforceAudioBufferLimit();
                 return decoded;
@@ -1143,6 +1191,8 @@
             entry.buffer = null;
             entry.promise = null;
             entry.lastUsedAt = 0;
+            entry.isPartial = false;
+            entry.partialSeconds = 0;
             if (entry.keys.size === 0) {
                 audioBufferCache.delete(cacheKey);
                 if (id && id !== cacheKey) audioBufferCache.delete(id);
@@ -1156,18 +1206,28 @@
     function preloadSelectedMusic() {
         const music = getSelectedMusic();
         if (!music || !music.url || !musicEngine) return Promise.resolve(null);
+        if (
+            isPreviewOpen() ||
+            isRecording ||
+            isCountingDown ||
+            document.visibilityState !== 'visible' ||
+            uploadOverlay?.classList.contains('active')
+        ) {
+            return Promise.resolve(null);
+        }
         const sessionId = musicSessionId;
         const expectedId = music.id;
         const cachedEntry = getCachedAudioBufferEntry(music.id, music.url);
-        if (cachedEntry?.duration) {
+        if (cachedEntry?.duration && !cachedEntry.isPartial) {
             setSeekLimits(Math.floor(cachedEntry.duration));
         }
-        return preloadMusicBuffer(music.id, music.url)
+        return preloadMusicBuffer(music.id, music.url, { partialDurationSec: PARTIAL_PRELOAD_SECONDS })
             .then((buffer) => {
                 if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
                     return null;
                 }
-                if (buffer?.duration) {
+                const updatedEntry = getCachedAudioBufferEntry(music.id, music.url);
+                if (buffer?.duration && !updatedEntry?.isPartial) {
                     setSeekLimits(Math.floor(buffer.duration));
                 }
                 return buffer?.duration || null;
@@ -1178,18 +1238,31 @@
     const SAFE_PRELOAD_IDLE_TIMEOUT = 2000;
     const SAFE_PRELOAD_FALLBACK_DELAY = 1200;
     const USER_IDLE_GRACE_MS = 1200;
+    const RAPID_TAP_WINDOW_MS = 220;
     let lastUserInteractionAt = 0;
+    let lastRapidTapAt = 0;
     let safeMusicPreloadHandle = null;
     let safeMusicPreloadScheduled = false;
     let safeMusicPreloadInFlight = false;
     let safeMusicPreloadCompleted = false;
+    let safeMusicPreloadAbortController = null;
 
-    const markUserInteraction = () => {
-        lastUserInteractionAt = performance.now();
+    const handleUserInteraction = (eventName) => {
+        const now = performance.now();
+        lastUserInteractionAt = now;
+        if (eventName === 'pointerdown' || eventName === 'touchstart') {
+            if (now - lastRapidTapAt <= RAPID_TAP_WINDOW_MS) {
+                cancelBackgroundPreloads();
+            }
+            lastRapidTapAt = now;
+        }
+        if (eventName === 'wheel') {
+            cancelBackgroundPreloads();
+        }
     };
 
     ['pointerdown', 'touchstart', 'keydown', 'wheel'].forEach((eventName) => {
-        document.addEventListener(eventName, markUserInteraction, { passive: true });
+        document.addEventListener(eventName, () => handleUserInteraction(eventName), { passive: true });
     });
 
     function isUserIdleEnough() {
@@ -1207,6 +1280,8 @@
             !isRecording &&
             !isCountingDown &&
             !isPreviewOpen() &&
+            document.visibilityState === 'visible' &&
+            !uploadOverlay?.classList.contains('active') &&
             isUserIdleEnough()
         );
     }
@@ -1224,21 +1299,32 @@
         if (!music?.url) return;
 
         const cachedEntry = getCachedAudioBufferEntry(music.id, music.url);
-        if (cachedEntry?.buffer || cachedEntry?.promise) {
-            safeMusicPreloadCompleted = Boolean(cachedEntry?.buffer);
+        if (cachedEntry?.buffer) {
+            safeMusicPreloadCompleted = true;
+            scheduleInitialChainPreload();
+            return;
+        }
+        if (cachedEntry?.promise) {
             return;
         }
 
+        safeMusicPreloadAbortController?.abort();
+        safeMusicPreloadAbortController = new AbortController();
         safeMusicPreloadInFlight = true;
-        preloadMusicBuffer(music.id, music.url)
+        preloadMusicBuffer(music.id, music.url, {
+            signal: safeMusicPreloadAbortController.signal,
+            partialDurationSec: PARTIAL_PRELOAD_SECONDS
+        })
             .then(() => {
                 safeMusicPreloadCompleted = true;
+                scheduleInitialChainPreload();
             })
             .catch(() => {
                 safeMusicPreloadCompleted = false;
             })
             .finally(() => {
                 safeMusicPreloadInFlight = false;
+                safeMusicPreloadAbortController = null;
             });
     }
 
@@ -1844,6 +1930,7 @@
                 }
                 renderFilterTags();
                 renderMusicList(musicSearchInput.value);
+                schedulePriorityVisiblePreload();
             };
             musicFilterTags.appendChild(btn);
         });
@@ -1914,6 +2001,7 @@
                     stopMusicPreview();
                     return;
                 }
+                cancelBackgroundPreloads();
                 unlockAudioContext();
                 startMusicPreview(opt);
             };
@@ -1957,6 +2045,7 @@
     function selectMusic(opt) {
         if (!opt) return;
         const hadSelection = !!getSelectedMusic();
+        cancelBackgroundPreloads();
         stopMusicPreview();
         selectedMusicId = opt.id;
         if (!hadSelection && parseFloat(musicVolumeInput.value || '0') === 0) {
@@ -2026,12 +2115,18 @@
         invalidateMusicSession();
     }
 
-    const MAX_PRELOAD_ITEMS = 2;
+    const MAX_PRELOAD_ITEMS = 3;
+    const INITIAL_CHAIN_AHEAD_LIMIT = 3;
+    const PRELOAD_INTENT_DEBOUNCE_MS = 160;
+    const PARTIAL_PRELOAD_SECONDS = 20;
     const visibleMusicIds = new Set();
     const preloadedMusicIds = new Set();
     let musicPreloadObserver = null;
-    let musicPreloadIdleHandle = null;
-    let isPreloadingVisibleMusic = false;
+    let preloadIntentTimer = null;
+    let activePreloadController = null;
+    let activePreloadToken = 0;
+    let initialChainInFlight = false;
+    let initialChainCompleted = false;
 
     function scheduleIdleTask(task, { timeout = 500, fallbackDelay = 120 } = {}) {
         if (typeof requestIdleCallback === 'function') {
@@ -2041,136 +2136,189 @@
         }
     }
 
-    function throttle(fn, wait = 50) {
-        let lastCall = 0;
-        let timeoutId = null;
-        return (...args) => {
-            const now = performance.now();
-            const remaining = wait - (now - lastCall);
-            if (remaining <= 0 || remaining > wait) {
-                if (timeoutId) {
-                    clearTimeout(timeoutId);
-                    timeoutId = null;
-                }
-                lastCall = now;
-                fn(...args);
-            } else if (!timeoutId) {
-                timeoutId = setTimeout(() => {
-                    lastCall = performance.now();
-                    timeoutId = null;
-                    fn(...args);
-                }, remaining);
+    function cancelBackgroundPreloads() {
+        if (preloadIntentTimer) {
+            clearTimeout(preloadIntentTimer);
+            preloadIntentTimer = null;
+        }
+        if (safeMusicPreloadHandle) {
+            if (typeof cancelIdleCallback === 'function') {
+                cancelIdleCallback(safeMusicPreloadHandle);
+            } else {
+                clearTimeout(safeMusicPreloadHandle);
             }
-        };
+            safeMusicPreloadHandle = null;
+            safeMusicPreloadScheduled = false;
+        }
+        if (safeMusicPreloadAbortController) {
+            safeMusicPreloadAbortController.abort();
+            safeMusicPreloadAbortController = null;
+        }
+        activePreloadToken += 1;
+        if (activePreloadController) {
+            activePreloadController.abort();
+            activePreloadController = null;
+        }
+        initialChainInFlight = false;
     }
 
-    function enqueueMusicPreload(id, url, { allowWhenSelected = false } = {}) {
-        if (!id || !url) return;
-        if (!allowWhenSelected && selectedMusicId) return;
+    function isPreloadBlocked() {
+        return (
+            !mediaStream?.active ||
+            isRecording ||
+            isCountingDown ||
+            isPreviewOpen() ||
+            document.visibilityState !== 'visible' ||
+            uploadOverlay?.classList.contains('active')
+        );
+    }
+
+    function canRunBackgroundPreload({ requireIdle = false } = {}) {
+        if (isPreloadBlocked()) return false;
+        if (requireIdle && !isUserIdleEnough()) return false;
+        if (navigator?.scheduling?.isInputPending?.()) return false;
+        return true;
+    }
+
+    function reservePreloadTrack(id, url, { allowWhenSelected = true } = {}) {
+        if (!id || !url) return false;
+        if (!allowWhenSelected && selectedMusicId) return false;
         const cached = getCachedAudioBufferEntry(id, url);
-        if (cached?.buffer || cached?.promise || preloadedMusicIds.has(id)) return;
+        if (cached?.buffer || cached?.promise || preloadedMusicIds.has(id)) return false;
         preloadedMusicIds.add(id);
-        preloadMusicBuffer(id, url).catch(() => {
-            preloadedMusicIds.delete(id);
-        });
+        return true;
     }
 
-    function preloadVisibleTracks({ maxItems = 2, allowWhenSelected = false } = {}) {
-        if (!musicListEl) return;
+    function releasePreloadTrack(id) {
+        if (!id) return;
+        preloadedMusicIds.delete(id);
+    }
+
+    async function runSequentialPreload(tracks, { allowWhenSelected = true, requireIdle = false, token, signal } = {}) {
+        for (const track of tracks) {
+            if (token !== activePreloadToken) return false;
+            if (!canRunBackgroundPreload({ requireIdle })) return false;
+            if (!reservePreloadTrack(track.id, track.url, { allowWhenSelected })) {
+                continue;
+            }
+            const durationSeconds = track.durationMs ? track.durationMs / 1000 : 0;
+            const partialDurationSec = durationSeconds
+                ? Math.min(PARTIAL_PRELOAD_SECONDS, durationSeconds)
+                : PARTIAL_PRELOAD_SECONDS;
+            try {
+                await preloadMusicBuffer(track.id, track.url, { signal, partialDurationSec });
+            } catch (error) {
+                releasePreloadTrack(track.id);
+                if (signal?.aborted || token !== activePreloadToken) return false;
+            }
+        }
+        return token === activePreloadToken;
+    }
+
+    function startPreloadSequence(tracks, { allowWhenSelected = true, requireIdle = false } = {}) {
+        if (!tracks?.length) return null;
+        if (!canRunBackgroundPreload({ requireIdle })) return null;
+        if (activePreloadController) {
+            activePreloadController.abort();
+            activePreloadController = null;
+        }
+        const controller = new AbortController();
+        activePreloadController = controller;
+        const token = ++activePreloadToken;
+        const promise = runSequentialPreload(tracks, {
+            allowWhenSelected,
+            requireIdle,
+            token,
+            signal: controller.signal
+        }).finally(() => {
+            if (activePreloadToken === token) {
+                activePreloadController = null;
+            }
+        });
+        return promise;
+    }
+
+    function collectPriorityTracks(maxItems = MAX_PRELOAD_ITEMS) {
+        if (!musicListEl) return [];
         const items = [...musicListEl.querySelectorAll('.music-item')];
+        if (!items.length) return [];
         const visibleOrdered = items.filter(item => visibleMusicIds.has(item.dataset.musicId));
-        const candidates = visibleOrdered.length ? visibleOrdered : items.slice(0, maxItems);
-        candidates.slice(0, maxItems).forEach((item) => {
+        const candidates = [];
+        visibleOrdered.forEach(item => candidates.push(item));
+        if (candidates.length < maxItems) {
+            const lastVisible = visibleOrdered.length ? visibleOrdered[visibleOrdered.length - 1] : null;
+            const startIndex = lastVisible
+                ? items.findIndex(item => item.dataset.musicId === lastVisible.dataset.musicId) + 1
+                : 0;
+            for (let i = Math.max(0, startIndex); i < items.length && candidates.length < maxItems; i += 1) {
+                const item = items[i];
+                if (!candidates.includes(item)) {
+                    candidates.push(item);
+                }
+            }
+        }
+        if (!candidates.length) {
+            candidates.push(...items.slice(0, maxItems));
+        }
+        return candidates.slice(0, maxItems).reduce((acc, item) => {
             const id = item.dataset.musicId;
             const opt = musicOptions.find(opt => String(opt.id) === id);
             if (opt?.url) {
-                enqueueMusicPreload(opt.id, opt.url, { allowWhenSelected });
+                acc.push({ id: opt.id, url: opt.url, durationMs: Number(opt.duration) || 0 });
             }
-        });
+            return acc;
+        }, []);
+    }
+
+    function schedulePriorityVisiblePreload() {
+        cancelBackgroundPreloads();
+        preloadIntentTimer = setTimeout(() => {
+            if (!canRunBackgroundPreload()) return;
+            const tracks = collectPriorityTracks(MAX_PRELOAD_ITEMS);
+            startPreloadSequence(tracks, { allowWhenSelected: true });
+        }, PRELOAD_INTENT_DEBOUNCE_MS);
+    }
+
+    function startInitialChainPreload() {
+        if (initialChainCompleted || initialChainInFlight) return;
+        if (!canRunBackgroundPreload({ requireIdle: true })) return;
+        if (activePreloadController || preloadIntentTimer) return;
+        const firstId = musicOptions?.[0]?.id ?? null;
+        const tracks = collectPriorityTracks(INITIAL_CHAIN_AHEAD_LIMIT + 1)
+            .filter(track => String(track.id) !== String(firstId))
+            .slice(0, INITIAL_CHAIN_AHEAD_LIMIT);
+        if (!tracks.length) {
+            initialChainCompleted = true;
+            return;
+        }
+        initialChainInFlight = true;
+        const promise = startPreloadSequence(tracks, { allowWhenSelected: true, requireIdle: true });
+        if (!promise) {
+            initialChainInFlight = false;
+            return;
+        }
+        promise
+            .then((completed) => {
+                if (completed) {
+                    initialChainCompleted = true;
+                }
+            })
+            .finally(() => {
+                initialChainInFlight = false;
+            });
+    }
+
+    function scheduleInitialChainPreload() {
+        if (initialChainCompleted || initialChainInFlight) return;
+        scheduleIdleTask(() => {
+            startInitialChainPreload();
+        }, { timeout: 500, fallbackDelay: 180 });
     }
 
     function preloadInitialPreviewTracks() {
-        scheduleIdleTask(() => {
-            if (!selectedMusicId) {
-                const first = musicOptions[0];
-                if (first?.url) {
-                    enqueueMusicPreload(first.id, first.url, { allowWhenSelected: true });
-                }
-            }
-            preloadVisibleTracks({ maxItems: 2, allowWhenSelected: true });
-        }, { timeout: 300, fallbackDelay: 80 });
-    }
-
-    function burstPreloadVisibleTracks() {
-        scheduleIdleTask(() => {
-            if (!musicListEl) return;
-            const items = [...musicListEl.querySelectorAll('.music-item')];
-            if (!items.length) return;
-            const visibleOrdered = items.filter(item => visibleMusicIds.has(item.dataset.musicId));
-            const ids = [];
-            visibleOrdered.forEach(item => ids.push(item.dataset.musicId));
-            if (visibleOrdered.length) {
-                const lastVisibleIndex = items.findIndex(item => item.dataset.musicId === visibleOrdered[visibleOrdered.length - 1].dataset.musicId);
-                const nextItem = items[lastVisibleIndex + 1];
-                if (nextItem) ids.push(nextItem.dataset.musicId);
-            } else {
-                items.slice(0, 4).forEach(item => ids.push(item.dataset.musicId));
-            }
-            const deduped = [...new Set(ids)].slice(0, 4);
-            deduped.forEach((id) => {
-                const opt = musicOptions.find(opt => String(opt.id) === String(id));
-                if (opt?.url) {
-                    enqueueMusicPreload(opt.id, opt.url, { allowWhenSelected: true });
-                }
-            });
-        }, { timeout: 400, fallbackDelay: 100 });
-    }
-
-    function processVisibleMusicPreloadQueue() {
-        if (isPreloadingVisibleMusic) return;
-        if (selectedMusicId) return;
-        const candidates = [...visibleMusicIds]
-            .filter(id => !preloadedMusicIds.has(id))
-            .slice(0, MAX_PRELOAD_ITEMS);
-        if (!candidates.length) return;
-        isPreloadingVisibleMusic = true;
-        const preloadNext = (deadline) => {
-            if (!candidates.length) {
-                isPreloadingVisibleMusic = false;
-                return;
-            }
-            if (deadline && typeof deadline.timeRemaining === 'function' && deadline.timeRemaining() < 6) {
-                isPreloadingVisibleMusic = false;
-                scheduleVisibleMusicPreload();
-                return;
-            }
-            const id = candidates.shift();
-            const opt = musicOptions.find(opt => String(opt.id) === id);
-            if (opt?.url) {
-                enqueueMusicPreload(id, opt.url);
-            }
-            if (typeof requestIdleCallback === 'function') {
-                requestIdleCallback(preloadNext, { timeout: 400 });
-            } else {
-                setTimeout(() => preloadNext(), 80);
-            }
-        };
-        scheduleIdleTask(() => preloadNext(), { timeout: 400, fallbackDelay: 80 });
-    }
-
-    function scheduleVisibleMusicPreload() {
-        if (musicPreloadIdleHandle) return;
-        if (typeof requestIdleCallback === 'function') {
-            musicPreloadIdleHandle = requestIdleCallback(() => {
-                musicPreloadIdleHandle = null;
-                processVisibleMusicPreloadQueue();
-            }, { timeout: 500 });
-        } else {
-            musicPreloadIdleHandle = setTimeout(() => {
-                musicPreloadIdleHandle = null;
-                processVisibleMusicPreloadQueue();
-            }, 120);
-        }
+        if (!canRunBackgroundPreload({ requireIdle: true })) return;
+        const tracks = collectPriorityTracks(MAX_PRELOAD_ITEMS);
+        startPreloadSequence(tracks, { allowWhenSelected: true, requireIdle: true });
     }
 
     function setupMusicPreloadObserver() {
@@ -2186,7 +2334,6 @@
                         visibleMusicIds.delete(id);
                     }
                 });
-                scheduleVisibleMusicPreload();
             }, { root: musicListEl, threshold: 0.45 });
         } else {
             musicPreloadObserver.disconnect();
@@ -2194,7 +2341,6 @@
         visibleMusicIds.clear();
         const items = musicListEl.querySelectorAll('.music-item');
         items.forEach(item => musicPreloadObserver.observe(item));
-        scheduleVisibleMusicPreload();
     }
 
     async function loadMusicCatalog() {
@@ -2343,7 +2489,7 @@
         musicTabBar?.removeAttribute('hidden');
         updateSheetBackdrop();
         setMusicOverlayVisibility();
-        burstPreloadVisibleTracks();
+        schedulePriorityVisiblePreload();
     }
 
     function openFilterSheet() {
@@ -2413,7 +2559,16 @@
     if (musicClearBtn) {
         musicClearBtn.onclick = (e) => { e.stopPropagation(); clearMusicSelection(); };
     }
-    musicSearchInput.oninput = (e) => renderMusicList(e.target.value);
+    musicSearchInput.oninput = (e) => {
+        renderMusicList(e.target.value);
+        schedulePriorityVisiblePreload();
+    };
+    if (musicListEl) {
+        musicListEl.addEventListener('scroll', () => {
+            cancelBackgroundPreloads();
+            schedulePriorityVisiblePreload();
+        }, { passive: true });
+    }
     musicFilterBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
         if (musicFilterSheet?.classList.contains('active')) {
@@ -2472,7 +2627,7 @@
     let musicEngine = null;
     const audioBufferCache = new Map();
     const MAX_AUDIO_BUFFERS = 12;
-    const MAX_PARALLEL_PRELOADS = 2;
+    const MAX_PARALLEL_PRELOADS = 1;
     let activePreloadCount = 0;
     const preloadQueue = [];
     let audioUnlocked = false;
@@ -2484,6 +2639,7 @@
     // --- Optimisation Fluidité (Gérer la visibilité de la page) ---
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
+            cancelBackgroundPreloads();
             if (!isRecording && !isCountingDown) {
                 if (mediaStream) {
                     mediaStream.getTracks().forEach(track => track.stop());
@@ -2874,6 +3030,7 @@
 
     async function startMusicPreview(opt) {
         if (!opt || !musicEngine) return;
+        cancelBackgroundPreloads();
         const sessionId = musicSessionId;
         const expectedId = opt.id;
         const perf = DEBUG_AUDIO ? { id: opt.id, tClick: performance.now() } : null;
@@ -2915,7 +3072,7 @@
         htmlStartPromise.catch(() => {});
 
         const cachedEntry = getCachedAudioBufferEntry(opt.id, opt.url);
-        if (cachedEntry?.buffer) {
+        if (cachedEntry?.buffer && !cachedEntry.isPartial) {
             musicEngine.setBuffer(cachedEntry.buffer, opt.url);
             if (cachedEntry.buffer.duration) {
                 setSeekLimits(Math.floor(cachedEntry.buffer.duration));
@@ -2952,7 +3109,7 @@
         }
 
         try {
-            const decoded = await preloadMusicBuffer(opt.id, opt.url);
+            const decoded = await preloadMusicBuffer(opt.id, opt.url, { forceFull: true });
             if (perf) {
                 perf.tDecodeDone = performance.now();
             }
@@ -3093,6 +3250,7 @@
 
     function startCountdownAndRecord() {
       if (isCountingDown) return;
+      cancelBackgroundPreloads();
       if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
 
       isCountingDown = true;
@@ -3213,6 +3371,7 @@
     };
 
     async function startRecording() {
+      cancelBackgroundPreloads();
       const audioMissing = !mediaStream || mediaStream.getAudioTracks().length === 0;
 
       if (audioMissing) {
@@ -3325,6 +3484,7 @@
     }
 
     function showPreview(blob) {
+       cancelBackgroundPreloads();
        if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
        previewObjectURL = URL.createObjectURL(blob);
        lockPreviewViewport();
@@ -3522,6 +3682,7 @@
        }
 
        const muxUploadUrl = getUploadURL();
+       cancelBackgroundPreloads();
        uploadOverlay.classList.add('active');
        setUploadStatusText("Préparation...");
        if(!muxUploadUrl || !recordedBlob) {
