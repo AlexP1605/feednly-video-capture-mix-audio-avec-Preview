@@ -203,7 +203,8 @@
     }
 
     .preview-audio-controls {
-      position: static;
+      position: sticky;
+      top: max(16px, env(safe-area-inset-top));
       z-index: 10;
       display: flex;
       align-items: center;
@@ -2053,6 +2054,7 @@
         if (!musicSheet) return;
         setActiveTab('music');
         musicSheet.classList.remove('hidden');
+        musicSheet.classList.add('active');
     }
 
     function openFilterSheet() {
@@ -2062,6 +2064,7 @@
     }
 
     function closeMusicSheet() {
+        musicSheet?.classList.remove('active');
         musicSheet?.classList.add('hidden');
         if (musicFilterSheet?.classList.contains('active')) {
             musicFilterSheet.classList.remove('active');
