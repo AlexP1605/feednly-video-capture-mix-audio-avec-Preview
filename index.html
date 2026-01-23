@@ -347,17 +347,19 @@
       aspect-ratio: 9 / 16;
       height: auto;
       border-radius: 10px;
-      border: none;
+      border: 1px solid rgba(255,255,255,0.18);
       background: rgba(255,255,255,0.08);
       background-size: cover;
       background-position: center;
       flex: 0 0 auto;
-      transition: transform 0.2s ease, opacity 0.2s ease;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
       position: relative;
       opacity: 0.35;
     }
     .thumbnail-frame.active {
       transform: scale(1.12); /* Fix: zoom plus doux pour la miniature active */
+      border-color: transparent; /* Fix: supprime le contour actif */
+      box-shadow: 0 12px 24px rgba(0,0,0,0.35);
       opacity: 1;
     }
     .thumbnail-loading {
@@ -951,8 +953,6 @@
     const musicTabBar = document.getElementById('music-tab-bar');
     let currentlyPlayingMusicId = null;
     let pendingMusicId = null;
-    let activeAudioType = null; // single source of truth for UI + overlap prevention
-    let webAudioTransitionedForId = null;
     let isDraggingWaveform = false;
     let videoDurationSeconds = 0;
     const markCameraReady = () => {
@@ -1276,7 +1276,7 @@
         return clamped;
     }
     
-    let facingMode = 'user';
+    let facingMode = 'environment';
     let recordedFacingMode = 'environment';
     let torchSupported = false;
     let torchEnabled = false;
@@ -1791,9 +1791,9 @@
         if (!musicEngine) return;
         musicEngine.updateLoop(start, end);
         const htmlState = musicEngine.getHtmlAudioState();
-        if (activeAudioType === 'web') {
+        if (musicEngine.isPlaying) {
             musicEngine.play(start, end, start).catch(() => {});
-        } else if (activeAudioType === 'html' && htmlState?.isPlaying) {
+        } else if (htmlState?.isPlaying) {
             musicEngine.seekHtmlAudio(start);
         }
     }
@@ -1909,7 +1909,7 @@
             playBtn.type = 'button';
             playBtn.className = 'icon-btn';
             const isPendingThis = pendingMusicId === opt.id;
-            const isPlayingThis = currentlyPlayingMusicId === opt.id && activeAudioType !== null;
+            const isPlayingThis = currentlyPlayingMusicId === opt.id && (musicEngine?.isPlaying || isPendingThis);
             playBtn.innerHTML = isPlayingThis ? playIconPause() : playIconPlay();
             if (isPendingThis) {
                 playBtn.classList.add('loading');
@@ -1918,7 +1918,7 @@
             }
             playBtn.onclick = async (e) => {
                 e.stopPropagation();
-                const alreadyPlaying = currentlyPlayingMusicId === opt.id && (activeAudioType !== null || pendingMusicId === opt.id);
+                const alreadyPlaying = currentlyPlayingMusicId === opt.id && (musicEngine?.isPlaying || pendingMusicId === opt.id);
                 if (alreadyPlaying) {
                     stopMusicPreview();
                     return;
@@ -1946,7 +1946,7 @@
             const isPendingThis = pendingMusicId !== null && String(pendingMusicId) === id;
             const isPlayingThis = currentlyPlayingMusicId !== null
                 && String(currentlyPlayingMusicId) === id
-                && activeAudioType !== null;
+                && (musicEngine?.isPlaying || isPendingThis);
             item.classList.toggle('active', selectedMusicId !== null && String(selectedMusicId) === id);
             if (!playBtn) return;
             playBtn.innerHTML = isPlayingThis ? playIconPause() : playIconPlay();
@@ -1966,23 +1966,13 @@
     function selectMusic(opt) {
         if (!opt) return;
         const hadSelection = !!getSelectedMusic();
-        const isNewTrack = selectedMusicId !== opt.id;
-        stopMusicPreview({ hard: true, reset: true });
-        if (isNewTrack) {
-            musicStartTime = 0;
-            currentMusicDuration = 30;
-            webAudioTransitionedForId = null;
-        }
+        stopMusicPreview();
         selectedMusicId = opt.id;
         if (!hadSelection && parseFloat(musicVolumeInput.value || '0') === 0) {
             applyMusicVolume(0.5);
         }
-        updateSeekDurationFromMeta(opt);
         updateMusicOverlay();
-        if (musicEngine) {
-            const { start, end } = getLoopBounds();
-            musicEngine.updateLoop(start, end);
-        }
+        updateSeekDurationFromMeta(opt);
         renderMusicList(musicSearchInput.value);
         unlockAudioContext();
         preloadSelectedMusic();
@@ -2014,12 +2004,11 @@
     }
 
     function clearMusicSelection() {
-        stopMusicPreview({ hard: true, reset: true });
+        stopMusicPreview({ hard: true });
         invalidateMusicSession();
         selectedMusicId = null;
         currentlyPlayingMusicId = null;
         pendingMusicId = null;
-        webAudioTransitionedForId = null;
         musicStartTime = 0;
         currentMusicDuration = 30;
         setSeekLimits(currentMusicDuration);
@@ -2045,9 +2034,8 @@
         renderMusicList(musicSearchInput.value);
         updateMusicSelectionUI();
         closeMusicSheet();
-        stopMusicPreview({ hard: true, reset: true });
+        stopMusicPreview({ hard: true });
         invalidateMusicSession();
-        webAudioTransitionedForId = null;
     }
 
     const MAX_PRELOAD_ITEMS = 2;
@@ -2632,7 +2620,7 @@
         htmlAudio.loop = false;
         htmlAudio.setAttribute('playsinline', '');
 
-        const stopHtmlAudio = ({ resetSrc = false, resetTime = false } = {}) => {
+        const stopHtmlAudio = ({ resetSrc = false } = {}) => {
             if (htmlAudioFadeRaf) {
                 cancelAnimationFrame(htmlAudioFadeRaf);
                 htmlAudioFadeRaf = null;
@@ -2640,33 +2628,9 @@
             htmlAudio.pause();
             htmlAudioPlaying = false;
             htmlAudioStartPerf = 0;
-            if (activeAudioType === 'html') {
-                activeAudioType = null;
-            }
-            if (resetTime) {
-                try { htmlAudio.currentTime = 0; } catch (error) {}
-            }
             if (resetSrc) {
                 htmlAudio.removeAttribute('src');
                 htmlAudio.load();
-            }
-        };
-
-        const stopWebAudio = ({ resetGain = false } = {}) => {
-            if (gainNode && audioCtx) {
-                gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
-                if (resetGain) {
-                    gainNode.gain.setValueAtTime(clampVolume(musicVolume), audioCtx.currentTime);
-                }
-            }
-            if (source) {
-                try { source.stop(0); } catch (error) {}
-                try { source.disconnect(); } catch (error) {}
-            }
-            source = null;
-            isPlaying = false;
-            if (activeAudioType === 'web') {
-                activeAudioType = null;
             }
         };
 
@@ -2723,10 +2687,14 @@
             }
         };
 
-        const stop = ({ resetHtml = false, resetHtmlSrc = false, resetGain = false } = {}) => {
-            stopWebAudio({ resetGain });
-            stopHtmlAudio({ resetSrc: resetHtmlSrc, resetTime: resetHtml });
-            activeAudioType = null;
+        const stop = () => {
+            if (source) {
+                try { source.stop(0); } catch (error) {}
+                try { source.disconnect(); } catch (error) {}
+            }
+            source = null;
+            isPlaying = false;
+            stopHtmlAudio({ resetSrc: false });
         };
 
         const setBuffer = (nextBuffer, url = '') => {
@@ -2738,9 +2706,7 @@
         const play = async (startTime, endTime, offsetTime) => {
             const ready = await ensureContext();
             if (!ready || !buffer) return false;
-            // Guarantee a single source: WebAudio cannot start while HTMLAudio is active.
-            stopWebAudio({ resetGain: true });
-            stopHtmlAudio({ resetSrc: true, resetTime: true });
+            stop();
             source = audioCtx.createBufferSource();
             source.buffer = buffer;
             source.loop = true;
@@ -2750,12 +2716,8 @@
             const safeOffset = Number.isFinite(offsetTime) ? offsetTime : source.loopStart;
             source.start(audioCtx.currentTime, safeOffset);
             isPlaying = true;
-            activeAudioType = 'web';
             source.onended = () => {
                 isPlaying = false;
-                if (activeAudioType === 'web') {
-                    activeAudioType = null;
-                }
             };
             return true;
         };
@@ -2803,9 +2765,7 @@
         const playHtmlAudio = (url, startTime, endTime) => {
             if (!url) return Promise.resolve(false);
             const session = ++htmlAudioPlaySession;
-            // Guarantee a single source: HTMLAudio cannot start while WebAudio is active.
-            stopWebAudio({ resetGain: true });
-            stopHtmlAudio({ resetSrc: true, resetTime: true });
+            stopHtmlAudio({ resetSrc: true });
             htmlAudioLoopStart = Math.max(0, startTime || 0);
             htmlAudioLoopEnd = Math.max(htmlAudioLoopStart + 0.05, endTime || 0);
             htmlAudio.src = url;
@@ -2813,7 +2773,6 @@
             htmlAudio.volume = clampVolume(musicVolume);
             htmlAudioPlaying = true;
             htmlAudioStartPerf = performance.now();
-            activeAudioType = 'html';
             htmlAudio.removeEventListener('timeupdate', syncHtmlLoop);
             htmlAudio.addEventListener('timeupdate', syncHtmlLoop);
             const updateLoopFromMeta = () => {
@@ -2830,7 +2789,6 @@
             return playPromise
                 .then(() => {
                     if (session !== htmlAudioPlaySession) return false;
-                    activeAudioType = 'html';
                     return true;
                 })
                 .catch(() => {
@@ -2847,31 +2805,24 @@
             htmlAudioStartPerf = performance.now();
         };
 
-        const fadeOutHtmlAudio = (durationMs = FAST_START_CROSSFADE_MS) => {
-            if (!htmlAudioPlaying) return Promise.resolve();
-            if (htmlAudioFadeRaf) {
-                cancelAnimationFrame(htmlAudioFadeRaf);
-                htmlAudioFadeRaf = null;
-            }
+        const crossfadeHtmlToWebAudio = (durationMs = FAST_START_CROSSFADE_MS) => {
+            if (!htmlAudioPlaying) return;
             const startVolume = htmlAudio.volume;
             const fadeStart = performance.now();
             const duration = Math.max(40, durationMs);
-            return new Promise((resolve) => {
-                const step = () => {
-                    const elapsed = performance.now() - fadeStart;
-                    const t = Math.min(1, elapsed / duration);
-                    htmlAudio.volume = startVolume * (1 - t);
-                    if (t < 1) {
-                        htmlAudioFadeRaf = requestAnimationFrame(step);
-                    } else {
-                        stopHtmlAudio({ resetSrc: true, resetTime: true });
-                        htmlAudio.volume = clampVolume(musicVolume);
-                        htmlAudioFadeRaf = null;
-                        resolve();
-                    }
-                };
-                htmlAudioFadeRaf = requestAnimationFrame(step);
-            });
+            const step = () => {
+                const elapsed = performance.now() - fadeStart;
+                const t = Math.min(1, elapsed / duration);
+                htmlAudio.volume = startVolume * (1 - t);
+                if (t < 1) {
+                    htmlAudioFadeRaf = requestAnimationFrame(step);
+                } else {
+                    stopHtmlAudio({ resetSrc: true });
+                    htmlAudio.volume = clampVolume(musicVolume);
+                    htmlAudioFadeRaf = null;
+                }
+            };
+            htmlAudioFadeRaf = requestAnimationFrame(step);
         };
 
         const getHtmlAudioState = () => ({
@@ -2892,7 +2843,7 @@
             fadeGainTo,
             playHtmlAudio,
             seekHtmlAudio,
-            fadeOutHtmlAudio,
+            crossfadeHtmlToWebAudio,
             getHtmlAudioState,
             get isPlaying() { return isPlaying; },
             get hasBuffer() { return !!buffer; }
@@ -2901,23 +2852,24 @@
 
     musicEngine = createMusicEngine();
 
-    function stopMusicPreview({ hard = false, reset = false } = {}) {
+    function stopMusicPreview({ hard = false } = {}) {
         if (!musicEngine) return;
-        musicEngine.stop({ resetHtml: reset, resetHtmlSrc: reset, resetGain: reset });
+        musicEngine.stop();
         if (hard) {
             musicEngine.clearBuffer();
         }
         currentlyPlayingMusicId = null;
         pendingMusicId = null;
-        activeAudioType = null;
         updateMusicListPlaybackState();
     }
 
     function restartPreviewIfPlaying() {
-        if (!currentlyPlayingMusicId || !activeAudioType) return;
+        if (!currentlyPlayingMusicId) return;
         const music = musicOptions.find(opt => opt.id === currentlyPlayingMusicId);
         if (!music) return;
-        startMusicPreview(music);
+        if (musicEngine?.isPlaying) {
+            startMusicPreview(music);
+        }
     }
 
     function getLoopedOffset(startTime, endTime, currentTime) {
@@ -2942,23 +2894,17 @@
         const sessionId = musicSessionId;
         const expectedId = opt.id;
         const perf = DEBUG_AUDIO ? { id: opt.id, tClick: performance.now() } : null;
-        const isNewTrackSelection = selectedMusicId !== opt.id;
 
-        if (isNewTrackSelection) {
-            // Reset timing/waveform state before any playback for a new track.
-            stopMusicPreview({ hard: true, reset: true });
-            musicStartTime = 0;
-            currentMusicDuration = 30;
-            webAudioTransitionedForId = null;
+        if (currentlyPlayingMusicId && currentlyPlayingMusicId !== opt.id) {
+            stopMusicPreview({ hard: false });
         }
 
         selectedMusicId = opt.id;
         currentlyPlayingMusicId = opt.id;
         pendingMusicId = opt.id;
-        activeAudioType = null;
 
-        updateSeekDurationFromMeta(opt);
         updateMusicOverlay();
+        updateSeekDurationFromMeta(opt);
         updateMusicListPlaybackState();
 
         clampStartForVideoDuration();
@@ -2970,26 +2916,23 @@
 
         let htmlStarted = false;
         let htmlStartPerf = 0;
-        const allowHtmlPreview = webAudioTransitionedForId !== expectedId;
-        const htmlStartPromise = allowHtmlPreview
-            ? musicEngine.playHtmlAudio(opt.url, start, end)
-                .then((started) => {
-                    htmlStarted = started;
-                    if (started) {
-                        const htmlState = musicEngine.getHtmlAudioState();
-                        htmlStartPerf = htmlState.startPerf || performance.now();
-                        if (perf) {
-                            perf.tSoundStart = htmlStartPerf;
-                            logAudioPerf({ ...perf });
-                        }
-                        if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
-                            pendingMusicId = null;
-                            updateMusicListPlaybackState();
-                        }
+        const htmlStartPromise = musicEngine.playHtmlAudio(opt.url, start, end)
+            .then((started) => {
+                htmlStarted = started;
+                if (started) {
+                    const htmlState = musicEngine.getHtmlAudioState();
+                    htmlStartPerf = htmlState.startPerf || performance.now();
+                    if (perf) {
+                        perf.tSoundStart = htmlStartPerf;
+                        logAudioPerf({ ...perf });
                     }
-                    return started;
-                })
-            : Promise.resolve(false);
+                    if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
+                        pendingMusicId = null;
+                        updateMusicListPlaybackState();
+                    }
+                }
+                return started;
+            });
         htmlStartPromise.catch(() => {});
 
         const cachedEntry = getCachedAudioBufferEntry(opt.id, opt.url);
@@ -3000,15 +2943,12 @@
             }
             try {
                 musicEngine.updateVolume(musicVolume);
-                const htmlState = musicEngine.getHtmlAudioState();
-                if (htmlState.isPlaying && webAudioTransitionedForId !== expectedId) {
-                    await musicEngine.fadeOutHtmlAudio(FAST_START_CROSSFADE_MS);
-                }
-                musicEngine.setGainInstant(0);
                 const started = await musicEngine.play(start, end);
                 if (started) {
-                    musicEngine.fadeGainTo(musicVolume, FAST_START_CROSSFADE_MS / 1000);
-                    webAudioTransitionedForId = expectedId;
+                    const htmlState = musicEngine.getHtmlAudioState();
+                    if (htmlState.isPlaying) {
+                        musicEngine.crossfadeHtmlToWebAudio(FAST_START_CROSSFADE_MS);
+                    }
                 }
                 if (perf) {
                     perf.tWebAudioStart = performance.now();
@@ -3049,15 +2989,14 @@
             }
             musicEngine.updateVolume(musicVolume);
             const htmlState = musicEngine.getHtmlAudioState();
-            if (htmlState.isPlaying && webAudioTransitionedForId !== expectedId) {
-                await musicEngine.fadeOutHtmlAudio(FAST_START_CROSSFADE_MS);
-            }
             const offset = getLoopedOffset(start, end, htmlState.currentTime || (start + (htmlState.startPerf ? (performance.now() - htmlState.startPerf) / 1000 : 0)));
             musicEngine.setGainInstant(0);
             const started = await musicEngine.play(start, end, offset);
             if (started) {
                 musicEngine.fadeGainTo(musicVolume, FAST_START_CROSSFADE_MS / 1000);
-                webAudioTransitionedForId = expectedId;
+                if (htmlState.isPlaying) {
+                    musicEngine.crossfadeHtmlToWebAudio(FAST_START_CROSSFADE_MS);
+                }
                 if (perf) {
                     perf.tWebAudioStart = performance.now();
                     perf.total = perf.tWebAudioStart - perf.tClick;
@@ -3204,7 +3143,7 @@
       }, 1000);
     }
 
-    async function startCamera({ withAudio = false } = {}) {
+    async function startCamera() {
       if (uploadCompleted) return;
       if (startCamera.isStarting) return;
       cameraReady = false;
@@ -3213,11 +3152,6 @@
       cameraPreview.style.opacity = "0";
       
       if (mediaStream && mediaStream.active) {
-        const hasAudioTrack = mediaStream.getAudioTracks().length > 0;
-        if (withAudio && !hasAudioTrack) {
-          mediaStream.getTracks().forEach(track => track.stop());
-          mediaStream = null;
-        } else {
         cameraPreview.srcObject = mediaStream;
         cameraPreview.play().catch(e=>{});
 
@@ -3239,12 +3173,15 @@
            }
         }, 300);
         return;
-        }
       }
 
       const constraints = {
-        audio: withAudio,
-        video: { facingMode: facingMode }
+        audio: true,
+        video: { 
+            facingMode: facingMode,
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+        }
       };
 
       try {
@@ -3273,8 +3210,7 @@
         }, 300);
 
       } catch (error) {
-        console.error('[camera] getUserMedia failed', error);
-        document.body.classList.remove('camera-starting');
+        console.error(error);
       } finally {
         startCamera.isStarting = false;
       }
@@ -3301,7 +3237,7 @@
       const audioMissing = !mediaStream || mediaStream.getAudioTracks().length === 0;
 
       if (audioMissing) {
-         await startCamera({ withAudio: true });
+         await startCamera();
       }
 
       const hasAudioTrack = mediaStream && mediaStream.getAudioTracks().length > 0;
