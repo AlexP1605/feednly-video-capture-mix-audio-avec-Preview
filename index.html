@@ -1266,11 +1266,26 @@
         return Math.min(1, Math.max(0, value));
     }
 
+    function normalizeMusicVolumeValue(value) {
+        const numeric = Number.isFinite(value) ? value : 0.5;
+        const maxValue = musicVolumeInput ? parseFloat(musicVolumeInput.max || '1') : 1;
+        if (maxValue > 1) {
+            return numeric / maxValue;
+        }
+        if (numeric > 1) {
+            return numeric / 100;
+        }
+        return numeric;
+    }
+
     function applyMusicVolume(value, { syncInput = true, updateEngine = true } = {}) {
-        const clamped = clampVolume(Number.isFinite(value) ? value : 0.5);
+        const normalized = normalizeMusicVolumeValue(value);
+        const clamped = clampVolume(normalized);
         musicVolume = clamped;
         if (syncInput && musicVolumeInput) {
-            musicVolumeInput.value = String(clamped);
+            const maxValue = parseFloat(musicVolumeInput.max || '1');
+            const inputValue = maxValue > 1 ? clamped * maxValue : clamped;
+            musicVolumeInput.value = String(inputValue);
         }
         syncVolumeLabels();
         if (updateEngine && musicEngine) {
@@ -2251,11 +2266,14 @@
     }
 
     const handleMusicVolumeInput = (event) => {
-        const nextValue = parseFloat(event?.target?.value);
-        applyMusicVolume(Number.isNaN(nextValue) ? 0.5 : nextValue);
+        const target = event?.currentTarget || event?.target || musicVolumeInput;
+        const rawValue = target?.valueAsNumber ?? parseFloat(target?.value);
+        applyMusicVolume(Number.isNaN(rawValue) ? 0.5 : rawValue);
     };
     musicVolumeInput?.addEventListener('input', handleMusicVolumeInput);
     musicVolumeInput?.addEventListener('change', handleMusicVolumeInput);
+    musicVolumeInput?.addEventListener('pointermove', handleMusicVolumeInput);
+    musicVolumeInput?.addEventListener('touchmove', handleMusicVolumeInput, { passive: true });
     if (waveformVisual) {
         waveformVisual.addEventListener('pointerdown', (e) => {
             isDraggingWaveform = true;
@@ -2402,7 +2420,7 @@
     }
 
     function syncVolumeLabels() {
-        if (musicVolumeValue) musicVolumeValue.textContent = Math.round((parseFloat(musicVolumeInput.value) || 0) * 100);
+        if (musicVolumeValue) musicVolumeValue.textContent = Math.round((Number.isFinite(musicVolume) ? musicVolume : 0) * 100);
     }
 
     function updateOriginalMuteButton() {
