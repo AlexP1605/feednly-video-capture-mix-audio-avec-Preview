@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -3056,12 +3054,6 @@
 
         let htmlStarted = false;
         let htmlStartPerf = 0;
-        const clearPendingIfCurrent = () => {
-            if (pendingMusicId === expectedId) {
-                pendingMusicId = null;
-                updateMusicListPlaybackState();
-            }
-        };
         const htmlStartPromise = musicEngine.playHtmlAudio(opt.url, start, end)
             .then((started) => {
                 htmlStarted = started;
@@ -3072,7 +3064,6 @@
                         perf.tSoundStart = htmlStartPerf;
                         logAudioPerf({ ...perf });
                     }
-                    clearPendingIfCurrent();
                 }
                 return started;
             });
@@ -3088,7 +3079,6 @@
                 musicEngine.updateVolume(musicVolume);
                 const started = await musicEngine.play(start, end);
                 if (started) {
-                    clearPendingIfCurrent();
                     const htmlState = musicEngine.getHtmlAudioState();
                     if (htmlState.isPlaying) {
                         musicEngine.crossfadeHtmlToWebAudio(FAST_START_CROSSFADE_MS);
@@ -3116,72 +3106,50 @@
             return;
         }
 
-        const canPreloadFull = (
-            !isRecording &&
-            !isCountingDown &&
-            !isPreviewOpen() &&
-            document.visibilityState === 'visible' &&
-            !uploadOverlay?.classList.contains('active')
-        );
-
-        if (canPreloadFull) {
-            preloadMusicBuffer(opt.id, opt.url, { forceFull: true })
-                .then(async (decoded) => {
-                    if (perf) {
-                        perf.tDecodeDone = performance.now();
-                    }
-                    if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
-                        musicEngine.stop();
-                        return;
-                    }
-                    if (decoded) {
-                        musicEngine.setBuffer(decoded, opt.url);
-                        if (decoded.duration) {
-                            setSeekLimits(Math.floor(decoded.duration));
-                        }
-                    }
-                    musicEngine.updateVolume(musicVolume);
-                    const htmlState = musicEngine.getHtmlAudioState();
-                    const offset = getLoopedOffset(
-                        start,
-                        end,
-                        htmlState.currentTime || (start + (htmlState.startPerf ? (performance.now() - htmlState.startPerf) / 1000 : 0))
-                    );
-                    musicEngine.setGainInstant(0);
-                    const started = await musicEngine.play(start, end, offset);
-                    if (started) {
-                        clearPendingIfCurrent();
-                        musicEngine.fadeGainTo(musicVolume, FAST_START_CROSSFADE_MS / 1000);
-                        if (htmlState.isPlaying) {
-                            musicEngine.crossfadeHtmlToWebAudio(FAST_START_CROSSFADE_MS);
-                        }
-                        if (perf) {
-                            perf.tWebAudioStart = performance.now();
-                            perf.total = perf.tWebAudioStart - perf.tClick;
-                            logAudioPerf(perf);
-                        }
-                    }
-                    if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
-                        musicEngine.stop();
-                        return;
-                    }
-                    if (!started) {
-                        currentlyPlayingMusicId = null;
-                    }
-                })
-                .catch(() => {
-                    if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
-                        musicEngine.stop();
-                        return;
-                    }
-                    currentlyPlayingMusicId = null;
-                    musicEngine.stop();
-                })
-                .finally(() => {
-                    clearPendingIfCurrent();
-                });
-        } else {
-            clearPendingIfCurrent();
+        try {
+            const decoded = await preloadMusicBuffer(opt.id, opt.url, { forceFull: true });
+            if (perf) {
+                perf.tDecodeDone = performance.now();
+            }
+            if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+                musicEngine.stop();
+                return;
+            }
+            if (decoded) {
+                musicEngine.setBuffer(decoded, opt.url);
+                if (decoded.duration) {
+                    setSeekLimits(Math.floor(decoded.duration));
+                }
+            }
+            musicEngine.updateVolume(musicVolume);
+            const htmlState = musicEngine.getHtmlAudioState();
+            const offset = getLoopedOffset(start, end, htmlState.currentTime || (start + (htmlState.startPerf ? (performance.now() - htmlState.startPerf) / 1000 : 0)));
+            musicEngine.setGainInstant(0);
+            const started = await musicEngine.play(start, end, offset);
+            if (started) {
+                musicEngine.fadeGainTo(musicVolume, FAST_START_CROSSFADE_MS / 1000);
+                if (htmlState.isPlaying) {
+                    musicEngine.crossfadeHtmlToWebAudio(FAST_START_CROSSFADE_MS);
+                }
+                if (perf) {
+                    perf.tWebAudioStart = performance.now();
+                    perf.total = perf.tWebAudioStart - perf.tClick;
+                    logAudioPerf(perf);
+                }
+            }
+            if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+                musicEngine.stop();
+                return;
+            }
+            if (!started) {
+                currentlyPlayingMusicId = null;
+            }
+        } catch (error) {
+            currentlyPlayingMusicId = null;
+            musicEngine.stop();
+        } finally {
+            pendingMusicId = null;
+            updateMusicListPlaybackState();
         }
     }
 
