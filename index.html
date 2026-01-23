@@ -2633,7 +2633,7 @@
             htmlAudioLoopEnd = Math.max(htmlAudioLoopStart + 0.05, endTime || 0);
             htmlAudio.src = url;
             htmlAudio.currentTime = htmlAudioLoopStart;
-            htmlAudio.volume = clampVolume(musicVolume);
+            updateVolume(musicVolume);
             htmlAudioPlaying = true;
             htmlAudioStartPerf = performance.now();
             htmlAudio.removeEventListener('timeupdate', syncHtmlLoop);
@@ -2689,6 +2689,7 @@
     }
 
     musicEngine = createMusicEngine();
+    musicEngine.updateVolume(musicVolume);
 
     function stopMusicPreview({ hard = false } = {}) {
         if (!musicEngine) return;
@@ -2747,6 +2748,7 @@
         updateWaveformProgress();
 
         const { start, end } = getLoopBounds();
+        musicEngine.updateVolume(musicVolume);
         const htmlStartPromise = musicEngine.playHtmlAudio(opt.url, start, end)
             .then((started) => {
                 if (started) {
