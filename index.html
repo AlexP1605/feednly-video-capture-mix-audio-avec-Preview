@@ -955,10 +955,17 @@
     let pendingMusicId = null;
     let isDraggingWaveform = false;
     let videoDurationSeconds = 0;
-    const markCameraReady = () => {
-      if (cameraReady) return;
-      if (cameraPreview.readyState < 2) return;
+    const revealCameraPreview = () => {
       cameraPreview.style.opacity = "1"; // garantir affichage plein écran
+    };
+    const ensureCameraVisible = () => {
+      revealCameraPreview();
+      requestAnimationFrame(revealCameraPreview);
+      setTimeout(revealCameraPreview, 200);
+    };
+    const markCameraReady = () => {
+      ensureCameraVisible();
+      if (cameraReady) return;
       cameraReady = true;
       document.body.classList.remove('camera-starting');
       if (pendingRecordUI && isRecording) {
@@ -2911,6 +2918,7 @@
       if (mediaStream && mediaStream.active) {
         cameraPreview.srcObject = mediaStream;
         cameraPreview.play().catch(e=>{});
+        ensureCameraVisible();
 
         markCameraReady();
         
@@ -2946,6 +2954,7 @@
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         cameraPreview.srcObject = stream;
         cameraPreview.play().catch(e=>{});
+        ensureCameraVisible();
         mediaStream = stream;
 
         markCameraReady();
