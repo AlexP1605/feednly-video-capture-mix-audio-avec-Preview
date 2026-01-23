@@ -1276,7 +1276,7 @@
         return clamped;
     }
     
-    let facingMode = 'environment';
+    let facingMode = 'user';
     let recordedFacingMode = 'environment';
     let torchSupported = false;
     let torchEnabled = false;
@@ -3204,7 +3204,7 @@
       }, 1000);
     }
 
-    async function startCamera() {
+    async function startCamera({ withAudio = false } = {}) {
       if (uploadCompleted) return;
       if (startCamera.isStarting) return;
       cameraReady = false;
@@ -3213,6 +3213,11 @@
       cameraPreview.style.opacity = "0";
       
       if (mediaStream && mediaStream.active) {
+        const hasAudioTrack = mediaStream.getAudioTracks().length > 0;
+        if (withAudio && !hasAudioTrack) {
+          mediaStream.getTracks().forEach(track => track.stop());
+          mediaStream = null;
+        } else {
         cameraPreview.srcObject = mediaStream;
         cameraPreview.play().catch(e=>{});
 
@@ -3234,15 +3239,12 @@
            }
         }, 300);
         return;
+        }
       }
 
       const constraints = {
-        audio: true,
-        video: { 
-            facingMode: facingMode,
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-        }
+        audio: withAudio,
+        video: { facingMode: facingMode }
       };
 
       try {
@@ -3271,7 +3273,8 @@
         }, 300);
 
       } catch (error) {
-        console.error(error);
+        console.error('[camera] getUserMedia failed', error);
+        document.body.classList.remove('camera-starting');
       } finally {
         startCamera.isStarting = false;
       }
@@ -3298,7 +3301,7 @@
       const audioMissing = !mediaStream || mediaStream.getAudioTracks().length === 0;
 
       if (audioMissing) {
-         await startCamera();
+         await startCamera({ withAudio: true });
       }
 
       const hasAudioTrack = mediaStream && mediaStream.getAudioTracks().length > 0;
