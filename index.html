@@ -1952,6 +1952,9 @@
                 startMusicPreview(opt);
             };
             item.appendChild(playBtn);
+            item.addEventListener('pointerdown', () => {
+                musicEngine?.unlockAudioContext();
+            }, { once: true, passive: true });
             item.onclick = (e) => {
                 e.stopPropagation();
                 selectMusic(opt);
@@ -2589,11 +2592,16 @@
         htmlAudio.setAttribute('playsinline', '');
         htmlAudio.volume = 1;
 
-        const ensureMusicAudioGraph = () => {
+        const ensureMusicAudioContext = () => {
             if (!musicAudioCtx) {
                 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
                 musicAudioCtx = new AudioContextCtor();
             }
+            return musicAudioCtx;
+        };
+
+        const ensureMusicAudioGraph = () => {
+            ensureMusicAudioContext();
             if (!musicGainNode) {
                 musicGainNode = musicAudioCtx.createGain();
                 musicGainNode.gain.value = clampVolume(musicVolume);
@@ -2684,6 +2692,7 @@
             currentUrl = url;
             const audioCtx = ensureMusicAudioGraph();
             if (audioCtx.state === 'suspended') {
+                // Safety net: should already be unlocked via explicit user gesture.
                 audioCtx.resume().catch(() => {});
             }
             htmlAudioLoopStart = Math.max(0, startTime || 0);
@@ -2733,6 +2742,13 @@
             startPerf: htmlAudioStartPerf
         });
 
+        const unlockAudioContext = () => {
+            const audioCtx = ensureMusicAudioContext();
+            if (audioCtx?.state === 'suspended') {
+                audioCtx.resume().catch(() => {});
+            }
+        };
+
         return {
             load,
             play,
@@ -2743,12 +2759,18 @@
             playHtmlAudio,
             seekHtmlAudio,
             getHtmlAudioState,
+            unlockAudioContext,
             get isPlaying() { return htmlAudioPlaying; }
         };
     }
 
     musicEngine = createMusicEngine();
     musicEngine.updateVolume(musicVolume);
+
+    // Unlock the AudioContext once on a real user gesture (WebView-friendly).
+    musicOverlay?.addEventListener('pointerdown', () => {
+        musicEngine?.unlockAudioContext();
+    }, { once: true, passive: true });
 
     function stopMusicPreview({ hard = false } = {}) {
         if (!musicEngine) return;
