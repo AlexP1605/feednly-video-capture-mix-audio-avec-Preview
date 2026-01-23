@@ -2580,10 +2580,31 @@
         let htmlAudioStartPerf = 0;
         let htmlAudioLoopSyncAt = 0;
         let htmlAudioPlaySession = 0;
+        let musicAudioCtx = null;
+        let musicSourceNode = null;
+        let musicGainNode = null;
 
         htmlAudio.preload = 'auto';
         htmlAudio.loop = false;
         htmlAudio.setAttribute('playsinline', '');
+        htmlAudio.volume = 1;
+
+        const ensureMusicAudioGraph = () => {
+            if (!musicAudioCtx) {
+                const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+                musicAudioCtx = new AudioContextCtor();
+            }
+            if (!musicGainNode) {
+                musicGainNode = musicAudioCtx.createGain();
+                musicGainNode.gain.value = clampVolume(musicVolume);
+                musicGainNode.connect(musicAudioCtx.destination);
+            }
+            if (!musicSourceNode) {
+                musicSourceNode = musicAudioCtx.createMediaElementSource(htmlAudio);
+                musicSourceNode.connect(musicGainNode);
+            }
+            return musicAudioCtx;
+        };
 
         const stopHtmlAudio = ({ resetSrc = false } = {}) => {
             htmlAudio.pause();
@@ -2636,11 +2657,8 @@
 
         const updateVolume = (value) => {
             const volume = clampVolume(value);
-            htmlAudio.volume = volume;
-            if (htmlAudioPlaying) {
-                htmlAudio.muted = true;
-                htmlAudio.muted = false;
-            }
+            const audioCtx = ensureMusicAudioGraph();
+            musicGainNode.gain.setTargetAtTime(volume, audioCtx.currentTime, 0.01);
         };
 
         const normalizeAudioUrl = (value) => {
@@ -2664,6 +2682,10 @@
             const isSameSource = Boolean(targetUrl && currentSrc && currentSrc === targetUrl);
             stopHtmlAudio({ resetSrc: !isSameSource });
             currentUrl = url;
+            const audioCtx = ensureMusicAudioGraph();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(() => {});
+            }
             htmlAudioLoopStart = Math.max(0, startTime || 0);
             htmlAudioLoopEnd = Math.max(htmlAudioLoopStart + 0.05, endTime || 0);
             if (!isSameSource) {
