@@ -2589,7 +2589,7 @@
             htmlAudio.pause();
             htmlAudioPlaying = false;
             htmlAudioStartPerf = 0;
-            if (resetSrc) {
+            if (resetSrc && (htmlAudio.getAttribute('src') || htmlAudio.src)) {
                 htmlAudio.removeAttribute('src');
                 htmlAudio.load();
             }
@@ -2635,7 +2635,21 @@
         };
 
         const updateVolume = (value) => {
-            htmlAudio.volume = clampVolume(value);
+            const volume = clampVolume(value);
+            htmlAudio.volume = volume;
+            if (htmlAudioPlaying) {
+                htmlAudio.muted = true;
+                htmlAudio.muted = false;
+            }
+        };
+
+        const normalizeAudioUrl = (value) => {
+            if (!value) return '';
+            try {
+                return new URL(value, document.baseURI).href;
+            } catch (error) {
+                return value;
+            }
         };
 
         const clearBuffer = () => {
@@ -2645,13 +2659,17 @@
         const playHtmlAudio = (url, startTime, endTime) => {
             if (!url) return Promise.resolve(false);
             const session = ++htmlAudioPlaySession;
-            stopHtmlAudio({ resetSrc: true });
+            const targetUrl = normalizeAudioUrl(url);
+            const currentSrc = htmlAudio.currentSrc || htmlAudio.src;
+            const isSameSource = Boolean(targetUrl && currentSrc && currentSrc === targetUrl);
+            stopHtmlAudio({ resetSrc: !isSameSource });
             currentUrl = url;
             htmlAudioLoopStart = Math.max(0, startTime || 0);
             htmlAudioLoopEnd = Math.max(htmlAudioLoopStart + 0.05, endTime || 0);
-            htmlAudio.src = url;
+            if (!isSameSource) {
+                htmlAudio.src = url;
+            }
             htmlAudio.currentTime = htmlAudioLoopStart;
-            updateVolume(musicVolume);
             htmlAudioPlaying = true;
             htmlAudioStartPerf = performance.now();
             htmlAudio.removeEventListener('timeupdate', syncHtmlLoop);
@@ -2663,6 +2681,7 @@
                 }
             };
             htmlAudio.addEventListener('loadedmetadata', updateLoopFromMeta, { once: true });
+            updateVolume(musicVolume);
             const playPromise = htmlAudio.play();
             if (!playPromise || typeof playPromise.then !== 'function') {
                 return Promise.resolve(true);
