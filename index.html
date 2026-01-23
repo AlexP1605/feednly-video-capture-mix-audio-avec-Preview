@@ -297,7 +297,9 @@
       width: min(200px, 60vw);
       aspect-ratio: 2 / 3;
       border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.2);
+      border: none;
+      outline: none;
+      overflow: hidden;
       background: rgba(255,255,255,0.08);
       background-size: cover;
       background-position: center;
@@ -802,6 +804,11 @@
                 <span class="music-artist"></span>
                 <span class="music-duration" id="music-duration"></span>
               </div>
+              <button type="button" id="music-clear-btn" class="music-clear" aria-label="Supprimer la musique">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M3.5 3.5l9 9m0-9l-9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </button>
             </div>
           </div>
           <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
@@ -1781,9 +1788,13 @@
         updateWaveformProgress();
         updatePositionLabel();
         const { start, end } = getLoopBounds();
-        if (musicEngine?.isPlaying) {
-            musicEngine.updateLoop(start, end);
-            musicEngine.play(start, end).catch(() => {});
+        if (!musicEngine) return;
+        musicEngine.updateLoop(start, end);
+        const htmlState = musicEngine.getHtmlAudioState();
+        if (musicEngine.isPlaying) {
+            musicEngine.play(start, end, start).catch(() => {});
+        } else if (htmlState?.isPlaying) {
+            musicEngine.seekHtmlAudio(start);
         }
     }
 
@@ -1993,17 +2004,20 @@
     }
 
     function clearMusicSelection() {
+        stopMusicPreview({ hard: true });
+        invalidateMusicSession();
         selectedMusicId = null;
+        currentlyPlayingMusicId = null;
+        pendingMusicId = null;
         musicStartTime = 0;
+        currentMusicDuration = 30;
+        setSeekLimits(currentMusicDuration);
         applyMusicVolume(0.5);
-        updatePositionLabel();
         syncVolumeLabels();
         renderMusicList(musicSearchInput.value);
         updateMusicOverlay();
-        closeMusicSheet();
-        stopMusicPreview({ hard: true });
-        invalidateMusicSession();
         updateMusicSelectionUI();
+        closeMusicSheet();
     }
 
     function resetMusicDefaults() {
@@ -2726,9 +2740,7 @@
             if (gainNode) {
                 gainNode.gain.value = clampVolume(value);
             }
-            if (htmlAudioPlaying) {
-                htmlAudio.volume = clampVolume(value);
-            }
+            htmlAudio.volume = clampVolume(value);
         };
 
         const clearBuffer = () => {
@@ -2787,6 +2799,12 @@
                 });
         };
 
+        const seekHtmlAudio = (startTime) => {
+            const nextTime = Math.max(0, startTime || 0);
+            htmlAudio.currentTime = nextTime;
+            htmlAudioStartPerf = performance.now();
+        };
+
         const crossfadeHtmlToWebAudio = (durationMs = FAST_START_CROSSFADE_MS) => {
             if (!htmlAudioPlaying) return;
             const startVolume = htmlAudio.volume;
@@ -2824,6 +2842,7 @@
             setGainInstant,
             fadeGainTo,
             playHtmlAudio,
+            seekHtmlAudio,
             crossfadeHtmlToWebAudio,
             getHtmlAudioState,
             get isPlaying() { return isPlaying; },
@@ -2906,6 +2925,10 @@
                     if (perf) {
                         perf.tSoundStart = htmlStartPerf;
                         logAudioPerf({ ...perf });
+                    }
+                    if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
+                        pendingMusicId = null;
+                        updateMusicListPlaybackState();
                     }
                 }
                 return started;
