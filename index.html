@@ -1402,7 +1402,7 @@
         const nextTime = Math.max(0, Number.isFinite(timeSeconds) ? timeSeconds : DEFAULT_THUMBNAIL_TIME);
         selectedThumbnailTime = nextTime;
         const frame = selectNearestThumbnailFrame(nextTime);
-        applySelectedThumbnailPreview(frame?.url || '');
+        applySelectedThumbnailPreview(frame?.urlLarge || frame?.url || '');
         if (!thumbnailStrip) return;
         const items = thumbnailItems.length ? thumbnailItems : thumbnailStrip.querySelectorAll('.thumbnail-frame');
         let closestItem = null;
@@ -1437,7 +1437,8 @@
             frames.forEach((frame, index) => {
                 const button = existingItems[index];
                 if (!button) return;
-                button.style.backgroundImage = frame.url ? `url(${frame.url})` : '';
+                const previewUrl = frame.urlSmall || frame.url || '';
+                button.style.backgroundImage = previewUrl ? `url(${previewUrl})` : '';
             });
             thumbnailItems = existingItems;
             setSelectedThumbnail(selectedThumbnailTime);
@@ -1451,7 +1452,8 @@
             button.type = 'button';
             button.className = 'thumbnail-frame';
             button.dataset.time = String(frame.time);
-            button.style.backgroundImage = frame.url ? `url(${frame.url})` : '';
+            const previewUrl = frame.urlSmall || frame.url || '';
+            button.style.backgroundImage = previewUrl ? `url(${previewUrl})` : '';
             button.onclick = (e) => {
                 e.stopPropagation();
                 setSelectedThumbnail(frame.time);
@@ -1502,16 +1504,21 @@
             await onceLoadedMetadata(thumbVideo);
 
             const duration = Math.max(0.1, Number(thumbVideo.duration) || videoDurationSeconds || 0.1);
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return [];
+            const canvasLarge = document.createElement('canvas');
+            const canvasSmall = document.createElement('canvas');
+            const ctxLarge = canvasLarge.getContext('2d');
+            const ctxSmall = canvasSmall.getContext('2d');
+            if (!ctxLarge || !ctxSmall) return [];
 
             const aspect = thumbVideo.videoWidth && thumbVideo.videoHeight
                 ? thumbVideo.videoWidth / thumbVideo.videoHeight
                 : 9 / 16;
-            const maxWidth = 160;
-            canvas.width = Math.min(maxWidth, Math.max(1, thumbVideo.videoWidth || maxWidth));
-            canvas.height = Math.round(canvas.width / aspect);
+            const maxWidthLarge = 640;
+            const maxWidthSmall = 300;
+            canvasLarge.width = Math.min(maxWidthLarge, Math.max(1, thumbVideo.videoWidth || maxWidthLarge));
+            canvasLarge.height = Math.round(canvasLarge.width / aspect);
+            canvasSmall.width = Math.min(maxWidthSmall, Math.max(1, thumbVideo.videoWidth || maxWidthSmall));
+            canvasSmall.height = Math.round(canvasSmall.width / aspect);
 
             thumbnailGenerationId += 1;
             const currentGeneration = thumbnailGenerationId;
@@ -1531,9 +1538,11 @@
 
             const captureFrameAt = async (time) => {
                 await seekVideoToTime(thumbVideo, time);
-                ctx.drawImage(thumbVideo, 0, 0, canvas.width, canvas.height);
-                const url = canvas.toDataURL('image/jpeg', 0.65);
-                return { time, url };
+                ctxLarge.drawImage(thumbVideo, 0, 0, canvasLarge.width, canvasLarge.height);
+                ctxSmall.drawImage(thumbVideo, 0, 0, canvasSmall.width, canvasSmall.height);
+                const urlLarge = canvasLarge.toDataURL('image/jpeg', 0.85);
+                const urlSmall = canvasSmall.toDataURL('image/jpeg', 0.7);
+                return { time, urlLarge, urlSmall };
             };
 
             const pushFrame = (frame) => {
@@ -1552,7 +1561,7 @@
 
             const times = buildThumbnailTimeList(duration);
             // UX: réserver toute la bande pour éviter les sauts visuels pendant le chargement
-            frames = times.map(time => ({ time, url: '' }));
+            frames = times.map(time => ({ time, urlLarge: '', urlSmall: '' }));
             thumbnailFrames = frames;
             renderThumbnailStrip(frames);
             const immediateTimes = getImmediateThumbnailTimes(duration);
@@ -1588,8 +1597,10 @@
                 scheduleIdleTask(processQueue, { timeout: 400, fallbackDelay: 120 });
             });
 
-            canvas.width = 0;
-            canvas.height = 0;
+            canvasLarge.width = 0;
+            canvasLarge.height = 0;
+            canvasSmall.width = 0;
+            canvasSmall.height = 0;
             thumbVideo.removeAttribute('src');
             thumbVideo.load();
             URL.revokeObjectURL(objectUrl);
@@ -1958,8 +1969,12 @@
     function selectMusic(opt) {
         if (!opt) return;
         const hadSelection = !!getSelectedMusic();
+        const isNewSelection = selectedMusicId !== opt.id;
         stopMusicPreview();
         selectedMusicId = opt.id;
+        if (isNewSelection) {
+            musicStartTime = 0;
+        }
         if (!hadSelection && parseFloat(musicVolumeInput.value || '0') === 0) {
             applyMusicVolume(0.5);
         }
@@ -2228,7 +2243,12 @@
         scheduleIdleTask(() => preloadSelectedMusic());
     }
 
-    musicVolumeInput.oninput = updateMusicSelectionUI;
+    const handleMusicVolumeInput = (event) => {
+        const nextValue = parseFloat(event?.target?.value);
+        applyMusicVolume(Number.isNaN(nextValue) ? 0.5 : nextValue);
+    };
+    musicVolumeInput?.addEventListener('input', handleMusicVolumeInput);
+    musicVolumeInput?.addEventListener('change', handleMusicVolumeInput);
     if (waveformVisual) {
         waveformVisual.addEventListener('pointerdown', (e) => {
             isDraggingWaveform = true;
@@ -2693,6 +2713,7 @@
         const sessionId = musicSessionId;
         const expectedId = opt.id;
         const perf = DEBUG_AUDIO ? { id: opt.id, tClick: performance.now() } : null;
+        const isNewSelection = selectedMusicId !== opt.id;
 
         if (currentlyPlayingMusicId && currentlyPlayingMusicId !== opt.id) {
             stopMusicPreview({ hard: false });
@@ -2701,8 +2722,16 @@
         selectedMusicId = opt.id;
         currentlyPlayingMusicId = opt.id;
         pendingMusicId = opt.id;
+        if (isNewSelection) {
+            musicStartTime = 0;
+            clampStartForVideoDuration();
+        }
 
         updateMusicOverlay();
+        if (isNewSelection) {
+            updatePositionLabel();
+            updateWaveformProgress();
+        }
         updateSeekDurationFromMeta(opt);
         updateMusicListPlaybackState();
 
