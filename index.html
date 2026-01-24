@@ -585,7 +585,7 @@
       min-width: 40px; text-align: center;
     }
     #music-volume {
-      --slider-hit-padding: 12px;
+      --slider-hit-padding: 14px;
       -webkit-appearance: none; appearance: none; width: 100%; height: calc(8px + var(--slider-hit-padding) * 2);
       padding: var(--slider-hit-padding) 0;
       background: transparent;
@@ -595,11 +595,13 @@
       -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%;
       background: #fff; border: none;
       box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+      margin-top: calc((8px - 18px) / 2);
     }
     #music-volume::-moz-range-thumb {
       width: 18px; height: 18px; border-radius: 50%;
       background: #fff; border: none;
       box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+      margin-top: calc((8px - 18px) / 2);
     }
     #music-volume::-moz-range-track {
       height: 8px; border-radius: 999px; background: rgba(255,255,255,0.16);
@@ -986,6 +988,10 @@
     let thumbnailFrames = [];
     let thumbnailFramesPromise = null;
     let thumbnailItems = [];
+    let thumbnailPrepareTimeout = null;
+    let thumbnailPrepareRaf1 = 0;
+    let thumbnailPrepareRaf2 = 0;
+    const thumbnailObjectUrls = new Set();
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
@@ -1492,6 +1498,56 @@
         });
     }
 
+    function registerThumbnailObjectUrl(url) {
+        if (!url) return '';
+        thumbnailObjectUrls.add(url);
+        return url;
+    }
+
+    function revokeThumbnailObjectUrl(url) {
+        if (!url || !thumbnailObjectUrls.has(url)) return;
+        URL.revokeObjectURL(url);
+        thumbnailObjectUrls.delete(url);
+    }
+
+    function revokeAllThumbnailObjectUrls() {
+        thumbnailObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+        thumbnailObjectUrls.clear();
+    }
+
+    function cancelScheduledThumbnailPreparation() {
+        if (thumbnailPrepareRaf1) cancelAnimationFrame(thumbnailPrepareRaf1);
+        if (thumbnailPrepareRaf2) cancelAnimationFrame(thumbnailPrepareRaf2);
+        if (thumbnailPrepareTimeout) clearTimeout(thumbnailPrepareTimeout);
+        thumbnailPrepareRaf1 = 0;
+        thumbnailPrepareRaf2 = 0;
+        thumbnailPrepareTimeout = null;
+    }
+
+    function scheduleThumbnailPreparation() {
+        if (!recordedBlob) return;
+        cancelScheduledThumbnailPreparation();
+        thumbnailPrepareRaf1 = requestAnimationFrame(() => {
+            thumbnailPrepareRaf1 = 0;
+            thumbnailPrepareRaf2 = requestAnimationFrame(() => {
+                thumbnailPrepareRaf2 = 0;
+                thumbnailPrepareTimeout = setTimeout(() => {
+                    thumbnailPrepareTimeout = null;
+                    prepareThumbnailPreview();
+                }, 0);
+            });
+        });
+    }
+
+    function canvasToBlobAsync(canvas, type, quality) {
+        if (!canvas || typeof canvas.toBlob !== 'function') {
+            return Promise.resolve(null);
+        }
+        return new Promise((resolve) => {
+            canvas.toBlob((blob) => resolve(blob || null), type, quality);
+        });
+    }
+
     async function extractThumbnailFrames(videoBlob) {
         if (!videoBlob) return [];
         if (thumbnailFramesPromise) return thumbnailFramesPromise;
@@ -1524,6 +1580,7 @@
             canvasLarge.height = Math.round(canvasLarge.width / aspect);
             canvasSmall.width = Math.min(maxWidthSmall, Math.max(1, thumbVideo.videoWidth || maxWidthSmall));
             canvasSmall.height = Math.round(canvasSmall.width / aspect);
+            const supportsToBlob = typeof canvasLarge.toBlob === 'function' && typeof canvasSmall.toBlob === 'function';
 
             thumbnailGenerationId += 1;
             const currentGeneration = thumbnailGenerationId;
@@ -1543,19 +1600,38 @@
 
             const captureFrameAt = async (time) => {
                 await seekVideoToTime(thumbVideo, time);
+                if (currentGeneration !== thumbnailGenerationId) return null;
                 ctxLarge.drawImage(thumbVideo, 0, 0, canvasLarge.width, canvasLarge.height);
                 ctxSmall.drawImage(thumbVideo, 0, 0, canvasSmall.width, canvasSmall.height);
-                const urlLarge = canvasLarge.toDataURL('image/jpeg', 0.85);
-                const urlSmall = canvasSmall.toDataURL('image/jpeg', 0.7);
+                let urlLarge = '';
+                let urlSmall = '';
+                if (supportsToBlob) {
+                    const [blobLarge, blobSmall] = await Promise.all([
+                        canvasToBlobAsync(canvasLarge, 'image/jpeg', 0.85),
+                        canvasToBlobAsync(canvasSmall, 'image/jpeg', 0.7),
+                    ]);
+                    urlLarge = blobLarge ? registerThumbnailObjectUrl(URL.createObjectURL(blobLarge)) : canvasLarge.toDataURL('image/jpeg', 0.85);
+                    urlSmall = blobSmall ? registerThumbnailObjectUrl(URL.createObjectURL(blobSmall)) : canvasSmall.toDataURL('image/jpeg', 0.7);
+                } else {
+                    urlLarge = canvasLarge.toDataURL('image/jpeg', 0.85);
+                    urlSmall = canvasSmall.toDataURL('image/jpeg', 0.7);
+                }
                 return { time, urlLarge, urlSmall };
             };
 
             const pushFrame = (frame) => {
-                if (!frame) return;
+                if (!frame || currentGeneration !== thumbnailGenerationId) return;
                 const index = frames.findIndex(
                     item => Math.abs(item.time - frame.time) <= THUMBNAIL_TIME_TOLERANCE
                 );
                 if (index >= 0) {
+                    const previous = frames[index];
+                    if (previous?.urlLarge && previous.urlLarge !== frame.urlLarge) {
+                        revokeThumbnailObjectUrl(previous.urlLarge);
+                    }
+                    if (previous?.urlSmall && previous.urlSmall !== frame.urlSmall) {
+                        revokeThumbnailObjectUrl(previous.urlSmall);
+                    }
                     frames = frames.map((item, idx) => (idx === index ? frame : item));
                 } else {
                     frames = [...frames, frame].sort((a, b) => a.time - b.time);
@@ -1626,7 +1702,7 @@
     }
 
     function prepareThumbnailPreview() {
-        if (!recordedBlob) return;
+        if (!recordedBlob || !previewOverlay.classList.contains('active')) return;
         extractThumbnailFrames(recordedBlob).then((frames) => {
             renderThumbnailStrip(frames || []);
         });
@@ -1932,6 +2008,7 @@
                     stopMusicPreview();
                     return;
                 }
+                await ensureMusicContextActive();
                 startMusicPreview(opt);
             };
             item.appendChild(playBtn);
@@ -2512,6 +2589,8 @@
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             stopMusicPreview({ hard: true });
+            musicContextNeedsResume = true;
+            audioCtxPrimed = false;
             if (!isRecording && !isCountingDown) {
                 if (mediaStream) {
                     mediaStream.getTracks().forEach(track => track.stop());
@@ -2539,6 +2618,7 @@
     // AUDIO ENGINE: Web Audio optimized (no HTML audio)
     let musicAudioCtx = null;
     let audioCtxPrimed = false;
+    let musicContextNeedsResume = false;
 
     function ensureMusicAudioContext() {
         if (!musicAudioCtx) {
@@ -2571,6 +2651,24 @@
             audioCtx.resume().catch(() => {});
         }
         primeMusicAudioContext(audioCtx);
+    }
+
+    async function ensureMusicContextActive() {
+        const audioCtx = ensureMusicAudioContext();
+        if (!audioCtx) return null;
+        if (audioCtx.state === 'suspended' || musicContextNeedsResume) {
+            try {
+                await audioCtx.resume();
+            } catch (error) {
+                // no-op: resume is best-effort and may require a user gesture
+            }
+        }
+        primeMusicAudioContext(audioCtx);
+        if (audioCtx.state !== 'running') {
+            audioCtxPrimed = false;
+        }
+        musicContextNeedsResume = audioCtx.state !== 'running';
+        return audioCtx;
     }
 
     function playBeep(freq = 800, type = 'short') {
@@ -2747,6 +2845,7 @@
             const cachedBuffer = buffer || getCachedBuffer(cacheKey, url);
             if (cachedBuffer) {
                 if (session !== playSession && !restart) return false;
+                await ensureMusicContextActive();
                 return startBufferSource(cachedBuffer, startTime, endTime, session);
             }
             const targetBuffer = await resolveBuffer(cacheKey, url);
@@ -2757,6 +2856,7 @@
                 return false;
             }
             if (session !== playSession && !restart) return false;
+            await ensureMusicContextActive();
             const started = startBufferSource(targetBuffer, startTime, endTime, session);
             return started;
         };
@@ -3197,7 +3297,10 @@
        }
        shouldCheckDuration = false;
        if (previewTimeout) clearTimeout(previewTimeout);
-       previewTimeout = setTimeout(() => { if(recordedBlob) showPreview(recordedBlob); }, 100);
+       previewTimeout = setTimeout(() => {
+           previewTimeout = null;
+           if (recordedBlob) showPreview(recordedBlob);
+       }, 16);
     }
 
     // UX: figer le viewport pour éviter les recalculs de hauteur visibles
@@ -3214,6 +3317,7 @@
     }
 
     function resetThumbnailDefaults() {
+       cancelScheduledThumbnailPreparation();
        selectedThumbnailTime = Number.NaN;
        thumbnailFrames = [];
        thumbnailFramesPromise = null;
@@ -3223,6 +3327,7 @@
            selectedThumbnailPreview.style.backgroundImage = '';
            selectedThumbnailPreview.classList.remove('ready');
        }
+       revokeAllThumbnailObjectUrls();
        if (thumbnailLoading) thumbnailLoading.hidden = true;
     }
 
@@ -3247,7 +3352,7 @@
        syncOriginalMuteState();
        updateMusicSelectionUI();
        preloadInitialPreviewTracks();
-       prepareThumbnailPreview();
+       scheduleThumbnailPreparation();
     }
 
     function resetPreviewState() {
@@ -3358,7 +3463,6 @@
        recordedBlob = file;
        shouldCheckDuration = true;
        showPreview(file);
-       extractThumbnailFrames(file);
        e.target.value = '';
     }
 
