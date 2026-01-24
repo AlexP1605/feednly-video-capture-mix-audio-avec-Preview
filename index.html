@@ -1026,7 +1026,7 @@
 
     function createCacheEntry({ id, url } = {}) {
         const entry = {
-            audio: null,
+            buffer: null,
             promise: null,
             url: url || '',
             duration: null,
@@ -1049,19 +1049,14 @@
     function touchCacheEntry(entry) {
         if (!entry) return;
         entry.lastUsedAt = performance.now();
-        if (entry.audio?.duration && !entry.duration) {
-            entry.duration = entry.audio.duration;
+        if (entry.buffer?.duration && !entry.duration) {
+            entry.duration = entry.buffer.duration;
         }
     }
 
     function evictCacheEntry(entry) {
         if (!entry || entry.promise) return;
-        if (entry.audio) {
-            entry.audio.pause();
-            entry.audio.removeAttribute('src');
-            entry.audio.load();
-        }
-        entry.audio = null;
+        entry.buffer = null;
         entry.duration = entry.duration ?? null;
         entry.lastUsedAt = 0;
     }
@@ -1073,7 +1068,7 @@
                 .map(value => String(value))
         );
         const uniqueEntries = [...new Set(audioPreloadCache.values())];
-        const cachedEntries = uniqueEntries.filter(entry => entry.audio);
+        const cachedEntries = uniqueEntries.filter(entry => entry.buffer);
         if (cachedEntries.length <= MAX_AUDIO_PRELOADS) return;
         const candidates = cachedEntries
             .filter(entry => !entry.promise)
@@ -1095,17 +1090,20 @@
         } else if (url && audioPreloadCache.has(url)) {
             entry = audioPreloadCache.get(url);
         }
-        if (entry?.audio || entry?.duration) {
+        if (entry?.buffer || entry?.duration) {
             touchCacheEntry(entry);
         }
         return entry;
     }
 
-    async function preloadHtmlAudio(id, url) {
+    async function preloadAudioBuffer(id, url) {
         if (!id && !url) return null;
         const cacheKey = url || id;
         const existing = getCachedAudioEntry(id, url);
-        if (existing?.audio && existing?.duration) return existing.duration;
+        if (existing?.buffer) {
+            touchCacheEntry(existing);
+            return existing.duration || existing.buffer.duration || null;
+        }
         if (existing?.promise) return existing.promise;
         if (!url) return null;
 
@@ -1116,39 +1114,24 @@
             registerCacheKey(entry, id);
         }
 
-        if (!entry.audio) {
-            entry.audio = new Audio();
-            entry.audio.preload = 'auto';
-            entry.audio.loop = false;
-            entry.audio.setAttribute('playsinline', '');
-        }
-
-        entry.audio.src = url;
-        entry.promise = new Promise((resolve, reject) => {
-            const cleanup = () => {
-                entry.audio?.removeEventListener('loadedmetadata', onLoaded);
-                entry.audio?.removeEventListener('error', onError);
-            };
-            const onLoaded = () => {
-                entry.duration = Number.isFinite(entry.audio?.duration) ? entry.audio.duration : entry.duration;
-                touchCacheEntry(entry);
-                enforceAudioPreloadLimit();
-                cleanup();
-                resolve(entry.duration || null);
-            };
-            const onError = () => {
-                cleanup();
-                reject(new Error('audio preload failed'));
-            };
-            entry.audio.addEventListener('loadedmetadata', onLoaded, { once: true });
-            entry.audio.addEventListener('error', onError, { once: true });
-            entry.audio.load();
-        });
+        entry.promise = (async () => {
+            const audioCtx = ensureMusicAudioContext();
+            if (!audioCtx) throw new Error('audio context unavailable');
+            const response = await fetch(url, { cache: 'force-cache' });
+            if (!response.ok) throw new Error('audio fetch failed');
+            const arrayBuffer = await response.arrayBuffer();
+            const buffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+            entry.buffer = buffer;
+            entry.duration = Number.isFinite(buffer?.duration) ? buffer.duration : entry.duration;
+            touchCacheEntry(entry);
+            enforceAudioPreloadLimit();
+            return entry.duration || null;
+        })();
 
         try {
             return await entry.promise;
         } catch (error) {
-            entry.audio = null;
+            entry.buffer = null;
             entry.promise = null;
             entry.lastUsedAt = 0;
             if (entry.keys.size === 0) {
@@ -1170,7 +1153,7 @@
         if (cachedEntry?.duration) {
             setSeekLimits(Math.floor(cachedEntry.duration));
         }
-        return preloadHtmlAudio(music.id, music.url)
+        return preloadAudioBuffer(music.id, music.url)
             .then((duration) => {
                 if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
                     return null;
@@ -1232,13 +1215,13 @@
         if (!music?.url) return;
 
         const cachedEntry = getCachedAudioEntry(music.id, music.url);
-        if (cachedEntry?.audio || cachedEntry?.promise) {
-            safeMusicPreloadCompleted = Boolean(cachedEntry?.audio);
+        if (cachedEntry?.buffer || cachedEntry?.promise) {
+            safeMusicPreloadCompleted = Boolean(cachedEntry?.buffer);
             return;
         }
 
         safeMusicPreloadInFlight = true;
-        preloadHtmlAudio(music.id, music.url)
+        preloadAudioBuffer(music.id, music.url)
             .then(() => {
                 safeMusicPreloadCompleted = true;
             })
@@ -2111,9 +2094,9 @@
         if (!id || !url) return;
         if (!allowWhenSelected && selectedMusicId) return;
         const cached = getCachedAudioEntry(id, url);
-        if (cached?.audio || cached?.promise || preloadedMusicIds.has(id)) return;
+        if (cached?.buffer || cached?.promise || preloadedMusicIds.has(id)) return;
         preloadedMusicIds.add(id);
-        preloadHtmlAudio(id, url).catch(() => {
+        preloadAudioBuffer(id, url).catch(() => {
             preloadedMusicIds.delete(id);
         });
     }
@@ -2528,14 +2511,12 @@
     // --- Optimisation Fluidité (Gérer la visibilité de la page) ---
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
+            stopMusicPreview({ hard: true });
             if (!isRecording && !isCountingDown) {
                 if (mediaStream) {
                     mediaStream.getTracks().forEach(track => track.stop());
                     mediaStream = null;
                 }
-            }
-            if (previewOverlay.classList.contains('active')) {
-                stopMusicPreview({ hard: true });
             }
         } else {
             if (
@@ -2555,199 +2536,251 @@
         long: 'data:audio/wav;base64,UklGRqQMAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYAMAAAAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0A=='
     };
 
-    const beepAudioCache = {
-        short: new Audio(BEEP_SOURCES.short),
-        long: new Audio(BEEP_SOURCES.long)
-    };
+    // AUDIO ENGINE: Web Audio optimized (no HTML audio)
+    let musicAudioCtx = null;
+    let audioCtxPrimed = false;
 
-    Object.values(beepAudioCache).forEach((audio) => {
-        audio.preload = 'auto';
-        audio.loop = false;
-        audio.setAttribute('playsinline', '');
-        audio.volume = 0.5;
-    });
+    function ensureMusicAudioContext() {
+        if (!musicAudioCtx) {
+            const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+            musicAudioCtx = new AudioContextCtor();
+        }
+        return musicAudioCtx;
+    }
 
-    function playBeep(_freq = 800, type = 'short') {
-        const audio = beepAudioCache[type === 'long' ? 'long' : 'short'];
-        if (!audio) return;
-        audio.currentTime = 0;
-        audio.play().catch(() => {});
+    function primeMusicAudioContext(audioCtx) {
+        if (audioCtxPrimed || !audioCtx) return;
+        try {
+            const buffer = audioCtx.createBuffer(1, 1, audioCtx.sampleRate || 44100);
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioCtx.destination);
+            source.start(0);
+            source.stop(0);
+            source.disconnect();
+        } catch (error) {
+            // no-op: priming is best-effort only
+        }
+        audioCtxPrimed = true;
+    }
+
+    function unlockMusicAudioContext() {
+        const audioCtx = ensureMusicAudioContext();
+        if (!audioCtx) return;
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
+        }
+        primeMusicAudioContext(audioCtx);
+    }
+
+    function playBeep(freq = 800, type = 'short') {
+        const audioCtx = ensureMusicAudioContext();
+        if (!audioCtx) return;
+        const duration = type === 'long' ? 0.18 : 0.08;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.value = 0;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.25, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        osc.start(now);
+        osc.stop(now + duration + 0.02);
+        osc.onended = () => {
+            osc.disconnect();
+            gain.disconnect();
+        };
     }
 
     function createMusicEngine() {
         let currentUrl = '';
-        let htmlAudio = new Audio();
-        let htmlAudioPlaying = false;
-        let htmlAudioLoopStart = 0;
-        let htmlAudioLoopEnd = 0;
-        let htmlAudioStartPerf = 0;
-        let htmlAudioLoopSyncAt = 0;
-        let htmlAudioPlaySession = 0;
-        let musicAudioCtx = null;
+        let currentId = null;
+        let currentBuffer = null;
         let musicSourceNode = null;
         let musicGainNode = null;
+        let loopStartTime = 0;
+        let loopEndTime = 0;
+        let startPerf = 0;
+        let isPlaying = false;
+        let playSession = 0;
 
-        htmlAudio.preload = 'auto';
-        htmlAudio.loop = false;
-        htmlAudio.setAttribute('playsinline', '');
-        htmlAudio.volume = 1;
-
-        const ensureMusicAudioContext = () => {
-            if (!musicAudioCtx) {
-                const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-                musicAudioCtx = new AudioContextCtor();
-            }
-            return musicAudioCtx;
-        };
-
-        const ensureMusicAudioGraph = () => {
-            ensureMusicAudioContext();
+        const ensureMusicGainNode = () => {
+            const audioCtx = ensureMusicAudioContext();
             if (!musicGainNode) {
-                musicGainNode = musicAudioCtx.createGain();
+                musicGainNode = audioCtx.createGain();
                 musicGainNode.gain.value = clampVolume(musicVolume);
-                musicGainNode.connect(musicAudioCtx.destination);
+                musicGainNode.connect(audioCtx.destination);
             }
+            return { audioCtx, gainNode: musicGainNode };
+        };
+
+        const primeAudioGraph = () => {
+            ensureMusicGainNode();
+        };
+
+        const stopCurrentSource = () => {
             if (!musicSourceNode) {
-                musicSourceNode = musicAudioCtx.createMediaElementSource(htmlAudio);
-                musicSourceNode.connect(musicGainNode);
+                isPlaying = false;
+                startPerf = 0;
+                return;
             }
-            return musicAudioCtx;
+            try {
+                musicSourceNode.onended = null;
+                musicSourceNode.stop(0);
+            } catch (error) {
+                // no-op: source may already be stopped
+            }
+            musicSourceNode.disconnect();
+            musicSourceNode = null;
+            isPlaying = false;
+            startPerf = 0;
         };
 
-        const stopHtmlAudio = ({ resetSrc = false } = {}) => {
-            htmlAudio.pause();
-            htmlAudioPlaying = false;
-            htmlAudioStartPerf = 0;
-            if (resetSrc && (htmlAudio.getAttribute('src') || htmlAudio.src)) {
-                htmlAudio.removeAttribute('src');
-                htmlAudio.load();
+        const computeLoopBounds = (buffer, startTime, endTime) => {
+            const duration = Math.max(0, buffer?.duration || 0);
+            if (!duration) {
+                return { start: 0, end: 0.05 };
             }
+            const startMax = Math.max(0, duration - 0.05);
+            const start = Math.min(Math.max(0, startTime || 0), startMax);
+            const requestedEnd = Number.isFinite(endTime) && endTime > 0 ? endTime : duration;
+            const end = Math.min(duration, Math.max(start + 0.05, requestedEnd));
+            return { start, end };
         };
 
-        const syncHtmlLoop = () => {
-            const now = performance.now();
-            if (now - htmlAudioLoopSyncAt < 50) return;
-            htmlAudioLoopSyncAt = now;
-            if (!htmlAudioPlaying) return;
-            if (!htmlAudioLoopEnd || !Number.isFinite(htmlAudioLoopEnd)) return;
-            if (htmlAudio.currentTime >= htmlAudioLoopEnd - 0.02) {
-                htmlAudio.currentTime = htmlAudioLoopStart || 0;
+        const startBufferSource = (buffer, startTime, endTime, session) => {
+            if (!buffer) return false;
+            const { audioCtx, gainNode } = ensureMusicGainNode();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(() => {});
             }
+            stopCurrentSource();
+            const bounds = computeLoopBounds(buffer, startTime, endTime);
+            loopStartTime = bounds.start;
+            loopEndTime = bounds.end;
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.loop = true;
+            source.loopStart = loopStartTime;
+            source.loopEnd = loopEndTime;
+            source.connect(gainNode);
+            source.onended = () => {
+                if (session !== playSession) return;
+                if (musicSourceNode === source) {
+                    musicSourceNode.disconnect();
+                    musicSourceNode = null;
+                }
+                isPlaying = false;
+            };
+            musicSourceNode = source;
+            currentBuffer = buffer;
+            isPlaying = true;
+            startPerf = performance.now();
+            // start immediately once we have a decoded buffer
+            source.start(0, loopStartTime);
+            return true;
+        };
+
+        const resolveBuffer = async (id, url) => {
+            const cached = getCachedAudioEntry(id, url);
+            if (cached?.buffer) return cached.buffer;
+            await preloadAudioBuffer(id, url);
+            return getCachedAudioEntry(id, url)?.buffer || null;
         };
 
         const load = async (url, { id } = {}) => {
             if (!url) return null;
             currentUrl = url;
-            const duration = await preloadHtmlAudio(id || url, url);
+            currentId = id ?? null;
+            primeAudioGraph();
+            const duration = await preloadAudioBuffer(id || url, url);
             if (duration) return duration;
             const cached = getCachedAudioEntry(id, url);
             return cached?.duration || null;
         };
 
         const stop = () => {
-            stopHtmlAudio({ resetSrc: false });
+            playSession += 1;
+            stopCurrentSource();
         };
 
         const play = async (startTime, endTime) => {
             if (!currentUrl) return false;
-            return playHtmlAudio(currentUrl, startTime, endTime);
+            const result = await playBufferAudio(currentUrl, startTime, endTime, { id: currentId });
+            return result;
         };
 
         const updateLoop = (startTime, endTime) => {
-            const loopStart = Math.max(0, startTime || 0);
-            const fallbackDuration = htmlAudio.duration || 0;
-            const loopEnd = Math.max(loopStart + 0.05, endTime || fallbackDuration || loopStart + 0.05);
-            if (htmlAudioPlaying) {
-                htmlAudioLoopStart = loopStart;
-                htmlAudioLoopEnd = loopEnd;
+            loopStartTime = Math.max(0, startTime || 0);
+            loopEndTime = Math.max(loopStartTime + 0.05, endTime || loopEndTime || loopStartTime + 0.05);
+            if (isPlaying && currentBuffer) {
+                playBufferAudio(currentUrl, loopStartTime, loopEndTime, { id: currentId, buffer: currentBuffer, restart: true });
             }
         };
 
         const updateVolume = (value) => {
             const volume = clampVolume(value);
-            const audioCtx = ensureMusicAudioGraph();
-            musicGainNode.gain.setTargetAtTime(volume, audioCtx.currentTime, 0.01);
-        };
-
-        const normalizeAudioUrl = (value) => {
-            if (!value) return '';
-            try {
-                return new URL(value, document.baseURI).href;
-            } catch (error) {
-                return value;
-            }
+            const { audioCtx, gainNode } = ensureMusicGainNode();
+            gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
         };
 
         const clearBuffer = () => {
             currentUrl = '';
+            currentId = null;
+            currentBuffer = null;
         };
 
-        const playHtmlAudio = (url, startTime, endTime) => {
-            if (!url) return Promise.resolve(false);
-            const session = ++htmlAudioPlaySession;
-            const targetUrl = normalizeAudioUrl(url);
-            const currentSrc = htmlAudio.currentSrc || htmlAudio.src;
-            const isSameSource = Boolean(targetUrl && currentSrc && currentSrc === targetUrl);
-            stopHtmlAudio({ resetSrc: !isSameSource });
+        const getCachedBuffer = (cacheKey, url) => {
+            return getCachedAudioEntry(cacheKey, url)?.buffer || null;
+        };
+
+        const playBufferAudio = async (url, startTime, endTime, { id = null, buffer = null, restart = false } = {}) => {
+            if (!url) return false;
+            const session = ++playSession;
             currentUrl = url;
-            const audioCtx = ensureMusicAudioGraph();
-            if (audioCtx.state === 'suspended') {
-                // Safety net: should already be unlocked via explicit user gesture.
-                audioCtx.resume().catch(() => {});
+            currentId = id;
+            const cacheKey = id || url;
+            const cachedBuffer = buffer || getCachedBuffer(cacheKey, url);
+            if (cachedBuffer) {
+                if (session !== playSession && !restart) return false;
+                return startBufferSource(cachedBuffer, startTime, endTime, session);
             }
-            htmlAudioLoopStart = Math.max(0, startTime || 0);
-            htmlAudioLoopEnd = Math.max(htmlAudioLoopStart + 0.05, endTime || 0);
-            if (!isSameSource) {
-                htmlAudio.src = url;
-            }
-            htmlAudio.currentTime = htmlAudioLoopStart;
-            htmlAudioPlaying = true;
-            htmlAudioStartPerf = performance.now();
-            htmlAudio.removeEventListener('timeupdate', syncHtmlLoop);
-            htmlAudio.addEventListener('timeupdate', syncHtmlLoop);
-            const updateLoopFromMeta = () => {
-                if (!Number.isFinite(htmlAudio.duration)) return;
-                if (!endTime || endTime > htmlAudio.duration) {
-                    htmlAudioLoopEnd = Math.max(htmlAudioLoopStart + 0.05, htmlAudio.duration);
+            const targetBuffer = await resolveBuffer(cacheKey, url);
+            if (!targetBuffer) {
+                if (session === playSession) {
+                    stopCurrentSource();
                 }
-            };
-            htmlAudio.addEventListener('loadedmetadata', updateLoopFromMeta, { once: true });
-            updateVolume(musicVolume);
-            const playPromise = htmlAudio.play();
-            if (!playPromise || typeof playPromise.then !== 'function') {
-                return Promise.resolve(true);
+                return false;
             }
-            return playPromise
-                .then(() => {
-                    if (session !== htmlAudioPlaySession) return false;
-                    return true;
-                })
-                .catch(() => {
-                    if (session === htmlAudioPlaySession) {
-                        stopHtmlAudio({ resetSrc: false });
-                    }
-                    return false;
-                });
+            if (session !== playSession && !restart) return false;
+            const started = startBufferSource(targetBuffer, startTime, endTime, session);
+            return started;
         };
 
         const seekHtmlAudio = (startTime) => {
-            const nextTime = Math.max(0, startTime || 0);
-            htmlAudio.currentTime = nextTime;
-            htmlAudioStartPerf = performance.now();
+            const nextStart = Math.max(0, startTime || 0);
+            if (!currentBuffer || !currentUrl) return;
+            const end = Math.max(nextStart + 0.05, loopEndTime || currentBuffer.duration || nextStart + 0.05);
+            playBufferAudio(currentUrl, nextStart, end, { id: currentId, buffer: currentBuffer, restart: true });
         };
 
         const getHtmlAudioState = () => ({
-            isPlaying: htmlAudioPlaying,
-            currentTime: htmlAudio.currentTime || 0,
-            startPerf: htmlAudioStartPerf
+            isPlaying,
+            currentTime: loopStartTime || 0,
+            startPerf
         });
 
         const unlockAudioContext = () => {
-            const audioCtx = ensureMusicAudioContext();
-            if (audioCtx?.state === 'suspended') {
-                audioCtx.resume().catch(() => {});
-            }
+            unlockMusicAudioContext();
+            primeAudioGraph();
+            updateVolume(musicVolume);
         };
+
+        const getAudioContext = () => ensureMusicAudioContext();
 
         return {
             load,
@@ -2756,11 +2789,12 @@
             updateLoop,
             updateVolume,
             clearBuffer,
-            playHtmlAudio,
+            playHtmlAudio: playBufferAudio,
             seekHtmlAudio,
             getHtmlAudioState,
             unlockAudioContext,
-            get isPlaying() { return htmlAudioPlaying; }
+            getAudioContext,
+            get isPlaying() { return isPlaying; }
         };
     }
 
@@ -2768,7 +2802,7 @@
     musicEngine.updateVolume(musicVolume);
 
     // Unlock the AudioContext once on a real user gesture (WebView-friendly).
-    musicOverlay?.addEventListener('pointerdown', () => {
+    document.addEventListener('pointerdown', () => {
         musicEngine?.unlockAudioContext();
     }, { once: true, passive: true });
 
@@ -2830,7 +2864,7 @@
 
         const { start, end } = getLoopBounds();
         musicEngine.updateVolume(musicVolume);
-        const htmlStartPromise = musicEngine.playHtmlAudio(opt.url, start, end)
+        const htmlStartPromise = musicEngine.playHtmlAudio(opt.url, start, end, { id: opt.id })
             .then((started) => {
                 if (started) {
                     const htmlState = musicEngine.getHtmlAudioState();
@@ -2847,7 +2881,7 @@
             })
             .catch(() => false);
 
-        preloadHtmlAudio(opt.id, opt.url).then((duration) => {
+        preloadAudioBuffer(opt.id, opt.url).then((duration) => {
             if (duration) {
                 setSeekLimits(Math.floor(duration));
             }
@@ -3283,6 +3317,7 @@
     // --- Galerie: Nettoyer la preview, couper micro, ouvrir menu ---
     galleryBtn.onclick = () => {
         // 💥 STOP TOUTES LES ACTIONS EN COURS
+        stopMusicPreview({ hard: true });
         if (previewTimeout) {
             clearTimeout(previewTimeout);
             previewTimeout = null;
