@@ -417,6 +417,7 @@
     .sheet select, .sheet input[type="range"] { flex: 1; padding: 8px 10px; border-radius: 12px; border: 1px solid #2b2b2d; background: #151519; color: #fff; }
     .sheet .toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; background: rgba(255,255,255,0.04); padding: 12px; border-radius: 14px; border: 1px solid #1f1f24; }
     .music-search-row { display: flex; gap: 10px; align-items: center; }
+    .music-search-row input[type="search"] { flex: 1 1 auto; min-width: 0; width: auto; }
     .music-filter-btn {
       height: 44px;
       min-width: 44px;
@@ -2008,7 +2009,8 @@
                     stopMusicPreview();
                     return;
                 }
-                await ensureMusicContextActive();
+                const activeCtx = await ensureMusicContextActive();
+                if (!activeCtx) return;
                 startMusicPreview(opt);
             };
             item.appendChild(playBtn);
@@ -2668,6 +2670,7 @@
             audioCtxPrimed = false;
         }
         musicContextNeedsResume = audioCtx.state !== 'running';
+        if (musicContextNeedsResume) return null;
         return audioCtx;
     }
 
@@ -2845,7 +2848,8 @@
             const cachedBuffer = buffer || getCachedBuffer(cacheKey, url);
             if (cachedBuffer) {
                 if (session !== playSession && !restart) return false;
-                await ensureMusicContextActive();
+                const activeCtx = await ensureMusicContextActive();
+                if (!activeCtx) return false;
                 return startBufferSource(cachedBuffer, startTime, endTime, session);
             }
             const targetBuffer = await resolveBuffer(cacheKey, url);
@@ -2856,7 +2860,8 @@
                 return false;
             }
             if (session !== playSession && !restart) return false;
-            await ensureMusicContextActive();
+            const activeCtx = await ensureMusicContextActive();
+            if (!activeCtx) return false;
             const started = startBufferSource(targetBuffer, startTime, endTime, session);
             return started;
         };
