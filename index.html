@@ -2027,6 +2027,21 @@
             }
             playBtn.onclick = (e) => {
                 e.stopPropagation();
+                playIntentId += 1;
+                const intentId = playIntentId;
+                const preloadNextItem = () => {
+                    if (!musicListEl) return;
+                    const items = [...musicListEl.querySelectorAll('.music-item')];
+                    const currentIndex = items.findIndex(item => item.dataset.musicId === String(opt.id));
+                    if (currentIndex < 0) return;
+                    const nextItem = items[currentIndex + 1];
+                    if (!nextItem) return;
+                    const nextId = nextItem.dataset.musicId;
+                    const nextOpt = musicOptions.find(option => String(option.id) === String(nextId));
+                    if (nextOpt?.url) {
+                        preloadAudioBuffer(nextOpt.id, nextOpt.url).catch(() => {});
+                    }
+                };
                 const alreadyPlaying = currentlyPlayingMusicId === opt.id && (musicEngine?.isPlaying || pendingMusicId === opt.id);
                 if (alreadyPlaying) {
                     stopMusicPreview();
@@ -2065,10 +2080,21 @@
                     selectedMusicId = opt.id;
                     currentlyPlayingMusicId = opt.id;
                     pendingMusicId = null;
+                    preloadNextItem();
                 } else {
                     pendingMusicId = opt.id;
                     preloadAudioBuffer(opt.id, opt.url)
                         .then((duration) => {
+                            if (intentId !== playIntentId || selectedMusicId !== opt.id) {
+                                return;
+                            }
+                            const startedAfterPreload = musicEngine.playImmediateFromCache(opt.url, start, safeEnd, { id: opt.id });
+                            if (startedAfterPreload) {
+                                currentlyPlayingMusicId = opt.id;
+                                pendingMusicId = null;
+                                updateMusicListPlaybackState();
+                                preloadNextItem();
+                            }
                             if (duration) {
                                 setSeekLimits(Math.floor(duration));
                             }
@@ -2658,6 +2684,7 @@
     const DEBUG_AUDIO = false;
     const MUSIC_STOP_GRACE_MS = 120;
     let lastMusicPreviewStartAt = 0;
+    let playIntentId = 0;
 
     // --- Optimisation Fluidité (Gérer la visibilité de la page) ---
     document.addEventListener('visibilitychange', () => {
