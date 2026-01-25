@@ -847,7 +847,7 @@
                   </svg>
                 </button>
               </div>
-              <div id="music-list"></div>
+              <div id="music-list" class="music-list"></div>
             </div>
             <div id="tab-waveform" class="tab-panel">
               <div class="timeline-row">
@@ -2556,6 +2556,16 @@
         musicOverlay.classList.toggle('hidden', !shouldShowOverlay);
     }
 
+    function resetMusicSheetUI() {
+        if (!musicSheet) return;
+        const list = musicSheet.querySelector('.music-list');
+        if (list) {
+            list.scrollTop = 0;
+        }
+        pendingMusicId = null;
+        updateMusicListPlaybackState();
+    }
+
     function openMusicSheet() {
         if (!musicSheet) return;
         setActiveTab('music');
@@ -3492,6 +3502,7 @@
     function hidePreview() {
        previewOverlay.classList.remove('active');
        document.body.classList.remove('showing-preview');
+       resetMusicSheetUI();
        unlockPreviewViewport();
        resetPreviewState();
 
@@ -3611,10 +3622,7 @@
           setUploadProgress(100);
           showUploadFinalizationMessage();
           uploadCompleted = true;
-          previewOverlay.classList.remove('active');
-          document.body.classList.remove('showing-preview');
-          unlockPreviewViewport();
-          resetPreviewState();
+          hidePreview();
           recordedChunks = [];
           pendingRecordUI = false;
           if (mediaStream) {
