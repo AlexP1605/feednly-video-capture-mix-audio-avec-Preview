@@ -1299,7 +1299,7 @@
     let uploadProgressValue = 0;
     let uploadProcessingRaf = null;
     let uploadCompleted = false;
-    let galleryAudioNeedsRebuild = false;
+    
     if (uploadMixText) {
         uploadMixText.textContent = UPLOAD_FINAL_MESSAGE;
     }
@@ -1885,7 +1885,7 @@
         if (!musicEngine) return;
         musicEngine.updateLoop(start, end);
         if (musicEngine.isPlaying) {
-            musicEngine.seekHtmlAudio(start);
+            musicEngine.seek(start);
         }
     }
 
@@ -2009,15 +2009,9 @@
             }
             playBtn.onclick = async (e) => {
                 e.stopPropagation();
-                musicEngine?.unlockAudioContext();
                 const alreadyPlaying = currentlyPlayingMusicId === opt.id && (musicEngine?.isPlaying || pendingMusicId === opt.id);
                 if (alreadyPlaying) {
                     stopMusicPreview();
-                    return;
-                }
-                const activeCtx = await ensureMusicContextActive();
-                if (!activeCtx) {
-                    console.debug('[music] context not ready');
                     return;
                 }
                 console.debug('[music] start preview', { id: opt.id });
@@ -2025,7 +2019,7 @@
             };
             item.appendChild(playBtn);
             item.addEventListener('pointerdown', () => {
-                musicEngine?.unlockAudioContext();
+                ensureAudioReady();
             }, { once: true, passive: true });
             item.onclick = (e) => {
                 e.stopPropagation();
@@ -2603,13 +2597,10 @@
     const MAX_AUDIO_PRELOADS = 12;
     const DEBUG_AUDIO = false;
 
-    // --- AJOUT MUSIQUE : lecteur HTML pour l'aperçu ---
-
     // --- Optimisation Fluidité (Gérer la visibilité de la page) ---
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             stopMusicPreview({ hard: true });
-            musicContextNeedsResume = true;
             audioCtxPrimed = false;
             if (!isRecording && !isCountingDown) {
                 if (mediaStream) {
@@ -2638,7 +2629,6 @@
     // AUDIO ENGINE: Web Audio optimized (no HTML audio)
     let musicAudioCtx = null;
     let audioCtxPrimed = false;
-    let musicContextNeedsResume = false;
 
     function ensureMusicAudioContext() {
         if (!musicAudioCtx) {
@@ -2664,31 +2654,17 @@
         audioCtxPrimed = true;
     }
 
-    function unlockMusicAudioContext() {
-        const audioCtx = ensureMusicAudioContext();
-        if (!audioCtx) return;
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume().catch(() => {});
-        }
-        primeMusicAudioContext(audioCtx);
-    }
-
-    async function ensureMusicContextActive() {
+    function ensureAudioReady() {
         const audioCtx = ensureMusicAudioContext();
         if (!audioCtx) return null;
-        if (audioCtx.state === 'suspended' || musicContextNeedsResume) {
-            try {
-                await audioCtx.resume();
-            } catch (error) {
-                // no-op: resume is best-effort and may require a user gesture
-            }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
         }
         primeMusicAudioContext(audioCtx);
         if (audioCtx.state !== 'running') {
             audioCtxPrimed = false;
         }
-        musicContextNeedsResume = audioCtx.state !== 'running';
-        if (musicContextNeedsResume) return null;
+        if (audioCtx.state !== 'running') return null;
         return audioCtx;
     }
 
@@ -2741,19 +2717,6 @@
             ensureMusicGainNode();
         };
 
-        const rebuildAudioGraph = () => {
-            stopCurrentSource();
-            if (musicGainNode) {
-                try {
-                    musicGainNode.disconnect();
-                } catch (error) {
-                    // no-op: best-effort cleanup
-                }
-            }
-            musicGainNode = null;
-            primeAudioGraph();
-        };
-
         const stopCurrentSource = () => {
             if (!musicSourceNode) {
                 isPlaying = false;
@@ -2787,9 +2750,6 @@
         const startBufferSource = (buffer, startTime, endTime, session) => {
             if (!buffer) return false;
             const { audioCtx, gainNode } = ensureMusicGainNode();
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume().catch(() => {});
-            }
             stopCurrentSource();
             const bounds = computeLoopBounds(buffer, startTime, endTime);
             loopStartTime = bounds.start;
@@ -2879,7 +2839,7 @@
             const cachedBuffer = buffer || getCachedBuffer(cacheKey, url);
             if (cachedBuffer) {
                 if (session !== playSession && !restart) return false;
-                const activeCtx = await ensureMusicContextActive();
+                const activeCtx = ensureAudioReady();
                 if (!activeCtx) return false;
                 return startBufferSource(cachedBuffer, startTime, endTime, session);
             }
@@ -2891,38 +2851,24 @@
                 return false;
             }
             if (session !== playSession && !restart) return false;
-            const activeCtx = await ensureMusicContextActive();
+            const activeCtx = ensureAudioReady();
             if (!activeCtx) return false;
             const started = startBufferSource(targetBuffer, startTime, endTime, session);
             return started;
         };
 
-        const seekHtmlAudio = (startTime) => {
+        const seek = (startTime) => {
             const nextStart = Math.max(0, startTime || 0);
             if (!currentBuffer || !currentUrl) return;
             const end = Math.max(nextStart + 0.05, loopEndTime || currentBuffer.duration || nextStart + 0.05);
             playBufferAudio(currentUrl, nextStart, end, { id: currentId, buffer: currentBuffer, restart: true });
         };
 
-        const getHtmlAudioState = () => ({
+        const getPlaybackState = () => ({
             isPlaying,
             currentTime: loopStartTime || 0,
             startPerf
         });
-
-        const unlockAudioContext = () => {
-            unlockMusicAudioContext();
-            primeAudioGraph();
-            updateVolume(musicVolume);
-        };
-
-        const refreshAudioGraph = () => {
-            unlockMusicAudioContext();
-            rebuildAudioGraph();
-            updateVolume(musicVolume);
-        };
-
-        const getAudioContext = () => ensureMusicAudioContext();
 
         return {
             load,
@@ -2931,12 +2877,9 @@
             updateLoop,
             updateVolume,
             clearBuffer,
-            playHtmlAudio: playBufferAudio,
-            seekHtmlAudio,
-            getHtmlAudioState,
-            unlockAudioContext,
-            refreshAudioGraph,
-            getAudioContext,
+            playBufferAudio,
+            seek,
+            getPlaybackState,
             get isPlaying() { return isPlaying; }
         };
     }
@@ -2945,9 +2888,7 @@
     musicEngine.updateVolume(musicVolume);
 
     // Unlock the AudioContext once on a real user gesture (WebView-friendly).
-    document.addEventListener('pointerdown', () => {
-        musicEngine?.unlockAudioContext();
-    }, { once: true, passive: true });
+    document.addEventListener('pointerdown', ensureAudioReady, { once: true, passive: true });
 
     function stopMusicPreview({ hard = false } = {}) {
         if (!musicEngine) return;
@@ -2974,21 +2915,11 @@
         console.log('[audio-perf]', payload);
     }
 
-    async function ensureGalleryAudioReady() {
-        if (!galleryAudioNeedsRebuild || !musicEngine) return true;
-        musicEngine.refreshAudioGraph();
-        const activeCtx = await ensureMusicContextActive();
-        if (!activeCtx || activeCtx.state !== 'running') {
-            return false;
-        }
-        galleryAudioNeedsRebuild = false;
-        return true;
-    }
-
     async function startMusicPreview(opt) {
         if (!opt || !musicEngine) return;
-        const galleryReady = await ensureGalleryAudioReady();
-        if (!galleryReady) {
+        const audioCtx = ensureMusicAudioContext();
+        if (!audioCtx || audioCtx.state !== 'running') {
+            console.warn('[music] audio context not running');
             return;
         }
         const sessionId = musicSessionId;
@@ -3023,12 +2954,13 @@
         const { start, end } = getLoopBounds();
         musicEngine.updateVolume(musicVolume);
         console.debug('[music] preview graph', { volume: musicVolume, start, end });
-        const htmlStartPromise = musicEngine.playHtmlAudio(opt.url, start, end, { id: opt.id })
+        await musicEngine.load(opt.url, { id: opt.id });
+        const playPromise = musicEngine.play(start, end)
             .then((started) => {
                 if (started) {
-                    const htmlState = musicEngine.getHtmlAudioState();
+                    const playbackState = musicEngine.getPlaybackState();
                     if (perf) {
-                        perf.tSoundStart = htmlState.startPerf || performance.now();
+                        perf.tSoundStart = playbackState.startPerf || performance.now();
                         logAudioPerf({ ...perf });
                     }
                     if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
@@ -3046,7 +2978,7 @@
             }
         }).catch(() => {});
 
-        const started = await htmlStartPromise;
+        const started = await playPromise;
         if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
             if (!started) {
                 musicEngine.stop();
@@ -3358,7 +3290,6 @@
        if (previewTimeout) clearTimeout(previewTimeout);
        previewTimeout = setTimeout(() => {
            previewTimeout = null;
-           galleryAudioNeedsRebuild = false;
            if (recordedBlob) showPreview(recordedBlob);
        }, 16);
     }
@@ -3524,7 +3455,6 @@
        recordedBlob = file;
        shouldCheckDuration = true;
        showPreview(file);
-       galleryAudioNeedsRebuild = true;
        e.target.value = '';
     }
 
