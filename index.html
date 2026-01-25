@@ -2556,13 +2556,42 @@
         musicOverlay.classList.toggle('hidden', !shouldShowOverlay);
     }
 
+    function getMusicSheetScroller() {
+        if (!musicSheet) return null;
+
+        const candidates = [
+            musicSheet.querySelector('.music-list'),
+            musicSheet.querySelector('#tab-music'),
+            musicSheet.querySelector('.sheet-content'),
+            musicSheet
+        ];
+
+        for (const el of candidates) {
+            if (!el) continue;
+            const style = window.getComputedStyle(el);
+            const canScroll =
+                (style.overflowY === 'auto' || style.overflowY === 'scroll')
+                && el.scrollHeight > el.clientHeight;
+
+            if (canScroll) return el;
+        }
+
+        return null;
+    }
+
     function resetMusicSheetUI() {
         if (!musicSheet) return;
-        const list = musicSheet.querySelector('.music-list');
-        if (list) {
-            list.scrollTop = 0;
+        const scroller = getMusicSheetScroller();
+        if (scroller) {
+            scroller.scrollTop = 0;
+            console.debug('[music] sheet scroll reset on', scroller);
         }
+        if (musicSearchInput) {
+            musicSearchInput.value = '';
+        }
+        resetFilterTag();
         pendingMusicId = null;
+        setActiveTab('music');
         updateMusicListPlaybackState();
     }
 
