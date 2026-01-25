@@ -1604,11 +1604,25 @@
                 });
             };
 
+            const drawThumbnailFrame = (ctx, canvas, video, shouldMirror) => {
+                if (!ctx) return;
+                if (shouldMirror) {
+                    ctx.save();
+                    ctx.scale(-1, 1);
+                    ctx.translate(-canvas.width, 0);
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    ctx.restore();
+                    return;
+                }
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            };
+
             const captureFrameAt = async (time) => {
                 await seekVideoToTime(thumbVideo, time);
                 if (currentGeneration !== thumbnailGenerationId) return null;
-                ctxLarge.drawImage(thumbVideo, 0, 0, canvasLarge.width, canvasLarge.height);
-                ctxSmall.drawImage(thumbVideo, 0, 0, canvasSmall.width, canvasSmall.height);
+                const shouldMirror = recordedFacingMode === 'user';
+                drawThumbnailFrame(ctxLarge, canvasLarge, thumbVideo, shouldMirror);
+                drawThumbnailFrame(ctxSmall, canvasSmall, thumbVideo, shouldMirror);
                 let urlLarge = '';
                 let urlSmall = '';
                 if (supportsToBlob) {
