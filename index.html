@@ -1575,7 +1575,10 @@
             const canvasSmall = document.createElement('canvas');
             const ctxLarge = canvasLarge.getContext('2d');
             const ctxSmall = canvasSmall.getContext('2d');
-            if (!ctxLarge || !ctxSmall) return [];
+            if (!ctxLarge || !ctxSmall) {
+                console.warn('[thumbnail] canvas context not available');
+                return [];
+            }
 
             const aspect = thumbVideo.videoWidth && thumbVideo.videoHeight
                 ? thumbVideo.videoWidth / thumbVideo.videoHeight
@@ -1605,16 +1608,17 @@
             };
 
             const drawThumbnailFrame = (ctx, canvas, video, shouldMirror) => {
-                if (!ctx) return;
+                if (!ctx || !canvas || !video) return;
+
+                ctx.save();
+
                 if (shouldMirror) {
-                    ctx.save();
                     ctx.scale(-1, 1);
                     ctx.translate(-canvas.width, 0);
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    ctx.restore();
-                    return;
                 }
+
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                ctx.restore();
             };
 
             const captureFrameAt = async (time) => {
