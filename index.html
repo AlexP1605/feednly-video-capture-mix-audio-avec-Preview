@@ -1299,6 +1299,7 @@
     let uploadProcessingRaf = null;
     let uploadCompleted = false;
     let galleryAudioNeedsRebuild = false;
+    let needsUserGestureAfterGallery = false;
     if (uploadMixText) {
         uploadMixText.textContent = UPLOAD_FINAL_MESSAGE;
     }
@@ -2006,20 +2007,40 @@
                 playBtn.disabled = true;
                 playBtn.setAttribute('aria-busy', 'true');
             }
-            playBtn.onclick = async (e) => {
+            playBtn.onpointerdown = async (e) => {
+                e.preventDefault();
                 e.stopPropagation();
-                musicEngine?.unlockAudioContext();
-                const alreadyPlaying = currentlyPlayingMusicId === opt.id && (musicEngine?.isPlaying || pendingMusicId === opt.id);
+
+                // 🔴 GESTURE UTILISATEUR SYNCHRONE (OBLIGATOIRE)
+                musicEngine.unlockAudioContext();
+
+                if (needsUserGestureAfterGallery) {
+                    // force un vrai unlock audio valide
+                    await ensureMusicContextActive();
+                    needsUserGestureAfterGallery = false;
+                }
+                galleryAudioNeedsRebuild = false;
+
+                const alreadyPlaying =
+                    currentlyPlayingMusicId === opt.id &&
+                    (musicEngine?.isPlaying || pendingMusicId === opt.id);
+
                 if (alreadyPlaying) {
                     stopMusicPreview();
                     return;
                 }
-                const activeCtx = await ensureMusicContextActive();
-                if (!activeCtx) {
-                    console.debug('[music] context not ready');
+
+                const { start, end } = getLoopBounds();
+                const startedNow = musicEngine.playImmediateFromCache(opt.url, start, end, { id: opt.id });
+                if (startedNow) {
+                    currentlyPlayingMusicId = opt.id;
+                    selectedMusicId = opt.id;
+                    pendingMusicId = null;
+                    updateMusicOverlay();
+                    updateMusicListPlaybackState();
                     return;
                 }
-                console.debug('[music] start preview', { id: opt.id });
+
                 startMusicPreview(opt);
             };
             item.appendChild(playBtn);
@@ -2771,6 +2792,24 @@
             startPerf = 0;
         };
 
+        const playImmediateFromCache = (url, startTime, endTime, { id = null } = {}) => {
+            if (!url) return false;
+            const session = ++playSession;
+            currentUrl = url;
+            currentId = id;
+
+            // unlock sans await (best-effort)
+            unlockMusicAudioContext();
+
+            const cacheKey = id || url;
+            const cached = getCachedAudioEntry(cacheKey, url);
+            const buffer = cached?.buffer;
+            if (!buffer) return false;
+
+            // start immédiat (clé iOS)
+            return startBufferSource(buffer, startTime, endTime, session);
+        };
+
         const computeLoopBounds = (buffer, startTime, endTime) => {
             const duration = Math.max(0, buffer?.duration || 0);
             if (!duration) {
@@ -2931,6 +2970,7 @@
             updateVolume,
             clearBuffer,
             playHtmlAudio: playBufferAudio,
+            playImmediateFromCache,
             seekHtmlAudio,
             getHtmlAudioState,
             unlockAudioContext,
@@ -3022,22 +3062,24 @@
         const { start, end } = getLoopBounds();
         musicEngine.updateVolume(musicVolume);
         console.debug('[music] preview graph', { volume: musicVolume, start, end });
-        const htmlStartPromise = musicEngine.playHtmlAudio(opt.url, start, end, { id: opt.id })
-            .then((started) => {
-                if (started) {
-                    const htmlState = musicEngine.getHtmlAudioState();
-                    if (perf) {
-                        perf.tSoundStart = htmlState.startPerf || performance.now();
-                        logAudioPerf({ ...perf });
-                    }
-                    if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
-                        pendingMusicId = null;
-                        updateMusicListPlaybackState();
-                    }
-                }
-                return started;
-            })
-            .catch(() => false);
+        let started = false;
+        try {
+            started = await musicEngine.playHtmlAudio(opt.url, start, end, { id: opt.id });
+        } catch {
+            started = false;
+        }
+
+        if (started) {
+            const htmlState = musicEngine.getHtmlAudioState();
+            if (perf) {
+                perf.tSoundStart = htmlState.startPerf || performance.now();
+                logAudioPerf({ ...perf });
+            }
+            if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
+                pendingMusicId = null;
+                updateMusicListPlaybackState();
+            }
+        }
 
         preloadAudioBuffer(opt.id, opt.url).then((duration) => {
             if (duration) {
@@ -3045,7 +3087,6 @@
             }
         }).catch(() => {});
 
-        const started = await htmlStartPromise;
         if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
             if (!started) {
                 musicEngine.stop();
@@ -3412,6 +3453,12 @@
        syncOriginalMuteState();
        updateMusicSelectionUI();
        preloadInitialPreviewTracks();
+       if (selectedMusicId !== null || musicOptions[0]) {
+           const preloadTarget = musicOptions.find(opt => opt.id === selectedMusicId) || musicOptions[0];
+           if (preloadTarget) {
+               preloadAudioBuffer(preloadTarget.id, preloadTarget.url).catch(() => {});
+           }
+       }
        scheduleThumbnailPreparation();
     }
 
@@ -3509,6 +3556,9 @@
 
         // 💥 Reset du champ input
         galleryInput.value = '';
+
+        galleryAudioNeedsRebuild = true;
+        needsUserGestureAfterGallery = true;
 
         // Ouvre la galerie
         galleryInput.click();
