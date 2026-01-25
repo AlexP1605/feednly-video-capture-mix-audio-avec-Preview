@@ -2007,7 +2007,7 @@
                 playBtn.disabled = true;
                 playBtn.setAttribute('aria-busy', 'true');
             }
-            playBtn.onclick = async (e) => {
+            playBtn.onclick = (e) => {
                 e.stopPropagation();
                 const alreadyPlaying = currentlyPlayingMusicId === opt.id && (musicEngine?.isPlaying || pendingMusicId === opt.id);
                 if (alreadyPlaying) {
@@ -2015,7 +2015,49 @@
                     return;
                 }
                 console.debug('[music] start preview', { id: opt.id });
-                await startMusicPreview(opt);
+                const audioCtx = ensureAudioReady();
+                if (!audioCtx) {
+                    console.warn('[music] audio context not ready');
+                    return;
+                }
+                if (currentlyPlayingMusicId && currentlyPlayingMusicId !== opt.id) {
+                    stopMusicPreview({ hard: false });
+                }
+                const isNewSelection = selectedMusicId !== opt.id;
+                if (isNewSelection) {
+                    selectedMusicId = opt.id;
+                    musicStartTime = 0;
+                    clampStartForVideoDuration();
+                    updateMusicOverlay();
+                    updateSeekDurationFromMeta(opt);
+                    updatePositionLabel();
+                    updateWaveformProgress();
+                }
+                if (!currentMusicDuration) {
+                    const cached = getCachedAudioEntry(opt.id, opt.url);
+                    if (cached?.duration) {
+                        setSeekLimits(Math.floor(cached.duration));
+                    }
+                }
+                const { start, end } = getLoopBounds();
+                const safeEnd = Math.max(end, start + 0.1);
+                musicEngine.updateVolume(musicVolume);
+                const startedNow = musicEngine.playImmediateFromCache(opt.url, start, safeEnd, { id: opt.id });
+                if (startedNow) {
+                    selectedMusicId = opt.id;
+                    currentlyPlayingMusicId = opt.id;
+                    pendingMusicId = null;
+                } else {
+                    pendingMusicId = opt.id;
+                    preloadAudioBuffer(opt.id, opt.url)
+                        .then((duration) => {
+                            if (duration) {
+                                setSeekLimits(Math.floor(duration));
+                            }
+                        })
+                        .catch(() => {});
+                }
+                updateMusicListPlaybackState();
             };
             item.appendChild(playBtn);
             item.addEventListener('pointerdown', () => {
@@ -2665,8 +2707,8 @@
         primeMusicAudioContext(audioCtx);
         if (audioCtx.state !== 'running') {
             audioCtxPrimed = false;
+            return null;
         }
-        if (audioCtx.state !== 'running') return null;
         return audioCtx;
     }
 
@@ -2859,6 +2901,19 @@
             return started;
         };
 
+        const playImmediateFromCache = (url, startTime, endTime, { id = null } = {}) => {
+            if (!url) return false;
+            const cacheKey = id || url;
+            const cachedBuffer = getCachedBuffer(cacheKey, url);
+            if (!cachedBuffer) return false;
+            const activeCtx = ensureAudioReady();
+            if (!activeCtx) return false;
+            const session = ++playSession;
+            currentUrl = url;
+            currentId = id;
+            return startBufferSource(cachedBuffer, startTime, endTime, session);
+        };
+
         const seek = (startTime) => {
             const nextStart = Math.max(0, startTime || 0);
             if (!currentBuffer || !currentUrl) return;
@@ -2880,6 +2935,7 @@
             updateVolume,
             clearBuffer,
             playBufferAudio,
+            playImmediateFromCache,
             seek,
             getPlaybackState,
             get isPlaying() { return isPlaying; }
