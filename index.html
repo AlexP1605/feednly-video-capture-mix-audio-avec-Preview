@@ -1298,6 +1298,7 @@
     let uploadProgressValue = 0;
     let uploadProcessingRaf = null;
     let uploadCompleted = false;
+    let galleryAudioNeedsRebuild = false;
     if (uploadMixText) {
         uploadMixText.textContent = UPLOAD_FINAL_MESSAGE;
     }
@@ -2739,6 +2740,19 @@
             ensureMusicGainNode();
         };
 
+        const rebuildAudioGraph = () => {
+            stopCurrentSource();
+            if (musicGainNode) {
+                try {
+                    musicGainNode.disconnect();
+                } catch (error) {
+                    // no-op: best-effort cleanup
+                }
+            }
+            musicGainNode = null;
+            primeAudioGraph();
+        };
+
         const stopCurrentSource = () => {
             if (!musicSourceNode) {
                 isPlaying = false;
@@ -2901,6 +2915,12 @@
             updateVolume(musicVolume);
         };
 
+        const refreshAudioGraph = () => {
+            unlockMusicAudioContext();
+            rebuildAudioGraph();
+            updateVolume(musicVolume);
+        };
+
         const getAudioContext = () => ensureMusicAudioContext();
 
         return {
@@ -2914,6 +2934,7 @@
             seekHtmlAudio,
             getHtmlAudioState,
             unlockAudioContext,
+            refreshAudioGraph,
             getAudioContext,
             get isPlaying() { return isPlaying; }
         };
@@ -2952,8 +2973,23 @@
         console.log('[audio-perf]', payload);
     }
 
+    async function ensureGalleryAudioReady() {
+        if (!galleryAudioNeedsRebuild || !musicEngine) return true;
+        musicEngine.refreshAudioGraph();
+        const activeCtx = await ensureMusicContextActive();
+        if (!activeCtx || activeCtx.state !== 'running') {
+            return false;
+        }
+        galleryAudioNeedsRebuild = false;
+        return true;
+    }
+
     async function startMusicPreview(opt) {
         if (!opt || !musicEngine) return;
+        const galleryReady = await ensureGalleryAudioReady();
+        if (!galleryReady) {
+            return;
+        }
         const sessionId = musicSessionId;
         const expectedId = opt.id;
         const perf = DEBUG_AUDIO ? { id: opt.id, tClick: performance.now() } : null;
@@ -3321,6 +3357,7 @@
        if (previewTimeout) clearTimeout(previewTimeout);
        previewTimeout = setTimeout(() => {
            previewTimeout = null;
+           galleryAudioNeedsRebuild = false;
            if (recordedBlob) showPreview(recordedBlob);
        }, 16);
     }
@@ -3486,6 +3523,7 @@
        recordedBlob = file;
        shouldCheckDuration = true;
        showPreview(file);
+       galleryAudioNeedsRebuild = true;
        e.target.value = '';
     }
 
