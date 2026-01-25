@@ -2015,7 +2015,7 @@
                     return;
                 }
                 console.debug('[music] start preview', { id: opt.id });
-                startMusicPreview(opt);
+                await startMusicPreview(opt);
             };
             item.appendChild(playBtn);
             item.addEventListener('pointerdown', () => {
@@ -2596,6 +2596,8 @@
     const audioPreloadCache = new Map();
     const MAX_AUDIO_PRELOADS = 12;
     const DEBUG_AUDIO = false;
+    const MUSIC_STOP_GRACE_MS = 120;
+    let lastMusicPreviewStartAt = 0;
 
     // --- Optimisation Fluidité (Gérer la visibilité de la page) ---
     document.addEventListener('visibilitychange', () => {
@@ -2891,6 +2893,9 @@
     document.addEventListener('pointerdown', ensureAudioReady, { once: true, passive: true });
 
     function stopMusicPreview({ hard = false } = {}) {
+        if (performance.now() - lastMusicPreviewStartAt < MUSIC_STOP_GRACE_MS) {
+            return;
+        }
         if (!musicEngine) return;
         musicEngine.stop();
         if (hard) {
@@ -2905,9 +2910,7 @@
         if (!currentlyPlayingMusicId) return;
         const music = musicOptions.find(opt => opt.id === currentlyPlayingMusicId);
         if (!music) return;
-        if (musicEngine?.isPlaying) {
-            startMusicPreview(music);
-        }
+        updateMusicListPlaybackState();
     }
 
     function logAudioPerf(payload) {
@@ -2917,9 +2920,10 @@
 
     async function startMusicPreview(opt) {
         if (!opt || !musicEngine) return;
-        const audioCtx = ensureMusicAudioContext();
-        if (!audioCtx || audioCtx.state !== 'running') {
-            console.warn('[music] audio context not running');
+        lastMusicPreviewStartAt = performance.now();
+        const audioCtx = await ensureAudioReady();
+        if (!audioCtx) {
+            console.warn('[music] audio context not ready');
             return;
         }
         const sessionId = musicSessionId;
@@ -2954,23 +2958,24 @@
         const { start, end } = getLoopBounds();
         musicEngine.updateVolume(musicVolume);
         console.debug('[music] preview graph', { volume: musicVolume, start, end });
-        await musicEngine.load(opt.url, { id: opt.id });
-        const playPromise = musicEngine.play(start, end)
-            .then((started) => {
-                if (started) {
-                    const playbackState = musicEngine.getPlaybackState();
-                    if (perf) {
-                        perf.tSoundStart = playbackState.startPerf || performance.now();
-                        logAudioPerf({ ...perf });
-                    }
-                    if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
-                        pendingMusicId = null;
-                        updateMusicListPlaybackState();
-                    }
-                }
-                return started;
-            })
-            .catch(() => false);
+        let started = false;
+        try {
+            await musicEngine.load(opt.url, { id: opt.id });
+            started = await musicEngine.play(start, end);
+        } catch (error) {
+            started = false;
+        }
+        if (started) {
+            const playbackState = musicEngine.getPlaybackState();
+            if (perf) {
+                perf.tSoundStart = playbackState.startPerf || performance.now();
+                logAudioPerf({ ...perf });
+            }
+            if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
+                pendingMusicId = null;
+                updateMusicListPlaybackState();
+            }
+        }
 
         preloadAudioBuffer(opt.id, opt.url).then((duration) => {
             if (duration) {
@@ -2978,7 +2983,6 @@
             }
         }).catch(() => {});
 
-        const started = await playPromise;
         if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
             if (!started) {
                 musicEngine.stop();
