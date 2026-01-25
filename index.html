@@ -2228,6 +2228,7 @@
     let musicPreloadObserver = null;
     let musicPreloadIdleHandle = null;
     let isPreloadingVisibleMusic = false;
+    let shouldPreloadAfterGallery = false;
 
     function scheduleIdleTask(task, { timeout = 500, fallbackDelay = 120 } = {}) {
         if (typeof requestIdleCallback === 'function') {
@@ -2281,6 +2282,21 @@
             const opt = musicOptions.find(opt => String(opt.id) === id);
             if (opt?.url) {
                 enqueueMusicPreload(opt.id, opt.url, { allowWhenSelected });
+            }
+        });
+    }
+
+    function preloadVisibleMusicImmediately() {
+        if (!musicListEl) return;
+        const items = [...musicListEl.querySelectorAll('.music-item')];
+        if (!items.length) return;
+        const visibleOrdered = items.filter(item => visibleMusicIds.has(item.dataset.musicId));
+        const candidates = visibleOrdered.length ? visibleOrdered : items.slice(0, MAX_PRELOAD_ITEMS);
+        candidates.slice(0, MAX_PRELOAD_ITEMS).forEach((item) => {
+            const id = item.dataset.musicId;
+            const opt = musicOptions.find(opt => String(opt.id) === String(id));
+            if (opt?.url) {
+                enqueueMusicPreload(opt.id, opt.url, { allowWhenSelected: true });
             }
         });
     }
@@ -3449,6 +3465,10 @@
        syncOriginalMuteState();
        updateMusicSelectionUI();
        preloadInitialPreviewTracks();
+       if (shouldPreloadAfterGallery) {
+           shouldPreloadAfterGallery = false;
+           preloadVisibleMusicImmediately();
+       }
        scheduleThumbnailPreparation();
     }
 
@@ -3559,6 +3579,7 @@
        }
        recordedBlob = file;
        shouldCheckDuration = true;
+       shouldPreloadAfterGallery = true;
        showPreview(file);
        e.target.value = '';
     }
