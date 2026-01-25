@@ -2958,23 +2958,24 @@
         const { start, end } = getLoopBounds();
         musicEngine.updateVolume(musicVolume);
         console.debug('[music] preview graph', { volume: musicVolume, start, end });
-        await musicEngine.load(opt.url, { id: opt.id });
-        const playPromise = musicEngine.play(start, end)
-            .then((started) => {
-                if (started) {
-                    const playbackState = musicEngine.getPlaybackState();
-                    if (perf) {
-                        perf.tSoundStart = playbackState.startPerf || performance.now();
-                        logAudioPerf({ ...perf });
-                    }
-                    if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
-                        pendingMusicId = null;
-                        updateMusicListPlaybackState();
-                    }
-                }
-                return started;
-            })
-            .catch(() => false);
+        let started = false;
+        try {
+            await musicEngine.load(opt.url, { id: opt.id });
+            started = await musicEngine.play(start, end);
+        } catch (error) {
+            started = false;
+        }
+        if (started) {
+            const playbackState = musicEngine.getPlaybackState();
+            if (perf) {
+                perf.tSoundStart = playbackState.startPerf || performance.now();
+                logAudioPerf({ ...perf });
+            }
+            if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
+                pendingMusicId = null;
+                updateMusicListPlaybackState();
+            }
+        }
 
         preloadAudioBuffer(opt.id, opt.url).then((duration) => {
             if (duration) {
@@ -2982,7 +2983,6 @@
             }
         }).catch(() => {});
 
-        const started = await playPromise;
         if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
             if (!started) {
                 musicEngine.stop();
