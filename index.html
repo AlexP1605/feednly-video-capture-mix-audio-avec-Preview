@@ -2229,6 +2229,7 @@
     let musicPreloadIdleHandle = null;
     let isPreloadingVisibleMusic = false;
     let shouldPreloadAfterGallery = false;
+    let shouldResetMusicSheetOnOpen = false;
 
     function scheduleIdleTask(task, { timeout = 500, fallbackDelay = 120 } = {}) {
         if (typeof requestIdleCallback === 'function') {
@@ -2581,11 +2582,6 @@
 
     function resetMusicSheetUI() {
         if (!musicSheet) return;
-        const scroller = getMusicSheetScroller();
-        if (scroller) {
-            scroller.scrollTop = 0;
-            console.debug('[music] sheet scroll reset on', scroller);
-        }
         if (musicSearchInput) {
             musicSearchInput.value = '';
         }
@@ -2602,6 +2598,20 @@
         musicTabBar?.removeAttribute('hidden');
         updateSheetBackdrop();
         setMusicOverlayVisibility();
+        if (shouldResetMusicSheetOnOpen) {
+            shouldResetMusicSheetOnOpen = false;
+            if (musicSearchInput) {
+                musicSearchInput.value = '';
+            }
+            resetFilterTag();
+            pendingMusicId = null;
+            requestAnimationFrame(() => {
+                const scroller = getMusicSheetScroller();
+                if (scroller) {
+                    scroller.scrollTop = 0;
+                }
+            });
+        }
         burstPreloadVisibleTracks();
     }
 
@@ -3531,6 +3541,7 @@
     function hidePreview() {
        previewOverlay.classList.remove('active');
        document.body.classList.remove('showing-preview');
+       shouldResetMusicSheetOnOpen = true;
        resetMusicSheetUI();
        unlockPreviewViewport();
        resetPreviewState();
