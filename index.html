@@ -972,12 +972,7 @@
     let recordedBlob = null;
     let previewObjectURL = null;
     let selectedThumbnailTime = 0.5;
-    let selectedThumbnailObjectURL = '';
     let thumbnailPrepareTimeout = null;
-    let thumbnailDebounceTimeout = null;
-    let thumbnailExtractionRequestId = 0;
-    let thumbnailExtractorVideo = null;
-    let thumbnailExtractorReady = false;
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
@@ -1347,16 +1342,6 @@
         thumbnailTimeDisplay.textContent = formatTimeLabel(timeSeconds);
     }
 
-    function applySelectedThumbnailPreview(url) {
-        if (!selectedThumbnailPreview) return;
-        if (!url) {
-            selectedThumbnailPreview.style.backgroundImage = '';
-            selectedThumbnailPreview.classList.remove('ready');
-            return;
-        }
-        selectedThumbnailPreview.style.backgroundImage = `url(${url})`;
-        selectedThumbnailPreview.classList.add('ready');
-    }
 
     function updateThumbnailSliderBounds() {
         if (!thumbnailTimeSlider) return;
@@ -1366,115 +1351,6 @@
         thumbnailTimeSlider.step = '0.1';
     }
 
-    async function ensureThumbnailExtractorReady() {
-        if (!thumbnailExtractorVideo) {
-            thumbnailExtractorVideo = document.createElement('video');
-            thumbnailExtractorVideo.muted = true;
-            thumbnailExtractorVideo.playsInline = true;
-            thumbnailExtractorVideo.preload = 'auto';
-        }
-        if (thumbnailExtractorVideo.src !== previewObjectURL) {
-            thumbnailExtractorReady = false;
-            thumbnailExtractorVideo.src = previewObjectURL || '';
-            thumbnailExtractorVideo.load();
-        }
-        if (thumbnailExtractorReady) return;
-        await new Promise((resolve, reject) => {
-            const onLoaded = () => {
-                cleanup();
-                thumbnailExtractorReady = true;
-                resolve();
-            };
-            const onError = () => {
-                cleanup();
-                reject(new Error('thumbnail extractor metadata error'));
-            };
-            const cleanup = () => {
-                thumbnailExtractorVideo.removeEventListener('loadedmetadata', onLoaded);
-                thumbnailExtractorVideo.removeEventListener('error', onError);
-            };
-            thumbnailExtractorVideo.addEventListener('loadedmetadata', onLoaded, { once: true });
-            thumbnailExtractorVideo.addEventListener('error', onError, { once: true });
-        });
-    }
-
-    async function extractLocalThumbnailAt(timeSeconds) {
-        if (!previewObjectURL || !videoDurationSeconds) return null;
-        await ensureThumbnailExtractorReady();
-        const targetTime = Math.max(0, Math.min(videoDurationSeconds, Number(timeSeconds) || 0));
-        console.debug('[thumbnail] extract:start', {
-            timeSeconds: targetTime,
-            videoWidth: thumbnailExtractorVideo.videoWidth || 0,
-            videoHeight: thumbnailExtractorVideo.videoHeight || 0
-        });
-        await new Promise((resolve, reject) => {
-            const onSeeked = () => {
-                cleanup();
-                resolve();
-            };
-            const onError = () => {
-                cleanup();
-                reject(new Error('thumbnail extractor seek error'));
-            };
-            const cleanup = () => {
-                thumbnailExtractorVideo.removeEventListener('seeked', onSeeked);
-                thumbnailExtractorVideo.removeEventListener('error', onError);
-            };
-            thumbnailExtractorVideo.addEventListener('seeked', onSeeked, { once: true });
-            thumbnailExtractorVideo.addEventListener('error', onError, { once: true });
-            thumbnailExtractorVideo.currentTime = targetTime;
-        });
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-
-        const width = thumbnailExtractorVideo.videoWidth || 360;
-        const height = thumbnailExtractorVideo.videoHeight || 640;
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d', { alpha: false });
-        if (!ctx) return null;
-
-        if (recordedFacingMode === 'user') {
-            ctx.save();
-            ctx.translate(width, 0);
-            ctx.scale(-1, 1);
-            ctx.drawImage(thumbnailExtractorVideo, 0, 0, width, height);
-            ctx.restore();
-        } else {
-            ctx.drawImage(thumbnailExtractorVideo, 0, 0, width, height);
-        }
-
-        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-        if (!blob) return null;
-        const objectUrl = URL.createObjectURL(blob);
-        console.debug('[thumbnail] extract:success', {
-            timeSeconds: targetTime,
-            videoWidth: width,
-            videoHeight: height,
-            blobSize: blob.size
-        });
-        return objectUrl;
-    }
-
-    async function updateSelectedThumbnailPreviewNow(timeSeconds) {
-        const requestId = ++thumbnailExtractionRequestId;
-        try {
-            const extractedObjectUrl = await extractLocalThumbnailAt(timeSeconds);
-            if (!extractedObjectUrl) return;
-            if (requestId !== thumbnailExtractionRequestId) {
-                URL.revokeObjectURL(extractedObjectUrl);
-                return;
-            }
-            if (selectedThumbnailObjectURL) URL.revokeObjectURL(selectedThumbnailObjectURL);
-            selectedThumbnailObjectURL = extractedObjectUrl;
-            applySelectedThumbnailPreview(selectedThumbnailObjectURL);
-        } catch (error) {
-            console.warn('[thumbnail] extract:fail', {
-                timeSeconds,
-                error: error?.message || String(error)
-            });
-        }
-    }
 
     function setSelectedThumbnail(timeSeconds) {
         const duration = Math.max(0, Number(videoDurationSeconds) || 0);
@@ -1483,17 +1359,11 @@
         selectedThumbnailTime = Number.isFinite(nextTime) ? nextTime : DEFAULT_THUMBNAIL_TIME;
         if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(selectedThumbnailTime);
         updateThumbnailTimeLabel(selectedThumbnailTime);
-        if (thumbnailDebounceTimeout) clearTimeout(thumbnailDebounceTimeout);
-        thumbnailDebounceTimeout = setTimeout(() => {
-            updateSelectedThumbnailPreviewNow(selectedThumbnailTime);
-        }, 100);
     }
 
     function cancelScheduledThumbnailPreparation() {
         if (thumbnailPrepareTimeout) clearTimeout(thumbnailPrepareTimeout);
-        if (thumbnailDebounceTimeout) clearTimeout(thumbnailDebounceTimeout);
         thumbnailPrepareTimeout = null;
-        thumbnailDebounceTimeout = null;
     }
 
     function scheduleThumbnailPreparation() {
@@ -2254,13 +2124,15 @@
     }
 
     if (thumbnailTimeSlider) {
-        thumbnailTimeSlider.addEventListener('input', (event) => {
-            const value = Number(event.target?.value || 0);
-            setSelectedThumbnail(value);
+        thumbnailTimeSlider.addEventListener('input', (e) => {
+            const value = Number(e.target.value);
+            previewVideo.currentTime = value;
+            updateThumbnailTimeLabel(value);
         });
-        thumbnailTimeSlider.addEventListener('change', (event) => {
-            const value = Number(event.target?.value || 0);
-            setSelectedThumbnail(value);
+
+        thumbnailTimeSlider.addEventListener('change', (e) => {
+            const value = Number(e.target.value);
+            selectedThumbnailTime = value;
         });
     }
 
@@ -3241,19 +3113,6 @@
        selectedThumbnailTime = Number.NaN;
        if (thumbnailTimeSlider) thumbnailTimeSlider.value = '0';
        updateThumbnailTimeLabel(0);
-       if (selectedThumbnailPreview) {
-           selectedThumbnailPreview.style.backgroundImage = '';
-           selectedThumbnailPreview.classList.remove('ready');
-       }
-       if (selectedThumbnailObjectURL) {
-           URL.revokeObjectURL(selectedThumbnailObjectURL);
-           selectedThumbnailObjectURL = '';
-       }
-       thumbnailExtractionRequestId += 1;
-       thumbnailExtractorReady = false;
-       if (thumbnailExtractorVideo) {
-           thumbnailExtractorVideo.src = '';
-       }
     }
 
     function showPreview(blob) {
@@ -3331,8 +3190,10 @@
         }
         updateThumbnailSliderBounds();
         const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME);
-        setSelectedThumbnail(defaultTime);
-        updateSelectedThumbnailPreviewNow(defaultTime);
+        selectedThumbnailTime = defaultTime;
+        previewVideo.currentTime = defaultTime;
+        if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(defaultTime);
+        updateThumbnailTimeLabel(defaultTime);
         setSeekLimits(currentMusicDuration);
         updateMusicOverlay();
         restartPreviewIfPlaying();
