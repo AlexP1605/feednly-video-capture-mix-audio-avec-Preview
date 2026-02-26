@@ -1314,10 +1314,12 @@
     const PATH_FLASH_OFF = "M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z";
 
     const MAX_DURATION = 60000;
+    const RECORDER_TIMESLICE_MS = 1000;
     const circumference = 2 * Math.PI * 46;
     let recordingStartTime = 0;
     let progressInterval = null;
     let previewTimeout = null;
+    let isStoppingRecording = false;
 
     // --- AJOUT MUSIQUE : initialisation UI simple ---
     const getSelectedMusic = () => {
@@ -3389,6 +3391,7 @@
       
       recordedFacingMode = facingMode; 
       recordedChunks = [];
+      isStoppingRecording = false;
       
       let options = {
          mimeType: 'video/mp4',
@@ -3404,14 +3407,29 @@
       try { mediaRecorder = new MediaRecorder(streamForRecording, options); }
       catch(e) { mediaRecorder = new MediaRecorder(streamForRecording); }
 
-      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.ondataavailable = e => {
+         if (e.data && e.data.size > 0) {
+             recordedChunks.push(e.data);
+         }
+      };
       mediaRecorder.onstop = () => {
          recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+         console.info('[recording] stop complete', {
+            chunksCollected: recordedChunks.length,
+            recordedBlobSize: recordedBlob.size,
+            mimeType: mediaRecorder.mimeType,
+            elapsedMs: Date.now() - recordingStartTime
+         });
          isRecording = false;
+         isStoppingRecording = false;
          finalizeRecording();
       };
       
-      mediaRecorder.start();
+      mediaRecorder.start(RECORDER_TIMESLICE_MS);
+      console.info('[recording] start', {
+        maxDurationMs: MAX_DURATION,
+        timesliceMs: RECORDER_TIMESLICE_MS
+      });
       isRecording = true;
       if (cameraReady) {
          document.body.classList.add('recording');
@@ -3439,10 +3457,21 @@
     }
 
     function stopRecording() {
+       if (isStoppingRecording) {
+           return;
+       }
+
        if (mediaRecorder && mediaRecorder.state === 'recording') {
+           isStoppingRecording = true;
+           try {
+             mediaRecorder.requestData();
+           } catch (error) {
+             console.warn('[recording] requestData failed before stop', error);
+           }
            mediaRecorder.stop();
        } else if (isRecording) {
            isRecording = false;
+           isStoppingRecording = false;
            finalizeRecording();
        }
     }
@@ -3553,6 +3582,11 @@
 
     previewVideo.onloadedmetadata = () => {
         videoDurationSeconds = Math.max(0, Number(previewVideo.duration) || 0);
+        console.info('[recording] preview metadata', {
+            previewDuration: previewVideo.duration,
+            recordedBlobSize: recordedBlob ? recordedBlob.size : 0,
+            chunksCollected: recordedChunks.length
+        });
         if (shouldCheckDuration) {
             if (previewVideo.duration > 61) {
                 const sec = Math.round(previewVideo.duration);
