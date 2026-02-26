@@ -320,55 +320,34 @@
       color: rgba(255,255,255,0.6);
     }
 
-    .thumbnail-strip {
-      display: flex;
-      --thumb-count: 8;
-      --thumb-gap: 2px;
-      gap: var(--thumb-gap);
-      overflow-x: hidden;
-      overflow-y: visible;
-      padding: 0;
-      touch-action: none;
-      overscroll-behavior: contain;
-      flex-wrap: nowrap;
-      align-items: center;
-      height: 82px;
-      background: rgba(255,255,255,0.05);
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.12);
-      scrollbar-width: none;
-      -ms-overflow-style: none;
+
+    .thumbnail-slider-row {
       width: 100%;
-      max-width: 100vw;
-      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05);
     }
-    .thumbnail-strip::-webkit-scrollbar { display: none; }
-    .thumbnail-frame {
-      width: calc((100% - (var(--thumb-count) - 1) * var(--thumb-gap)) / var(--thumb-count));
-      aspect-ratio: 9 / 16;
-      height: auto;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.18);
-      background: rgba(255,255,255,0.08);
-      background-size: cover;
-      background-position: center;
+    .thumbnail-slider-label {
+      font-size: 12px;
+      color: rgba(255,255,255,0.72);
       flex: 0 0 auto;
-      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-      position: relative;
-      opacity: 0.35;
     }
-    .thumbnail-frame.active {
-      transform: scale(1.12); /* Fix: zoom plus doux pour la miniature active */
-      border-color: transparent; /* Fix: supprime le contour actif */
-      box-shadow: 0 12px 24px rgba(0,0,0,0.35);
-      opacity: 1;
+    .thumbnail-time-slider {
+      flex: 1;
+      min-width: 0;
     }
-    .thumbnail-loading {
-      font-size: 13px;
-      opacity: 0.7;
-      text-align: center;
-      padding: 18px 0;
+    .thumbnail-time-display {
+      font-size: 12px;
+      color: rgba(255,255,255,0.9);
+      min-width: 36px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
     }
+
     .inline-music-controls {
       position: relative;
       left: auto;
@@ -800,7 +779,11 @@
         </div>
         <div class="thumbnail-label">Miniature sélectionnée</div>
         <div class="thumbnail-strip-group">
-          <div id="thumbnail-strip" class="thumbnail-strip" role="listbox" aria-label="Choisir une miniature"></div>
+          <div class="thumbnail-slider-row">
+            <label for="thumbnail-time-slider" class="thumbnail-slider-label">Moment</label>
+            <input id="thumbnail-time-slider" class="thumbnail-time-slider" type="range" min="0" max="0" step="0.1" value="0" />
+            <span id="thumbnail-time-display" class="thumbnail-time-display">0:00</span>
+          </div>
           <div class="music-overlay-row">
             <div id="music-overlay" class="music-overlay">
               <div class="music-visual">
@@ -818,8 +801,7 @@
               </button>
             </div>
           </div>
-          <div id="thumbnail-loading" class="thumbnail-loading" hidden>Génération des miniatures…</div>
-        </div>
+                  </div>
         <video id="preview-video" playsinline webkit-playsinline preload="auto"></video>
         <div id="music-controls" class="sheet inline-music-controls">
           <div class="sheet-handle"></div>
@@ -947,8 +929,8 @@
     const waveformVisual = document.getElementById('waveform-visual');
     const originalMuteToggleInput = document.getElementById('original-mute-toggle');
     const selectedThumbnailPreview = document.getElementById('selected-thumbnail-preview');
-    const thumbnailStrip = document.getElementById('thumbnail-strip');
-    const thumbnailLoading = document.getElementById('thumbnail-loading');
+    const thumbnailTimeSlider = document.getElementById('thumbnail-time-slider');
+    const thumbnailTimeDisplay = document.getElementById('thumbnail-time-display');
     let waveformHandleStart = null;
     let waveformHandleEnd = null;
     const tabWaveform = document.getElementById('tab-waveform');
@@ -990,13 +972,8 @@
     let recordedBlob = null;
     let previewObjectURL = null;
     let selectedThumbnailTime = 0.5;
-    let thumbnailFrames = [];
-    let thumbnailFramesPromise = null;
-    let thumbnailItems = [];
     let thumbnailPrepareTimeout = null;
-    let thumbnailPrepareRaf1 = 0;
-    let thumbnailPrepareRaf2 = 0;
-    const thumbnailObjectUrls = new Set();
+    let thumbnailDebounceTimeout = null;
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
@@ -1343,67 +1320,27 @@
 
     // --- MINIATURES (Thumbnail picker) ---
     const DEFAULT_THUMBNAIL_TIME = 0.5;
-    const THUMBNAIL_IMMEDIATE_TIMES = [0.3, 1];
-    const THUMBNAIL_MIN_STEP = 0.8;
-    const THUMBNAIL_MAX_STEP = 1;
-    const THUMBNAIL_MAX_FRAMES = 8;
-    const THUMBNAIL_TIME_TOLERANCE = 0.08;
-    let thumbnailGenerationId = 0;
-    function getThumbnailFrameTimes(durationSeconds) {
-        const duration = Math.max(0.1, Number(durationSeconds) || 0.1);
-        const step = Math.max(THUMBNAIL_MIN_STEP, Math.min(THUMBNAIL_MAX_STEP, duration / (THUMBNAIL_MAX_FRAMES - 1)));
-        const count = Math.min(THUMBNAIL_MAX_FRAMES, Math.max(2, Math.floor(duration / step) + 1));
-        const times = Array.from({ length: count }, (_, index) => Math.min(duration, index * step));
-        if (times.length) {
-            times[times.length - 1] = duration;
-        }
-        return times;
+
+    function getMuxPlaybackId() {
+        const params = new URLSearchParams(window.location.search || '');
+        return (
+            window.muxPlaybackId
+            || params.get('playbackId')
+            || params.get('playback_id')
+            || ''
+        ).trim();
     }
 
-    function getImmediateThumbnailTimes(durationSeconds) {
-        const duration = Math.max(0.1, Number(durationSeconds) || 0.1);
-        const times = THUMBNAIL_IMMEDIATE_TIMES
-            .map(time => Math.min(duration, Math.max(0, time)))
-            .filter(time => Number.isFinite(time));
-        return Array.from(new Set(times)).sort((a, b) => a - b);
+    function buildMuxThumbnailUrl(playbackId, timeSeconds) {
+        const safePlaybackId = (playbackId || '').trim();
+        if (!safePlaybackId) return '';
+        const safeTime = Math.max(0, Number(timeSeconds) || 0).toFixed(1);
+        return `https://image.mux.com/${encodeURIComponent(safePlaybackId)}/thumbnail.jpg?time=${safeTime}`;
     }
 
-    function buildThumbnailTimeList(durationSeconds) {
-        const baseTimes = getThumbnailFrameTimes(durationSeconds);
-        const immediateTimes = getImmediateThumbnailTimes(durationSeconds);
-        const adjustedTimes = [...baseTimes];
-        immediateTimes.forEach((time) => {
-            let closestIndex = 0;
-            let closestDiff = Number.POSITIVE_INFINITY;
-            adjustedTimes.forEach((value, index) => {
-                const diff = Math.abs(value - time);
-                if (diff < closestDiff) {
-                    closestDiff = diff;
-                    closestIndex = index;
-                }
-            });
-            adjustedTimes[closestIndex] = time;
-        });
-        const sortedTimes = adjustedTimes.sort((a, b) => a - b);
-        return sortedTimes.reduce((acc, time) => {
-            const last = acc[acc.length - 1];
-            const isImmediate = immediateTimes.some(immediate => Math.abs(immediate - time) < THUMBNAIL_TIME_TOLERANCE);
-            if (acc.length && Math.abs(last - time) <= THUMBNAIL_TIME_TOLERANCE) {
-                if (isImmediate) acc[acc.length - 1] = time;
-                return acc;
-            }
-            acc.push(time);
-            return acc;
-        }, []);
-    }
-
-    function selectNearestThumbnailFrame(timeSeconds) {
-        if (!thumbnailFrames.length) return null;
-        const target = Math.max(0, timeSeconds || 0);
-        return thumbnailFrames.reduce((closest, frame) => {
-            if (!closest) return frame;
-            return Math.abs(frame.time - target) < Math.abs(closest.time - target) ? frame : closest;
-        }, null);
+    function updateThumbnailTimeLabel(timeSeconds) {
+        if (!thumbnailTimeDisplay) return;
+        thumbnailTimeDisplay.textContent = formatTimeLabel(timeSeconds);
     }
 
     function applySelectedThumbnailPreview(url) {
@@ -1417,321 +1354,59 @@
         selectedThumbnailPreview.classList.add('ready');
     }
 
+    function updateThumbnailSliderBounds() {
+        if (!thumbnailTimeSlider) return;
+        const max = Math.max(0, Number(videoDurationSeconds) || 0);
+        thumbnailTimeSlider.min = '0';
+        thumbnailTimeSlider.max = String(max);
+        thumbnailTimeSlider.step = '0.1';
+    }
+
+    function updateSelectedThumbnailPreviewNow(timeSeconds) {
+        const playbackId = getMuxPlaybackId();
+        if (!playbackId || !videoDurationSeconds) {
+            return;
+        }
+        const url = buildMuxThumbnailUrl(playbackId, timeSeconds);
+        applySelectedThumbnailPreview(url);
+    }
+
     function setSelectedThumbnail(timeSeconds) {
-        const nextTime = Math.max(0, Number.isFinite(timeSeconds) ? timeSeconds : DEFAULT_THUMBNAIL_TIME);
-        selectedThumbnailTime = nextTime;
-        const frame = selectNearestThumbnailFrame(nextTime);
-        applySelectedThumbnailPreview(frame?.urlLarge || frame?.url || '');
-        if (!thumbnailStrip) return;
-        const items = thumbnailItems.length ? thumbnailItems : thumbnailStrip.querySelectorAll('.thumbnail-frame');
-        let closestItem = null;
-        let closestDiff = Number.POSITIVE_INFINITY;
-        items.forEach((item) => {
-            const itemTime = Number(item.dataset.time || 0);
-            const diff = Math.abs(itemTime - nextTime);
-            if (diff < closestDiff) {
-                closestDiff = diff;
-                closestItem = item;
-            }
-        });
-        items.forEach((item) => item.classList.toggle('active', item === closestItem));
-    }
-
-    function renderThumbnailStrip(frames) {
-        if (!thumbnailStrip) return;
-        thumbnailStrip.style.setProperty('--thumb-count', String(Math.max(frames.length, 1)));
-        if (!frames.length) {
-            thumbnailStrip.innerHTML = '';
-            thumbnailItems = [];
-            return;
-        }
-        const existingItems = [...thumbnailStrip.querySelectorAll('.thumbnail-frame')];
-        const layoutMatches = existingItems.length === frames.length
-            && existingItems.every((item, index) => {
-                const itemTime = Number(item.dataset.time || 0);
-                return Math.abs(itemTime - frames[index].time) <= THUMBNAIL_TIME_TOLERANCE;
-            });
-        if (layoutMatches) {
-            // UX: évite les reflows en mettant à jour uniquement les images
-            frames.forEach((frame, index) => {
-                const button = existingItems[index];
-                if (!button) return;
-                const previewUrl = frame.urlSmall || frame.url || '';
-                button.style.backgroundImage = previewUrl ? `url(${previewUrl})` : '';
-            });
-            thumbnailItems = existingItems;
-            setSelectedThumbnail(selectedThumbnailTime);
-            requestAnimationFrame(updateActiveThumbnail);
-            return;
-        }
-        thumbnailStrip.innerHTML = '';
-        const fragment = document.createDocumentFragment();
-        frames.forEach((frame) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'thumbnail-frame';
-            button.dataset.time = String(frame.time);
-            const previewUrl = frame.urlSmall || frame.url || '';
-            button.style.backgroundImage = previewUrl ? `url(${previewUrl})` : '';
-            button.onclick = (e) => {
-                e.stopPropagation();
-                setSelectedThumbnail(frame.time);
-            };
-            fragment.appendChild(button);
-        });
-        thumbnailStrip.appendChild(fragment);
-        thumbnailItems = [...thumbnailStrip.querySelectorAll('.thumbnail-frame')];
-        setSelectedThumbnail(selectedThumbnailTime);
-        requestAnimationFrame(updateActiveThumbnail);
-    }
-
-    function seekVideoToTime(video, timeSeconds) {
-        return new Promise((resolve) => {
-            const handleSeek = () => {
-                video.removeEventListener('seeked', handleSeek);
-                resolve();
-            };
-            video.addEventListener('seeked', handleSeek, { once: true });
-            const safeTime = Math.min(Math.max(0, timeSeconds), Math.max(video.duration || timeSeconds, 0));
-            video.currentTime = safeTime;
-        });
-    }
-
-    function onceLoadedMetadata(video) {
-        return new Promise((resolve, reject) => {
-            const onLoaded = () => resolve();
-            const onError = () => reject(new Error('thumbnail metadata failed'));
-            video.addEventListener('loadedmetadata', onLoaded, { once: true });
-            video.addEventListener('error', onError, { once: true });
-        });
-    }
-
-    function registerThumbnailObjectUrl(url) {
-        if (!url) return '';
-        thumbnailObjectUrls.add(url);
-        return url;
-    }
-
-    function revokeThumbnailObjectUrl(url) {
-        if (!url || !thumbnailObjectUrls.has(url)) return;
-        URL.revokeObjectURL(url);
-        thumbnailObjectUrls.delete(url);
-    }
-
-    function revokeAllThumbnailObjectUrls() {
-        thumbnailObjectUrls.forEach((url) => URL.revokeObjectURL(url));
-        thumbnailObjectUrls.clear();
+        const duration = Math.max(0, Number(videoDurationSeconds) || 0);
+        const fallback = Number.isFinite(selectedThumbnailTime) ? selectedThumbnailTime : DEFAULT_THUMBNAIL_TIME;
+        const nextTime = Math.max(0, Math.min(duration || Number.POSITIVE_INFINITY, Number.isFinite(timeSeconds) ? timeSeconds : fallback));
+        selectedThumbnailTime = Number.isFinite(nextTime) ? nextTime : DEFAULT_THUMBNAIL_TIME;
+        if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(selectedThumbnailTime);
+        updateThumbnailTimeLabel(selectedThumbnailTime);
+        if (thumbnailDebounceTimeout) clearTimeout(thumbnailDebounceTimeout);
+        thumbnailDebounceTimeout = setTimeout(() => {
+            updateSelectedThumbnailPreviewNow(selectedThumbnailTime);
+        }, 100);
     }
 
     function cancelScheduledThumbnailPreparation() {
-        if (thumbnailPrepareRaf1) cancelAnimationFrame(thumbnailPrepareRaf1);
-        if (thumbnailPrepareRaf2) cancelAnimationFrame(thumbnailPrepareRaf2);
         if (thumbnailPrepareTimeout) clearTimeout(thumbnailPrepareTimeout);
-        thumbnailPrepareRaf1 = 0;
-        thumbnailPrepareRaf2 = 0;
+        if (thumbnailDebounceTimeout) clearTimeout(thumbnailDebounceTimeout);
         thumbnailPrepareTimeout = null;
+        thumbnailDebounceTimeout = null;
     }
 
     function scheduleThumbnailPreparation() {
-        if (!recordedBlob) return;
+        if (!previewOverlay.classList.contains('active')) return;
         cancelScheduledThumbnailPreparation();
-        thumbnailPrepareRaf1 = requestAnimationFrame(() => {
-            thumbnailPrepareRaf1 = 0;
-            thumbnailPrepareRaf2 = requestAnimationFrame(() => {
-                thumbnailPrepareRaf2 = 0;
-                thumbnailPrepareTimeout = setTimeout(() => {
-                    thumbnailPrepareTimeout = null;
-                    prepareThumbnailPreview();
-                }, 0);
-            });
-        });
-    }
-
-    function canvasToBlobAsync(canvas, type, quality) {
-        if (!canvas || typeof canvas.toBlob !== 'function') {
-            return Promise.resolve(null);
-        }
-        return new Promise((resolve) => {
-            canvas.toBlob((blob) => resolve(blob || null), type, quality);
-        });
-    }
-
-    async function extractThumbnailFrames(videoBlob) {
-        if (!videoBlob) return [];
-        if (thumbnailFramesPromise) return thumbnailFramesPromise;
-        if (thumbnailLoading) thumbnailLoading.hidden = false;
-
-        thumbnailFramesPromise = (async () => {
-            const thumbVideo = document.createElement('video');
-            thumbVideo.muted = true;
-            thumbVideo.preload = 'auto';
-            const objectUrl = URL.createObjectURL(videoBlob);
-            thumbVideo.src = objectUrl;
-            thumbVideo.playsInline = true;
-            thumbVideo.setAttribute('playsinline', '');
-            thumbVideo.load();
-            await onceLoadedMetadata(thumbVideo);
-
-            const duration = Math.max(0.1, Number(thumbVideo.duration) || videoDurationSeconds || 0.1);
-            const canvasLarge = document.createElement('canvas');
-            const canvasSmall = document.createElement('canvas');
-            const ctxLarge = canvasLarge.getContext('2d');
-            const ctxSmall = canvasSmall.getContext('2d');
-            if (!ctxLarge || !ctxSmall) {
-                console.warn('[thumbnail] canvas context not available');
-                return [];
-            }
-
-            const aspect = thumbVideo.videoWidth && thumbVideo.videoHeight
-                ? thumbVideo.videoWidth / thumbVideo.videoHeight
-                : 9 / 16;
-            const maxWidthLarge = 640;
-            const maxWidthSmall = 300;
-            canvasLarge.width = Math.min(maxWidthLarge, Math.max(1, thumbVideo.videoWidth || maxWidthLarge));
-            canvasLarge.height = Math.round(canvasLarge.width / aspect);
-            canvasSmall.width = Math.min(maxWidthSmall, Math.max(1, thumbVideo.videoWidth || maxWidthSmall));
-            canvasSmall.height = Math.round(canvasSmall.width / aspect);
-            const supportsToBlob = typeof canvasLarge.toBlob === 'function' && typeof canvasSmall.toBlob === 'function';
-
-            thumbnailGenerationId += 1;
-            const currentGeneration = thumbnailGenerationId;
-            let frames = [];
-            let renderScheduled = false;
-
-            const scheduleThumbnailRender = () => {
-                if (renderScheduled) return;
-                renderScheduled = true;
-                requestAnimationFrame(() => {
-                    renderScheduled = false;
-                    if (currentGeneration !== thumbnailGenerationId) return;
-                    renderThumbnailStrip(frames);
-                    setSelectedThumbnail(selectedThumbnailTime);
-                });
-            };
-
-            const drawThumbnailFrame = (ctx, canvas, video, shouldMirror) => {
-                if (!ctx || !canvas || !video) return;
-
-                ctx.save();
-
-                if (shouldMirror) {
-                    ctx.scale(-1, 1);
-                    ctx.translate(-canvas.width, 0);
-                }
-
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                ctx.restore();
-            };
-
-            const captureFrameAt = async (time) => {
-                await seekVideoToTime(thumbVideo, time);
-                if (currentGeneration !== thumbnailGenerationId) return null;
-                const shouldMirror = recordedFacingMode === 'user';
-                drawThumbnailFrame(ctxLarge, canvasLarge, thumbVideo, shouldMirror);
-                drawThumbnailFrame(ctxSmall, canvasSmall, thumbVideo, shouldMirror);
-                let urlLarge = '';
-                let urlSmall = '';
-                if (supportsToBlob) {
-                    const [blobLarge, blobSmall] = await Promise.all([
-                        canvasToBlobAsync(canvasLarge, 'image/jpeg', 0.85),
-                        canvasToBlobAsync(canvasSmall, 'image/jpeg', 0.7),
-                    ]);
-                    urlLarge = blobLarge ? registerThumbnailObjectUrl(URL.createObjectURL(blobLarge)) : canvasLarge.toDataURL('image/jpeg', 0.85);
-                    urlSmall = blobSmall ? registerThumbnailObjectUrl(URL.createObjectURL(blobSmall)) : canvasSmall.toDataURL('image/jpeg', 0.7);
-                } else {
-                    urlLarge = canvasLarge.toDataURL('image/jpeg', 0.85);
-                    urlSmall = canvasSmall.toDataURL('image/jpeg', 0.7);
-                }
-                return { time, urlLarge, urlSmall };
-            };
-
-            const pushFrame = (frame) => {
-                if (!frame || currentGeneration !== thumbnailGenerationId) return;
-                const index = frames.findIndex(
-                    item => Math.abs(item.time - frame.time) <= THUMBNAIL_TIME_TOLERANCE
-                );
-                if (index >= 0) {
-                    const previous = frames[index];
-                    if (previous?.urlLarge && previous.urlLarge !== frame.urlLarge) {
-                        revokeThumbnailObjectUrl(previous.urlLarge);
-                    }
-                    if (previous?.urlSmall && previous.urlSmall !== frame.urlSmall) {
-                        revokeThumbnailObjectUrl(previous.urlSmall);
-                    }
-                    frames = frames.map((item, idx) => (idx === index ? frame : item));
-                } else {
-                    frames = [...frames, frame].sort((a, b) => a.time - b.time);
-                }
-                thumbnailFrames = frames;
-                scheduleThumbnailRender();
-            };
-
-            const times = buildThumbnailTimeList(duration);
-            // UX: réserver toute la bande pour éviter les sauts visuels pendant le chargement
-            frames = times.map(time => ({ time, urlLarge: '', urlSmall: '' }));
-            thumbnailFrames = frames;
-            renderThumbnailStrip(frames);
-            const immediateTimes = getImmediateThumbnailTimes(duration);
-            const remainingTimes = times.filter(
-                time => !immediateTimes.some(immediate => Math.abs(immediate - time) < THUMBNAIL_TIME_TOLERANCE),
-            );
-
-            for (const time of immediateTimes) {
-                if (currentGeneration !== thumbnailGenerationId) break;
-                const frame = await captureFrameAt(time);
-                pushFrame(frame);
-            }
-
-            await new Promise((resolve) => {
-                const processQueue = async () => {
-                    if (currentGeneration !== thumbnailGenerationId) {
-                        resolve();
-                        return;
-                    }
-                    if (!remainingTimes.length) {
-                        resolve();
-                        return;
-                    }
-                    const time = remainingTimes.shift();
-                    try {
-                        const frame = await captureFrameAt(time);
-                        pushFrame(frame);
-                    } catch (error) {
-                        // ignore single frame failures
-                    }
-                    scheduleIdleTask(processQueue, { timeout: 400, fallbackDelay: 120 });
-                };
-                scheduleIdleTask(processQueue, { timeout: 400, fallbackDelay: 120 });
-            });
-
-            canvasLarge.width = 0;
-            canvasLarge.height = 0;
-            canvasSmall.width = 0;
-            canvasSmall.height = 0;
-            thumbVideo.removeAttribute('src');
-            thumbVideo.load();
-            URL.revokeObjectURL(objectUrl);
-            thumbVideo.remove();
-            return frames;
-        })()
-            .then((frames) => {
-                thumbnailFrames = frames;
-                return frames;
-            })
-            .catch(() => [])
-            .finally(() => {
-                if (thumbnailLoading) thumbnailLoading.hidden = true;
-                thumbnailFramesPromise = null;
-            });
-
-        return thumbnailFramesPromise;
+        thumbnailPrepareTimeout = setTimeout(() => {
+            thumbnailPrepareTimeout = null;
+            prepareThumbnailPreview();
+        }, 0);
     }
 
     function prepareThumbnailPreview() {
-        if (!recordedBlob || !previewOverlay.classList.contains('active')) return;
-        extractThumbnailFrames(recordedBlob).then((frames) => {
-            renderThumbnailStrip(frames || []);
-        });
+        if (!previewOverlay.classList.contains('active')) return;
+        updateThumbnailSliderBounds();
+        const safeDuration = Math.max(0, Number(videoDurationSeconds) || 0);
+        const defaultTime = Math.min(safeDuration, DEFAULT_THUMBNAIL_TIME);
+        const nextTime = Number.isFinite(selectedThumbnailTime) ? selectedThumbnailTime : defaultTime;
+        setSelectedThumbnail(nextTime);
     }
 
     // UX: progression en % (réelle ou estimée) pour l'overlay d'upload
@@ -2473,67 +2148,17 @@
         }, { passive: true });
     }
 
-    function updateActiveThumbnail() {
-        if (!thumbnailStrip) return;
-        const items = thumbnailItems.length ? thumbnailItems : thumbnailStrip.querySelectorAll('.thumbnail-frame');
-        if (!items.length) return;
-        let closestItem = null;
-        let closestDistance = Number.POSITIVE_INFINITY;
-        items.forEach((item) => {
-            const itemTime = Number(item.dataset.time || 0);
-            const distance = Math.abs(itemTime - selectedThumbnailTime);
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closestItem = item;
-            }
+    if (thumbnailTimeSlider) {
+        thumbnailTimeSlider.addEventListener('input', (event) => {
+            const value = Number(event.target?.value || 0);
+            setSelectedThumbnail(value);
         });
-        if (!closestItem) return;
-        items.forEach((item) => item.classList.toggle('active', item === closestItem));
+        thumbnailTimeSlider.addEventListener('change', (event) => {
+            const value = Number(event.target?.value || 0);
+            setSelectedThumbnail(value);
+        });
     }
 
-    function getClosestThumbnailTimeByX(clientX) {
-        if (!thumbnailStrip || !thumbnailFrames.length) return selectedThumbnailTime;
-        const items = thumbnailItems.length ? thumbnailItems : thumbnailStrip.querySelectorAll('.thumbnail-frame');
-        if (!items.length) return selectedThumbnailTime;
-        let closestItem = null;
-        let closestDistance = Number.POSITIVE_INFINITY;
-        items.forEach((item) => {
-            const rect = item.getBoundingClientRect();
-            const center = rect.left + rect.width / 2;
-            const distance = Math.abs(clientX - center);
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closestItem = item;
-            }
-        });
-        return Number(closestItem?.dataset.time || selectedThumbnailTime);
-    }
-
-    function handleThumbnailScrub(clientX) {
-        const time = getClosestThumbnailTimeByX(clientX);
-        setSelectedThumbnail(time);
-    }
-
-    if (thumbnailStrip) {
-        let isDraggingThumbnail = false;
-        thumbnailStrip.addEventListener('pointerdown', (event) => {
-            if (!thumbnailFrames.length) return;
-            isDraggingThumbnail = true;
-            thumbnailStrip.setPointerCapture?.(event.pointerId);
-            handleThumbnailScrub(event.clientX);
-        });
-        thumbnailStrip.addEventListener('pointermove', (event) => {
-            if (!isDraggingThumbnail) return;
-            handleThumbnailScrub(event.clientX);
-        });
-        const endDrag = (event) => {
-            if (!isDraggingThumbnail) return;
-            isDraggingThumbnail = false;
-            thumbnailStrip.releasePointerCapture?.(event.pointerId);
-        };
-        thumbnailStrip.addEventListener('pointerup', endDrag);
-        thumbnailStrip.addEventListener('pointercancel', endDrag);
-    }
 
     function setActiveTab(tabKey = 'music') {
         const showMusic = tabKey === 'music';
@@ -3509,16 +3134,12 @@
     function resetThumbnailDefaults() {
        cancelScheduledThumbnailPreparation();
        selectedThumbnailTime = Number.NaN;
-       thumbnailFrames = [];
-       thumbnailFramesPromise = null;
-       thumbnailItems = [];
-       if (thumbnailStrip) thumbnailStrip.innerHTML = '';
+       if (thumbnailTimeSlider) thumbnailTimeSlider.value = '0';
+       updateThumbnailTimeLabel(0);
        if (selectedThumbnailPreview) {
            selectedThumbnailPreview.style.backgroundImage = '';
            selectedThumbnailPreview.classList.remove('ready');
        }
-       revokeAllThumbnailObjectUrls();
-       if (thumbnailLoading) thumbnailLoading.hidden = true;
     }
 
     function showPreview(blob) {
@@ -3594,8 +3215,11 @@
             }
             shouldCheckDuration = false;
         }
+        updateThumbnailSliderBounds();
         if (videoDurationSeconds && selectedThumbnailTime > videoDurationSeconds) {
             setSelectedThumbnail(videoDurationSeconds);
+        } else {
+            prepareThumbnailPreview();
         }
         setSeekLimits(currentMusicDuration);
         updateMusicOverlay();
