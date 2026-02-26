@@ -2258,8 +2258,8 @@
             const value = Number(event.target?.value || 0);
             setSelectedThumbnail(value);
         });
-        thumbnailTimeSlider.addEventListener('change', (event) => {
-            const value = Number(event.target?.value || 0);
+        thumbnailTimeSlider.addEventListener('input', (e) => {
+            const value = Number(e.target.value);
             setSelectedThumbnail(value);
         });
     }
