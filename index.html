@@ -972,8 +972,12 @@
     let recordedBlob = null;
     let previewObjectURL = null;
     let selectedThumbnailTime = 0.5;
+    let selectedThumbnailObjectURL = '';
     let thumbnailPrepareTimeout = null;
     let thumbnailDebounceTimeout = null;
+    let thumbnailExtractionRequestId = 0;
+    let thumbnailExtractorVideo = null;
+    let thumbnailExtractorReady = false;
     // UX: garder l'UI stable le temps que la caméra soit prête
     let cameraReady = false;
     let pendingRecordUI = false;
@@ -1362,13 +1366,114 @@
         thumbnailTimeSlider.step = '0.1';
     }
 
-    function updateSelectedThumbnailPreviewNow(timeSeconds) {
-        const playbackId = getMuxPlaybackId();
-        if (!playbackId || !videoDurationSeconds) {
-            return;
+    async function ensureThumbnailExtractorReady() {
+        if (!thumbnailExtractorVideo) {
+            thumbnailExtractorVideo = document.createElement('video');
+            thumbnailExtractorVideo.muted = true;
+            thumbnailExtractorVideo.playsInline = true;
+            thumbnailExtractorVideo.preload = 'auto';
         }
-        const url = buildMuxThumbnailUrl(playbackId, timeSeconds);
-        applySelectedThumbnailPreview(url);
+        if (thumbnailExtractorVideo.src !== previewObjectURL) {
+            thumbnailExtractorReady = false;
+            thumbnailExtractorVideo.src = previewObjectURL || '';
+            thumbnailExtractorVideo.load();
+        }
+        if (thumbnailExtractorReady) return;
+        await new Promise((resolve, reject) => {
+            const onLoaded = () => {
+                cleanup();
+                thumbnailExtractorReady = true;
+                resolve();
+            };
+            const onError = () => {
+                cleanup();
+                reject(new Error('thumbnail extractor metadata error'));
+            };
+            const cleanup = () => {
+                thumbnailExtractorVideo.removeEventListener('loadedmetadata', onLoaded);
+                thumbnailExtractorVideo.removeEventListener('error', onError);
+            };
+            thumbnailExtractorVideo.addEventListener('loadedmetadata', onLoaded, { once: true });
+            thumbnailExtractorVideo.addEventListener('error', onError, { once: true });
+        });
+    }
+
+    async function extractLocalThumbnailAt(timeSeconds) {
+        if (!previewObjectURL || !videoDurationSeconds) return null;
+        await ensureThumbnailExtractorReady();
+        const targetTime = Math.max(0, Math.min(videoDurationSeconds, Number(timeSeconds) || 0));
+        console.debug('[thumbnail] extract:start', {
+            timeSeconds: targetTime,
+            videoWidth: thumbnailExtractorVideo.videoWidth || 0,
+            videoHeight: thumbnailExtractorVideo.videoHeight || 0
+        });
+        await new Promise((resolve, reject) => {
+            const onSeeked = () => {
+                cleanup();
+                resolve();
+            };
+            const onError = () => {
+                cleanup();
+                reject(new Error('thumbnail extractor seek error'));
+            };
+            const cleanup = () => {
+                thumbnailExtractorVideo.removeEventListener('seeked', onSeeked);
+                thumbnailExtractorVideo.removeEventListener('error', onError);
+            };
+            thumbnailExtractorVideo.addEventListener('seeked', onSeeked, { once: true });
+            thumbnailExtractorVideo.addEventListener('error', onError, { once: true });
+            thumbnailExtractorVideo.currentTime = targetTime;
+        });
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+
+        const width = thumbnailExtractorVideo.videoWidth || 360;
+        const height = thumbnailExtractorVideo.videoHeight || 640;
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) return null;
+
+        if (recordedFacingMode === 'user') {
+            ctx.save();
+            ctx.translate(width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(thumbnailExtractorVideo, 0, 0, width, height);
+            ctx.restore();
+        } else {
+            ctx.drawImage(thumbnailExtractorVideo, 0, 0, width, height);
+        }
+
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+        if (!blob) return null;
+        const objectUrl = URL.createObjectURL(blob);
+        console.debug('[thumbnail] extract:success', {
+            timeSeconds: targetTime,
+            videoWidth: width,
+            videoHeight: height,
+            blobSize: blob.size
+        });
+        return objectUrl;
+    }
+
+    async function updateSelectedThumbnailPreviewNow(timeSeconds) {
+        const requestId = ++thumbnailExtractionRequestId;
+        try {
+            const extractedObjectUrl = await extractLocalThumbnailAt(timeSeconds);
+            if (!extractedObjectUrl) return;
+            if (requestId !== thumbnailExtractionRequestId) {
+                URL.revokeObjectURL(extractedObjectUrl);
+                return;
+            }
+            if (selectedThumbnailObjectURL) URL.revokeObjectURL(selectedThumbnailObjectURL);
+            selectedThumbnailObjectURL = extractedObjectUrl;
+            applySelectedThumbnailPreview(selectedThumbnailObjectURL);
+        } catch (error) {
+            console.warn('[thumbnail] extract:fail', {
+                timeSeconds,
+                error: error?.message || String(error)
+            });
+        }
     }
 
     function setSelectedThumbnail(timeSeconds) {
@@ -3140,6 +3245,15 @@
            selectedThumbnailPreview.style.backgroundImage = '';
            selectedThumbnailPreview.classList.remove('ready');
        }
+       if (selectedThumbnailObjectURL) {
+           URL.revokeObjectURL(selectedThumbnailObjectURL);
+           selectedThumbnailObjectURL = '';
+       }
+       thumbnailExtractionRequestId += 1;
+       thumbnailExtractorReady = false;
+       if (thumbnailExtractorVideo) {
+           thumbnailExtractorVideo.src = '';
+       }
     }
 
     function showPreview(blob) {
@@ -3216,11 +3330,9 @@
             shouldCheckDuration = false;
         }
         updateThumbnailSliderBounds();
-        if (videoDurationSeconds && selectedThumbnailTime > videoDurationSeconds) {
-            setSelectedThumbnail(videoDurationSeconds);
-        } else {
-            prepareThumbnailPreview();
-        }
+        const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME);
+        setSelectedThumbnail(defaultTime);
+        updateSelectedThumbnailPreviewNow(defaultTime);
         setSeekLimits(currentMusicDuration);
         updateMusicOverlay();
         restartPreviewIfPlaying();
@@ -3310,6 +3422,11 @@
        let uploadSuccessNotified = false;
        let processingStarted = false;
 
+       const selectedThumbnailTimeForUpload = Number.isFinite(selectedThumbnailTime) ? selectedThumbnailTime : DEFAULT_THUMBNAIL_TIME;
+       console.log('[UPLOAD_THUMBNAIL_DEBUG]', {
+          selectedThumbnailTime: selectedThumbnailTimeForUpload
+       });
+
        function resetAfterUploadSuccess() {
           if (uploadPhaseTimeout) {
               clearTimeout(uploadPhaseTimeout);
@@ -3342,13 +3459,21 @@
           setTimeout(() => uploadOverlay.classList.remove('active'), 4000);
        }
 
-       function handleUploadSuccess(assetId) {
+       async function handleUploadSuccess(assetId) {
           if (!assetId || uploadSuccessNotified) return;
           uploadSuccessNotified = true;
           stopProcessingProgressAnimation();
           setUploadProgress(100);
           showUploadFinalizationMessage();
-          notifyHost({ status: 'success', action: 'next_page', asset_id: assetId });
+          console.log('[UPLOAD_NOTIFY_DEBUG]', {
+              selected_thumbnail_time: selectedThumbnailTimeForUpload
+          });
+          notifyHost({
+              status: 'success',
+              action: 'next_page',
+              asset_id: assetId,
+              selected_thumbnail_time: selectedThumbnailTimeForUpload
+          });
           resetAfterUploadSuccess();
        }
 
@@ -3379,7 +3504,7 @@
          formData.append('facingMode', recordedFacingMode);
          formData.append('audioMode', audioMode);
          formData.append('muxUploadUrl', muxUploadUrl);
-         formData.append('thumbnailTime', String(Number.isFinite(selectedThumbnailTime) ? selectedThumbnailTime : DEFAULT_THUMBNAIL_TIME));
+         formData.append('thumbnailTime', String(selectedThumbnailTimeForUpload));
          if (selectedMusic) {
             formData.append('musicUrl', selectedMusic.url || '');
             formData.append('musicStart', String(musicStartTime || 0));
@@ -3396,7 +3521,8 @@
             url: xhr.responseURL || 'unknown',
             audioMode,
             hasMusic: !!selectedMusic,
-            blobSize: recordedBlob?.size
+            blobSize: recordedBlob?.size,
+            thumbnailTime: selectedThumbnailTimeForUpload
          });
        xhr.upload.onprogress = e => {
            if (!e.lengthComputable) return;
@@ -3411,7 +3537,7 @@
                 startProcessingProgress({ target: 99, durationMs: 14000 });
             }
         };
-        xhr.onload = () => {
+        xhr.onload = async () => {
             if(xhr.status < 300) {
                if (uploadPhaseTimeout) {
                   clearTimeout(uploadPhaseTimeout);
@@ -3431,7 +3557,7 @@
                   fail('invalid-response', JSON.stringify(res));
                   return;
                }
-               handleUploadSuccess(assetId);
+               await handleUploadSuccess(assetId);
             } else {
                fail('http-error', 'status ' + xhr.status + ' – ' + xhr.responseText.slice(0,200));
             }
@@ -3475,7 +3601,7 @@
                 clearTimeout(uploadPhaseTimeout);
                 uploadPhaseTimeout = null;
              }
-             handleUploadSuccess(assetId);
+             await handleUploadSuccess(assetId);
              return;
           } catch (error) {
              console.warn('[FAST_PATH_DIRECT_MUX] fallback to server', error);
