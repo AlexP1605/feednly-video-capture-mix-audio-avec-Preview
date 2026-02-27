@@ -3547,6 +3547,7 @@
            isOriginalMuted
          });
          startEstimatedUploadProgress(uploadBlob.size || 0);
+         console.log('BLOB SIZE MB:', uploadBlob.size / 1024 / 1024);
          const uploadRes = await fetch(muxUploadUrl, {
            method: 'PUT',
            headers: { 'Content-Type': 'video/mp4' },
