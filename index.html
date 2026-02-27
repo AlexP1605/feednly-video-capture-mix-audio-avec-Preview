@@ -3399,13 +3399,15 @@
           setUploadProgress(100);
           showUploadFinalizationMessage();
           console.log('[UPLOAD_NOTIFY_DEBUG]', {
-              selected_thumbnail_time: selectedThumbnailTimeForUpload
+              selected_thumbnail_time: selectedThumbnailTimeForUpload,
+              thumbnail_time: selectedThumbnailTimeForUpload
           });
           notifyHost({
               status: 'success',
               action: 'next_page',
               asset_id: assetId,
-              selected_thumbnail_time: selectedThumbnailTimeForUpload
+              selected_thumbnail_time: selectedThumbnailTimeForUpload,
+              thumbnail_time: selectedThumbnailTimeForUpload
           });
           resetAfterUploadSuccess();
        }
