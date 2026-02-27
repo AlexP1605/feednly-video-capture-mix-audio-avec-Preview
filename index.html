@@ -2865,7 +2865,7 @@
     }
 
     function getFinalAudioMode() {
-      const hasMusic = !!selectedMusicId;
+      const hasMusic = !!getSelectedMusic();
       if (!hasMusic && !isOriginalMuted) return 'original';
       if (!hasMusic && isOriginalMuted) return 'mute';
       if (hasMusic && isOriginalMuted) return 'music';
@@ -3381,7 +3381,14 @@
 
        function fail(step, detail = '') {
           const msg = `Échec (${step})${detail ? ' : ' + detail : ''}`;
-          console.error('[UPLOAD ERROR]', step, detail);
+          console.error('[UPLOAD FAIL]', {
+            step,
+            detail,
+            hasRecordedBlob: Boolean(recordedBlob),
+            recordedBlobSize: recordedBlob?.size || 0,
+            selectedMusicId,
+            selectedMusic: getSelectedMusic()?.id || null
+          });
           stopUploadProgressAnimation();
           stopProcessingProgressAnimation();
           if (uploadPhaseTimeout) {
@@ -3415,8 +3422,10 @@
        const muxUploadUrl = getUploadURL();
        uploadOverlay.classList.add('active');
        setUploadStatusText("Préparation...");
-       if(!muxUploadUrl || !recordedBlob) {
-          if (!recordedBlob) {
+       const uploadBlob = recordedBlob;
+       const hasValidBlob = uploadBlob instanceof Blob && uploadBlob.size > 0;
+       if(!muxUploadUrl || !hasValidBlob) {
+          if (!hasValidBlob) {
              fail('no-video');
           } else {
              fail('no-mux-upload-url');
@@ -3426,21 +3435,43 @@
        setUploadProgress(0);
 
        const selectedMusic = getSelectedMusic();
+       const hasSelectedMusic = Boolean(selectedMusic && selectedMusic.url);
+       if (selectedMusicId && !selectedMusic) {
+          console.warn('[UPLOAD MUSIC] selectedMusicId has no matching option', { selectedMusicId });
+       }
        const audioMode = getFinalAudioMode();
        const isFastPath =
          recordedFacingMode === 'environment' &&
          audioMode === 'original' &&
-         !selectedMusicId &&
+         !hasSelectedMusic &&
          isOriginalMuted === false;
 
+       console.log('[UPLOAD] before upload starts', {
+         audioMode,
+         isFastPath,
+         selectedMusicId,
+         hasSelectedMusic,
+         hasValidBlob,
+         blobSize: uploadBlob.size
+       });
+
        const startServerUpload = () => {
+         console.log('[UPLOAD_MERGE] before merge starts', {
+            audioMode,
+            selectedMusicId,
+            hasSelectedMusic,
+            blobSize: uploadBlob.size,
+            musicStartTime,
+            musicVolume,
+            isOriginalMuted
+         });
          const formData = new FormData();
-         formData.append('video', recordedBlob, recordedBlob.name || 'recording.mp4');
+         formData.append('video', uploadBlob, uploadBlob.name || 'recording.mp4');
          formData.append('facingMode', recordedFacingMode);
          formData.append('audioMode', audioMode);
          formData.append('muxUploadUrl', muxUploadUrl);
          formData.append('thumbnailTime', String(selectedThumbnailTimeForUpload));
-         if (selectedMusic) {
+         if (hasSelectedMusic) {
             formData.append('musicUrl', selectedMusic.url || '');
             formData.append('musicStart', String(musicStartTime || 0));
             formData.append('musicVolume', String(musicVolume || 0));
@@ -3455,8 +3486,8 @@
          console.log('[UPLOAD] sending request', {
             url: xhr.responseURL || 'unknown',
             audioMode,
-            hasMusic: !!selectedMusic,
-            blobSize: recordedBlob?.size,
+            hasMusic: hasSelectedMusic,
+            blobSize: uploadBlob.size,
             thumbnailTime: selectedThumbnailTimeForUpload
          });
        xhr.upload.onprogress = e => {
@@ -3492,6 +3523,11 @@
                   fail('invalid-response', JSON.stringify(res));
                   return;
                }
+               console.log('[UPLOAD_MERGE] after merge finishes', {
+                  audioMode,
+                  hasSelectedMusic,
+                  assetId
+               });
                await handleUploadSuccess(assetId);
             } else {
                fail('http-error', 'status ' + xhr.status + ' – ' + xhr.responseText.slice(0,200));
@@ -3507,14 +3543,14 @@
          console.log('[FAST_PATH_DIRECT_MUX]', {
            facingMode: recordedFacingMode,
            audioMode,
-           hasMusic: !!selectedMusicId,
+           hasMusic: hasSelectedMusic,
            isOriginalMuted
          });
-         startEstimatedUploadProgress(recordedBlob?.size || 0);
+         startEstimatedUploadProgress(uploadBlob.size || 0);
          const uploadRes = await fetch(muxUploadUrl, {
            method: 'PUT',
            headers: { 'Content-Type': 'video/mp4' },
-           body: recordedBlob,
+           body: uploadBlob,
            duplex: 'half'
          });
          stopUploadProgressAnimation();
