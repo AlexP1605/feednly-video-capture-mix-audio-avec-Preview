@@ -3423,6 +3423,14 @@
        uploadOverlay.classList.add('active');
        setUploadStatusText("Préparation...");
        const uploadBlob = recordedBlob;
+
+       try {
+          const sizeMB = uploadBlob ? (uploadBlob.size / 1024 / 1024).toFixed(2) : 'NO_BLOB';
+          alert('UPLOAD SIZE MB: ' + sizeMB);
+          console.log('[BLOB SIZE MB]', sizeMB);
+       } catch (e) {
+          alert('BLOB SIZE ERROR');
+       }
        const hasValidBlob = uploadBlob instanceof Blob && uploadBlob.size > 0;
        if(!muxUploadUrl || !hasValidBlob) {
           if (!hasValidBlob) {
