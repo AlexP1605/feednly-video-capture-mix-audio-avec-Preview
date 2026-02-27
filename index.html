@@ -2996,8 +2996,9 @@
         audio: true,
         video: { 
             facingMode: facingMode,
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
+            width: { ideal: 720 },
+            height: { ideal: 1280 },
+            frameRate: { ideal: 30, max: 30 }
         }
       };
 
@@ -3065,13 +3066,18 @@
       recordedChunks = [];
       isStoppingRecording = false;
       
+      const targetVideoBitrate = 3_000_000;
+      const targetAudioBitrate = 128_000;
+
       let options = {
-         mimeType: 'video/mp4',
-         videoBitsPerSecond: facingMode === 'user' ? 6000000 : 10000000
+         videoBitsPerSecond: targetVideoBitrate,
+         audioBitsPerSecond: targetAudioBitrate
       };
-      
-      if (!MediaRecorder.isTypeSupported('video/mp4')) {
-          options = { videoBitsPerSecond: facingMode === 'user' ? 6000000 : 10000000 };
+
+      if (MediaRecorder.isTypeSupported('video/mp4')) {
+         options.mimeType = 'video/mp4';
+      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+         options.mimeType = 'video/webm;codecs=vp8,opus';
       }
 
       const streamForRecording = mediaStream;
@@ -3086,6 +3092,8 @@
       };
       mediaRecorder.onstop = () => {
          recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+         const sizeMB = (recordedBlob.size / (1024 * 1024)).toFixed(2);
+         console.log('[recording] final size MB:', sizeMB);
          console.info('[recording] stop complete', {
             chunksCollected: recordedChunks.length,
             recordedBlobSize: recordedBlob.size,
