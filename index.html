@@ -296,7 +296,7 @@
     }
     .thumbnail-preview {
       width: min(200px, 60vw);
-      aspect-ratio: 2 / 3;
+      aspect-ratio: var(--thumbnail-aspect-ratio, 2 / 3);
       border-radius: 16px;
       border: none;
       outline: none;
@@ -1373,6 +1373,9 @@
         if (!thumbnailCanvas) return;
         const sourceWidth = Math.max(1, Number(previewVideo.videoWidth) || Number(previewVideo.clientWidth) || 360);
         const sourceHeight = Math.max(1, Number(previewVideo.videoHeight) || Number(previewVideo.clientHeight) || 640);
+        if (selectedThumbnailPreview) {
+            selectedThumbnailPreview.style.setProperty('--thumbnail-aspect-ratio', `${sourceWidth} / ${sourceHeight}`);
+        }
         if (thumbnailCanvas.width !== sourceWidth || thumbnailCanvas.height !== sourceHeight) {
             thumbnailCanvas.width = sourceWidth;
             thumbnailCanvas.height = sourceHeight;
