@@ -315,7 +315,7 @@
     }
     #thumbnailCanvas {
       width: 100%;
-      height: 100%;
+      height: auto;
       display: block;
     }
     .thumbnail-label {
@@ -1371,8 +1371,8 @@
 
     function resizeThumbnailCanvasFromVideo() {
         if (!thumbnailCanvas) return;
-        const sourceWidth = Math.max(1, Number(previewVideo.videoWidth) || Number(previewVideo.clientWidth) || 360);
-        const sourceHeight = Math.max(1, Number(previewVideo.videoHeight) || Number(previewVideo.clientHeight) || 640);
+        const sourceWidth = Math.max(1, Number(previewVideo.videoWidth) || 360);
+        const sourceHeight = Math.max(1, Number(previewVideo.videoHeight) || 640);
         if (selectedThumbnailPreview) {
             selectedThumbnailPreview.style.setProperty('--thumbnail-aspect-ratio', `${sourceWidth} / ${sourceHeight}`);
         }
@@ -1381,7 +1381,6 @@
             thumbnailCanvas.height = sourceHeight;
         }
         thumbnailCanvas.style.width = '100%';
-        thumbnailCanvas.style.height = '100%';
         if (selectedThumbnailPreview) {
             selectedThumbnailPreview.classList.add('ready');
         }
@@ -1389,15 +1388,10 @@
 
     function drawThumbnailFrame() {
         if (!thumbnailCanvas || !thumbnailCtx) return;
-        const drawWidth = Math.max(1, thumbnailCanvas.width || Number(previewVideo.videoWidth) || 360);
-        const drawHeight = Math.max(1, thumbnailCanvas.height || Number(previewVideo.videoHeight) || 640);
-        const sourceWidth = Math.max(1, Number(previewVideo.videoWidth) || drawWidth);
-        const sourceHeight = Math.max(1, Number(previewVideo.videoHeight) || drawHeight);
-        const scale = Math.max(drawWidth / sourceWidth, drawHeight / sourceHeight);
-        const cropWidth = Math.max(1, drawWidth / scale);
-        const cropHeight = Math.max(1, drawHeight / scale);
-        const sourceX = Math.max(0, (sourceWidth - cropWidth) / 2);
-        const sourceY = Math.max(0, (sourceHeight - cropHeight) / 2);
+        const drawWidth = thumbnailCanvas.width || previewVideo.videoWidth || 360;
+        const drawHeight = thumbnailCanvas.height || previewVideo.videoHeight || 640;
+        const sourceWidth = previewVideo.videoWidth || drawWidth;
+        const sourceHeight = previewVideo.videoHeight || drawHeight;
 
         thumbnailCtx.save();
         thumbnailCtx.clearRect(0, 0, drawWidth, drawHeight);
@@ -1407,10 +1401,10 @@
         }
         thumbnailCtx.drawImage(
             previewVideo,
-            sourceX,
-            sourceY,
-            cropWidth,
-            cropHeight,
+            0,
+            0,
+            sourceWidth,
+            sourceHeight,
             0,
             0,
             drawWidth,
