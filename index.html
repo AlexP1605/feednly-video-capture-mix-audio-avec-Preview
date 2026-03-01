@@ -313,9 +313,12 @@
       opacity: 1;
       transform: scale(1);
     }
+    .selected-thumbnail {
+      aspect-ratio: var(--thumbnail-aspect-ratio, 2 / 3);
+    }
     #thumbnailCanvas {
       width: 100%;
-      height: 100%;
+      height: auto;
       display: block;
     }
     .thumbnail-label {
@@ -780,7 +783,7 @@
     <div id="preview-overlay">
       <div class="preview-video-container">
         <div class="thumbnail-preview-wrap">
-          <div id="selected-thumbnail-preview" class="thumbnail-preview" role="img" aria-label="Miniature sélectionnée">
+          <div id="selected-thumbnail-preview" class="thumbnail-preview selected-thumbnail" role="img" aria-label="Miniature sélectionnée">
             <canvas id="thumbnailCanvas"></canvas>
           </div>
         </div>
@@ -1374,25 +1377,19 @@
 
         const videoWidth = previewVideo.videoWidth || 360;
         const videoHeight = previewVideo.videoHeight || 640;
-        const isRotated =
-            videoWidth > videoHeight &&
-            previewVideo.clientHeight > previewVideo.clientWidth;
-        const outputWidth = isRotated ? videoHeight : videoWidth;
-        const outputHeight = isRotated ? videoWidth : videoHeight;
 
-        // Canvas = vraie résolution brute
-        if (thumbnailCanvas.width !== outputWidth || thumbnailCanvas.height !== outputHeight) {
-            thumbnailCanvas.width = outputWidth;
-            thumbnailCanvas.height = outputHeight;
+        if (thumbnailCanvas.width !== videoWidth || thumbnailCanvas.height !== videoHeight) {
+            thumbnailCanvas.width = videoWidth;
+            thumbnailCanvas.height = videoHeight;
         }
 
         thumbnailCanvas.style.width = '100%';
+        thumbnailCanvas.style.height = 'auto';
 
-        // Container = ratio réellement affiché
         if (selectedThumbnailPreview) {
             selectedThumbnailPreview.style.setProperty(
                 '--thumbnail-aspect-ratio',
-                `${outputWidth} / ${outputHeight}`
+                `${videoWidth} / ${videoHeight}`
             );
             selectedThumbnailPreview.classList.add('ready');
         }
@@ -1401,46 +1398,46 @@
     function drawThumbnailFrame() {
         if (!thumbnailCanvas || !thumbnailCtx) return;
 
-        const videoWidth = previewVideo.videoWidth || 360;
-        const videoHeight = previewVideo.videoHeight || 640;
+        const vw = previewVideo.videoWidth || 360;
+        const vh = previewVideo.videoHeight || 640;
+        const cw = thumbnailCanvas.width;
+        const ch = thumbnailCanvas.height;
 
-        const drawWidth = thumbnailCanvas.width;
-        const drawHeight = thumbnailCanvas.height;
+        const videoRatio = vw / vh;
+        const canvasRatio = cw / ch;
 
-        const isRotated =
-            videoWidth > videoHeight &&
-            previewVideo.clientHeight > previewVideo.clientWidth;
+        let sx = 0;
+        let sy = 0;
+        let sWidth = vw;
+        let sHeight = vh;
+
+        if (videoRatio > canvasRatio) {
+            sWidth = vh * canvasRatio;
+            sx = (vw - sWidth) / 2;
+        } else {
+            sHeight = vw / canvasRatio;
+            sy = (vh - sHeight) / 2;
+        }
 
         thumbnailCtx.save();
-        thumbnailCtx.clearRect(0, 0, drawWidth, drawHeight);
+        thumbnailCtx.clearRect(0, 0, cw, ch);
 
         if (recordedFacingMode === 'user') {
-            thumbnailCtx.translate(drawWidth, 0);
+            thumbnailCtx.translate(cw, 0);
             thumbnailCtx.scale(-1, 1);
         }
 
-        if (isRotated) {
-            // Rotation 90° clockwise
-            thumbnailCtx.translate(drawWidth / 2, drawHeight / 2);
-            thumbnailCtx.rotate(Math.PI / 2);
-            thumbnailCtx.drawImage(
-                previewVideo,
-                -videoWidth / 2,
-                -videoHeight / 2
-            );
-        } else {
-            thumbnailCtx.drawImage(
-                previewVideo,
-                0,
-                0,
-                videoWidth,
-                videoHeight,
-                0,
-                0,
-                drawWidth,
-                drawHeight
-            );
-        }
+        thumbnailCtx.drawImage(
+            previewVideo,
+            sx,
+            sy,
+            sWidth,
+            sHeight,
+            0,
+            0,
+            cw,
+            ch
+        );
 
         thumbnailCtx.restore();
     }
@@ -3012,9 +3009,8 @@
            const caps = track.getCapabilities ? track.getCapabilities() : {};
            torchSupported = !!caps.torch;
            updateFlashUI();
-           if (!cameraPreview.dataset.trackSettingsLogged && track.getSettings) {
-             console.log('[camera] settings', track.getSettings());
-             cameraPreview.dataset.trackSettingsLogged = 'true';
+           if (track?.getSettings) {
+             console.log('[TRACK_SETTINGS]', track.getSettings());
            }
         }, 300);
         return;
@@ -3024,8 +3020,8 @@
         audio: true,
         video: { 
             facingMode: facingMode,
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 720 },
+            height: { ideal: 1280 },
             frameRate: { ideal: 30, max: 30 }
         }
       };
@@ -3050,9 +3046,8 @@
            const caps = track.getCapabilities ? track.getCapabilities() : {};
            torchSupported = !!caps.torch;
            updateFlashUI();
-           if (!cameraPreview.dataset.trackSettingsLogged && track.getSettings) {
-             console.log('[camera] settings', track.getSettings());
-             cameraPreview.dataset.trackSettingsLogged = 'true';
+           if (track?.getSettings) {
+             console.log('[TRACK_SETTINGS]', track.getSettings());
            }
         }, 300);
 
@@ -3281,6 +3276,18 @@
     }
 
     previewVideo.onloadedmetadata = () => {
+        const vw = previewVideo.videoWidth;
+        const vh = previewVideo.videoHeight;
+        const cw = previewVideo.clientWidth;
+        const ch = previewVideo.clientHeight;
+        console.info('[VIDEO_METADATA]', {
+            vw,
+            vh,
+            cw,
+            ch,
+            videoRatio: vh ? vw / vh : 0,
+            clientRatio: ch ? cw / ch : 0
+        });
         videoDurationSeconds = Math.max(0, Number(previewVideo.duration) || 0);
         console.info('[recording] preview metadata', {
             previewDuration: previewVideo.duration,
