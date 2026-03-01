@@ -1373,28 +1373,15 @@
     function resizeThumbnailCanvasFromVideo() {
         if (!thumbnailCanvas) return;
 
-        const videoWidth = previewVideo.videoWidth || 360;
-        const videoHeight = previewVideo.videoHeight || 640;
-        const isRotated =
-            videoWidth > videoHeight &&
-            previewVideo.clientHeight > previewVideo.clientWidth;
-        const outputWidth = isRotated ? videoHeight : videoWidth;
-        const outputHeight = isRotated ? videoWidth : videoHeight;
-
-        // Canvas = vraie résolution brute
-        if (thumbnailCanvas.width !== outputWidth || thumbnailCanvas.height !== outputHeight) {
-            thumbnailCanvas.width = outputWidth;
-            thumbnailCanvas.height = outputHeight;
-        }
+        // Miniature toujours portrait fixe
+        thumbnailCanvas.width = 720;
+        thumbnailCanvas.height = 1280;
 
         thumbnailCanvas.style.width = '100%';
+        thumbnailCanvas.style.height = 'auto';
 
-        // Container = ratio réellement affiché
         if (selectedThumbnailPreview) {
-            selectedThumbnailPreview.style.setProperty(
-                '--thumbnail-aspect-ratio',
-                `${outputWidth} / ${outputHeight}`
-            );
+            selectedThumbnailPreview.style.setProperty('--thumbnail-aspect-ratio', `9 / 16`);
             selectedThumbnailPreview.classList.add('ready');
         }
     }
@@ -1402,46 +1389,47 @@
     function drawThumbnailFrame() {
         if (!thumbnailCanvas || !thumbnailCtx) return;
 
-        const videoWidth = previewVideo.videoWidth || 360;
-        const videoHeight = previewVideo.videoHeight || 640;
+        const vw = previewVideo.videoWidth;
+        const vh = previewVideo.videoHeight;
 
-        const drawWidth = thumbnailCanvas.width;
-        const drawHeight = thumbnailCanvas.height;
+        const cw = thumbnailCanvas.width;
+        const ch = thumbnailCanvas.height;
 
-        const isRotated =
-            videoWidth > videoHeight &&
-            previewVideo.clientHeight > previewVideo.clientWidth;
+        const videoRatio = vw / vh;
+        const canvasRatio = cw / ch;
+
+        let sx = 0;
+        let sy = 0;
+        let sWidth = vw;
+        let sHeight = vh;
+
+        if (videoRatio > canvasRatio) {
+            sWidth = vh * canvasRatio;
+            sx = (vw - sWidth) / 2;
+        } else {
+            sHeight = vw / canvasRatio;
+            sy = (vh - sHeight) / 2;
+        }
 
         thumbnailCtx.save();
-        thumbnailCtx.clearRect(0, 0, drawWidth, drawHeight);
+        thumbnailCtx.clearRect(0, 0, cw, ch);
 
         if (recordedFacingMode === 'user') {
-            thumbnailCtx.translate(drawWidth, 0);
+            thumbnailCtx.translate(cw, 0);
             thumbnailCtx.scale(-1, 1);
         }
 
-        if (isRotated) {
-            // Rotation 90° clockwise
-            thumbnailCtx.translate(drawWidth / 2, drawHeight / 2);
-            thumbnailCtx.rotate(Math.PI / 2);
-            thumbnailCtx.drawImage(
-                previewVideo,
-                -videoWidth / 2,
-                -videoHeight / 2
-            );
-        } else {
-            thumbnailCtx.drawImage(
-                previewVideo,
-                0,
-                0,
-                videoWidth,
-                videoHeight,
-                0,
-                0,
-                drawWidth,
-                drawHeight
-            );
-        }
+        thumbnailCtx.drawImage(
+            previewVideo,
+            sx,
+            sy,
+            sWidth,
+            sHeight,
+            0,
+            0,
+            cw,
+            ch
+        );
 
         thumbnailCtx.restore();
     }
