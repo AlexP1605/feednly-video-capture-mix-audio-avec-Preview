@@ -1374,14 +1374,16 @@
 
         const videoWidth = previewVideo.videoWidth || 360;
         const videoHeight = previewVideo.videoHeight || 640;
-
-        const displayWidth = previewVideo.clientWidth || videoWidth;
-        const displayHeight = previewVideo.clientHeight || videoHeight;
+        const isRotated =
+            videoWidth > videoHeight &&
+            previewVideo.clientHeight > previewVideo.clientWidth;
+        const outputWidth = isRotated ? videoHeight : videoWidth;
+        const outputHeight = isRotated ? videoWidth : videoHeight;
 
         // Canvas = vraie résolution brute
-        if (thumbnailCanvas.width !== videoWidth || thumbnailCanvas.height !== videoHeight) {
-            thumbnailCanvas.width = videoWidth;
-            thumbnailCanvas.height = videoHeight;
+        if (thumbnailCanvas.width !== outputWidth || thumbnailCanvas.height !== outputHeight) {
+            thumbnailCanvas.width = outputWidth;
+            thumbnailCanvas.height = outputHeight;
         }
 
         thumbnailCanvas.style.width = '100%';
@@ -1390,7 +1392,7 @@
         if (selectedThumbnailPreview) {
             selectedThumbnailPreview.style.setProperty(
                 '--thumbnail-aspect-ratio',
-                `${displayWidth} / ${displayHeight}`
+                `${outputWidth} / ${outputHeight}`
             );
             selectedThumbnailPreview.classList.add('ready');
         }
