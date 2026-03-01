@@ -1371,53 +1371,76 @@
 
     function resizeThumbnailCanvasFromVideo() {
         if (!thumbnailCanvas) return;
-        const sourceWidth = Math.max(1, Number(previewVideo.videoWidth) || Number(previewVideo.clientWidth) || 360);
-        const sourceHeight = Math.max(1, Number(previewVideo.videoHeight) || Number(previewVideo.clientHeight) || 640);
-        if (selectedThumbnailPreview) {
-            selectedThumbnailPreview.style.setProperty('--thumbnail-aspect-ratio', `${sourceWidth} / ${sourceHeight}`);
+
+        const videoWidth = previewVideo.videoWidth || 360;
+        const videoHeight = previewVideo.videoHeight || 640;
+
+        const displayWidth = previewVideo.clientWidth || videoWidth;
+        const displayHeight = previewVideo.clientHeight || videoHeight;
+
+        // Canvas = vraie résolution brute
+        if (thumbnailCanvas.width !== videoWidth || thumbnailCanvas.height !== videoHeight) {
+            thumbnailCanvas.width = videoWidth;
+            thumbnailCanvas.height = videoHeight;
         }
-        if (thumbnailCanvas.width !== sourceWidth || thumbnailCanvas.height !== sourceHeight) {
-            thumbnailCanvas.width = sourceWidth;
-            thumbnailCanvas.height = sourceHeight;
-        }
+
         thumbnailCanvas.style.width = '100%';
-        thumbnailCanvas.style.height = '100%';
+
+        // Container = ratio réellement affiché
         if (selectedThumbnailPreview) {
+            selectedThumbnailPreview.style.setProperty(
+                '--thumbnail-aspect-ratio',
+                `${displayWidth} / ${displayHeight}`
+            );
             selectedThumbnailPreview.classList.add('ready');
         }
     }
 
     function drawThumbnailFrame() {
         if (!thumbnailCanvas || !thumbnailCtx) return;
-        const drawWidth = Math.max(1, thumbnailCanvas.width || Number(previewVideo.videoWidth) || 360);
-        const drawHeight = Math.max(1, thumbnailCanvas.height || Number(previewVideo.videoHeight) || 640);
-        const sourceWidth = Math.max(1, Number(previewVideo.videoWidth) || drawWidth);
-        const sourceHeight = Math.max(1, Number(previewVideo.videoHeight) || drawHeight);
-        const scale = Math.max(drawWidth / sourceWidth, drawHeight / sourceHeight);
-        const cropWidth = Math.max(1, drawWidth / scale);
-        const cropHeight = Math.max(1, drawHeight / scale);
-        const sourceX = Math.max(0, (sourceWidth - cropWidth) / 2);
-        const sourceY = Math.max(0, (sourceHeight - cropHeight) / 2);
+
+        const videoWidth = previewVideo.videoWidth || 360;
+        const videoHeight = previewVideo.videoHeight || 640;
+
+        const drawWidth = thumbnailCanvas.width;
+        const drawHeight = thumbnailCanvas.height;
+
+        const isRotated =
+            videoWidth > videoHeight &&
+            previewVideo.clientHeight > previewVideo.clientWidth;
 
         thumbnailCtx.save();
         thumbnailCtx.clearRect(0, 0, drawWidth, drawHeight);
+
         if (recordedFacingMode === 'user') {
             thumbnailCtx.translate(drawWidth, 0);
             thumbnailCtx.scale(-1, 1);
         }
-        thumbnailCtx.drawImage(
-            previewVideo,
-            sourceX,
-            sourceY,
-            cropWidth,
-            cropHeight,
-            0,
-            0,
-            drawWidth,
-            drawHeight
-        );
+
+        if (isRotated) {
+            // Rotation 90° clockwise
+            thumbnailCtx.translate(drawWidth / 2, drawHeight / 2);
+            thumbnailCtx.rotate(Math.PI / 2);
+            thumbnailCtx.drawImage(
+                previewVideo,
+                -videoWidth / 2,
+                -videoHeight / 2
+            );
+        } else {
+            thumbnailCtx.drawImage(
+                previewVideo,
+                0,
+                0,
+                videoWidth,
+                videoHeight,
+                0,
+                0,
+                drawWidth,
+                drawHeight
+            );
+        }
+
         thumbnailCtx.restore();
-        selectedThumbnailPreview?.classList.add('ready');
     }
 
     function requestDrawThumbnail() {
