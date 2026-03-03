@@ -3602,7 +3602,9 @@
 
        const startServerUpload = () => {
          const formData = new FormData();
-         formData.append('video', uploadBlob, uploadBlob.name || 'recording.mp4');
+         console.log('UPLOAD DEBUG TYPE:', uploadBlob.type);
+         console.log('UPLOAD DEBUG NAME:', uploadBlob.name);
+         formData.append('video', uploadBlob, 'recording.mp4');
          formData.append('facingMode', recordedFacingMode);
          formData.append('audioMode', audioMode);
          formData.append('muxUploadUrl', muxUploadUrl);
