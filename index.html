@@ -2219,7 +2219,6 @@
     }
 
     previewVideo.addEventListener('seeked', requestDrawThumbnail);
-    previewVideo.addEventListener('timeupdate', requestDrawThumbnail);
     previewVideo.addEventListener('loadeddata', resizeThumbnailCanvasFromVideo);
     previewVideo.addEventListener('loadeddata', requestDrawThumbnail);
 
@@ -3298,6 +3297,7 @@
         const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME);
         selectedThumbnailTime = defaultTime;
         previewVideo.currentTime = defaultTime;
+        previewVideo.pause();
         requestDrawThumbnail();
         if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(defaultTime);
         updateThumbnailTimeLabel(defaultTime);
