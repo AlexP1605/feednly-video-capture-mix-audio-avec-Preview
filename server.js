@@ -98,8 +98,6 @@ function buildAssetId(muxUploadUrl) {
 }
 
 app.post('/process-upload', upload.single('video'), async (req, res) => {
-  const requestStart = Date.now();
-  console.log('[REQUEST_START]', requestStart);
   const inputFile = req.file?.path;
   const {
     facingMode = 'environment',
@@ -123,9 +121,6 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
   if (needsMusic && !musicUrl) {
     return res.status(400).json({ error: 'missing musicUrl' });
   }
-  const uploadReceived = Date.now();
-  console.log('[UPLOAD_RECEIVED]', uploadReceived);
-
   let musicPath = '';
   let outputPath = '';
 
@@ -146,16 +141,12 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
       await downloadToFile(musicUrl, musicPath);
     }
 
-    if (shouldUploadOnly) {
-      console.log('[SERVER_UPLOAD_ONLY]', { facingMode, audioMode, hasMusicUrl });
-    } else if (shouldMirrorOnly) {
-      console.log('[SERVER_MIRROR_ONLY]', { facingMode, audioMode, hasMusicUrl });
+    if (!shouldUploadOnly && shouldMirrorOnly) {
       args.push('-i', inputFile);
       outputPath = path.join(uploadDir, `output-${Date.now()}.mp4`);
       args.push('-vf', 'hflip', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'copy');
       args.push('-movflags', '+faststart', outputPath);
-    } else {
-      console.log('[SERVER_AUDIO_PROCESS]', { facingMode, audioMode, hasMusicUrl });
+    } else if (!shouldUploadOnly) {
       if (!['original', 'mute', 'music', 'music+original'].includes(audioMode)) {
         return res.status(400).json({ error: 'invalid audioMode' });
       }
@@ -216,11 +207,7 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
     }
 
     if (!shouldUploadOnly) {
-      const ffmpegStart = Date.now();
-      console.log('[FFMPEG_START]', ffmpegStart);
       await runFfmpeg(args);
-      const ffmpegEnd = Date.now();
-      console.log('[FFMPEG_END]', ffmpegEnd);
     }
 
     const fileToUpload = shouldUploadOnly ? inputFile : outputPath;
@@ -228,8 +215,6 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
       throw new Error('Upload failed: output file was not created');
     }
 
-    const muxStart = Date.now();
-    console.log('[MUX_PUT_START]', muxStart);
     const uploadStream = fs.createReadStream(fileToUpload);
     const uploadRes = await new Promise((resolve, reject) => {
       uploadStream.on('error', (error) => {
@@ -245,9 +230,6 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
         .then(resolve)
         .catch(reject);
     });
-    const muxEnd = Date.now();
-    console.log('[MUX_PUT_END]', muxEnd);
-
     if (!uploadRes.ok) {
       throw new Error(`Mux upload failed: ${uploadRes.status}`);
     }
