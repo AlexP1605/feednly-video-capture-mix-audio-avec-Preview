@@ -3477,7 +3477,7 @@
           selectedThumbnailTime: selectedThumbnailTimeForUpload
        });
 
-       function resetAfterUploadSuccess() {
+       function resetAfterUploadSuccess({ showMixingMessage = true } = {}) {
           if (uploadPhaseTimeout) {
               clearTimeout(uploadPhaseTimeout);
               uploadPhaseTimeout = null;
@@ -3485,7 +3485,9 @@
           stopUploadProgressAnimation();
           stopProcessingProgressAnimation();
           setUploadProgress(100);
-          showUploadFinalizationMessage();
+          if (showMixingMessage) {
+              showUploadFinalizationMessage();
+          }
           uploadCompleted = true;
           hidePreview();
           recordedChunks = [];
@@ -3496,15 +3498,15 @@
           }
        }
 
-       function fail(step, detail = '') {
+       function fail(step, detail = '', { includeMusicDebug = true } = {}) {
           const msg = `Échec (${step})${detail ? ' : ' + detail : ''}`;
           console.error('[UPLOAD FAIL]', {
             step,
             detail,
             hasRecordedBlob: Boolean(recordedBlob),
             recordedBlobSize: recordedBlob?.size || 0,
-            selectedMusicId,
-            selectedMusic: getSelectedMusic()?.id || null
+            selectedMusicId: includeMusicDebug ? selectedMusicId : undefined,
+            selectedMusic: includeMusicDebug ? (getSelectedMusic()?.id || null) : undefined
           });
           stopUploadProgressAnimation();
           stopProcessingProgressAnimation();
@@ -3516,12 +3518,14 @@
           setTimeout(() => uploadOverlay.classList.remove('active'), 4000);
        }
 
-       async function handleUploadSuccess(assetId) {
+       async function handleUploadSuccess(assetId, { showMixingMessage = true } = {}) {
           if (!assetId || uploadSuccessNotified) return;
           uploadSuccessNotified = true;
           stopProcessingProgressAnimation();
           setUploadProgress(100);
-          showUploadFinalizationMessage();
+          if (showMixingMessage) {
+              showUploadFinalizationMessage();
+          }
           console.log('[UPLOAD_NOTIFY_DEBUG]', {
               selected_thumbnail_time: selectedThumbnailTimeForUpload,
               thumbnail_time: selectedThumbnailTimeForUpload
@@ -3533,7 +3537,7 @@
               selected_thumbnail_time: selectedThumbnailTimeForUpload,
               thumbnail_time: selectedThumbnailTimeForUpload
           });
-          resetAfterUploadSuccess();
+          resetAfterUploadSuccess({ showMixingMessage });
        }
 
        const muxUploadUrl = getUploadURL();
@@ -3548,59 +3552,51 @@
        } catch (e) {
           alert('BLOB SIZE ERROR');
        }
-       const hasValidBlob = uploadBlob instanceof Blob && uploadBlob.size > 0;
-       if(!muxUploadUrl || !hasValidBlob) {
-          if (!hasValidBlob) {
-             fail('no-video');
-          } else {
-             fail('no-mux-upload-url');
-          }
+       if (!(uploadBlob instanceof Blob) || uploadBlob.size === 0) {
+          fail('no-video');
+          return;
+       }
+       if (!muxUploadUrl) {
+          fail('no-mux-upload-url');
           return;
        }
        setUploadProgress(0);
 
-       const selectedMusic = getSelectedMusic();
-       const hasSelectedMusic = Boolean(selectedMusic && selectedMusic.url);
-
-       const uploadDirectToMux = async ({ mode = 'standard' } = {}) => {
-         console.log('[DIRECT_MUX_UPLOAD]', {
-           mode,
-           source: videoSourceType,
-           blobSize: uploadBlob.size
-         });
-         startEstimatedUploadProgress(uploadBlob.size || 0);
-         const uploadRes = await fetch(muxUploadUrl, {
-           method: 'PUT',
-           headers: { 'Content-Type': 'video/mp4' },
-           body: uploadBlob,
-           duplex: 'half'
-         });
-         stopUploadProgressAnimation();
-         if (!uploadRes.ok) {
-           throw new Error(`Mux upload failed: ${uploadRes.status}`);
-         }
-         startProcessingProgress({ target: 99, durationMs: 4000 });
-         const assetId = buildAssetId(muxUploadUrl);
-         if (!assetId) {
-           throw new Error('invalid mux upload url');
-         }
-         return assetId;
-       };
-
-       if (isGalleryVideoSource()) {
+       if (videoSourceType === 'gallery') {
+          console.log('[GALLERY_PIPELINE] direct mux upload');
+          uploadOverlay.classList.add('active');
+          setUploadStatusText("Upload en cours...");
           try {
-             const assetId = await uploadDirectToMux({ mode: 'gallery' });
-             if (uploadPhaseTimeout) {
-                clearTimeout(uploadPhaseTimeout);
-                uploadPhaseTimeout = null;
+             startEstimatedUploadProgress(uploadBlob.size || 0);
+
+             const uploadRes = await fetch(muxUploadUrl, {
+               method: 'PUT',
+               headers: { 'Content-Type': uploadBlob.type || 'video/mp4' },
+               body: uploadBlob
+             });
+
+             stopUploadProgressAnimation();
+
+             if (!uploadRes.ok) {
+                throw new Error(`Mux upload failed: ${uploadRes.status}`);
              }
-             await handleUploadSuccess(assetId);
+
+             const assetId = buildAssetId(muxUploadUrl);
+             if (!assetId) {
+                throw new Error('invalid mux upload url');
+             }
+
+             await handleUploadSuccess(assetId, { showMixingMessage: false });
              return;
           } catch (error) {
-             fail('direct-mux-upload', error?.message || 'unknown');
+             fail('direct-mux-upload', error?.message || 'unknown', { includeMusicDebug: false });
              return;
           }
        }
+
+       const hasValidBlob = uploadBlob instanceof Blob && uploadBlob.size > 0;
+       const selectedMusic = getSelectedMusic();
+       const hasSelectedMusic = Boolean(selectedMusic && selectedMusic.url);
 
        if (selectedMusicId && !selectedMusic) {
           console.warn('[UPLOAD MUSIC] selectedMusicId has no matching option', { selectedMusicId });
