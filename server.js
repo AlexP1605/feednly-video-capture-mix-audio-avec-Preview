@@ -33,7 +33,18 @@ const storage = multer.diskStorage({
     cb(null, `${Date.now()}-${safeName}`);
   }
 });
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 100 * 1024 * 1024 // 100 MB
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype && file.mimetype.startsWith('video/')) {
+      return cb(null, true);
+    }
+    cb(new Error('invalid file type: expected video/*'));
+  }
+});
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok' });
@@ -49,6 +60,9 @@ function runCommand(command, args) {
     });
     proc.stderr.on('data', (data) => {
       stderr += data.toString();
+    });
+    proc.on('error', (error) => {
+      reject(new Error(`${command} failed to start: ${error.message}`));
     });
     proc.on('close', (code) => {
       if (code === 0) {
