@@ -15,6 +15,8 @@
       --flash-active: #ffcc00;
       --preview-audio-control-size: 52px;
       --preview-top-control-offset: calc(env(safe-area-inset-top) - 4px);
+      --app-viewport-height: 100svh;
+      --app-viewport-width: 100vw;
     }
 
     /* Désactivation globale de la sélection native pour un comportement "app-like". */
@@ -38,7 +40,7 @@
     html { width: 100%; height: 100%; background: #000; overflow: hidden; overflow-x: hidden; }
 
     body {
-      margin: 0; width: 100%; height: 100svh; min-height: 100svh; max-height: 100svh; background: #000;
+      margin: 0; width: 100%; height: var(--app-viewport-height, 100svh); min-height: var(--app-viewport-height, 100svh); max-height: var(--app-viewport-height, 100svh); background: #000;
       font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
       position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; overflow-x: hidden;
     }
@@ -173,8 +175,8 @@
       opacity: 0;
       flex-direction: column;
       transition: opacity 0.2s ease;
-      width: var(--preview-viewport-width, 100%);
-      height: var(--preview-viewport-height, 100dvh);
+      width: var(--preview-viewport-width, var(--app-viewport-width, 100vw));
+      height: var(--preview-viewport-height, var(--app-viewport-height, 100svh));
       overflow: hidden;
     }
     #preview-overlay.active { display: flex; opacity: 1; }
@@ -3241,9 +3243,25 @@
     }
 
     // UX: figer le viewport pour éviter les recalculs de hauteur visibles
+    function getViewportSize() {
+       const vv = window.visualViewport;
+       const height = Math.round((vv && vv.height) || window.innerHeight || document.documentElement.clientHeight || 0);
+       const width = Math.round((vv && vv.width) || window.innerWidth || document.documentElement.clientWidth || 0);
+       return { height, width };
+    }
+
+    function syncAppViewportVars() {
+       const { height, width } = getViewportSize();
+       if (height > 0) {
+           document.documentElement.style.setProperty('--app-viewport-height', `${height}px`);
+       }
+       if (width > 0) {
+           document.documentElement.style.setProperty('--app-viewport-width', `${width}px`);
+       }
+    }
+
     function lockPreviewViewport() {
-       const height = window.innerHeight;
-       const width = window.innerWidth;
+       const { height, width } = getViewportSize();
        previewOverlay.style.setProperty('--preview-viewport-height', `${height}px`);
        previewOverlay.style.setProperty('--preview-viewport-width', `${width}px`);
     }
@@ -3323,6 +3341,24 @@
        if (!uploadCompleted && (!mediaStream || !mediaStream.active)) {
            startCamera();
        }
+    }
+
+
+    syncAppViewportVars();
+    let viewportSyncRaf = null;
+    function scheduleViewportSync() {
+        if (viewportSyncRaf) return;
+        viewportSyncRaf = requestAnimationFrame(() => {
+            viewportSyncRaf = null;
+            syncAppViewportVars();
+        });
+    }
+
+    window.addEventListener('resize', scheduleViewportSync, { passive: true });
+    window.addEventListener('orientationchange', scheduleViewportSync, { passive: true });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', scheduleViewportSync, { passive: true });
+        window.visualViewport.addEventListener('scroll', scheduleViewportSync, { passive: true });
     }
 
     previewVideo.onloadedmetadata = () => {
