@@ -2767,6 +2767,11 @@
         if (!currentlyPlayingMusicId) return;
         const music = musicOptions.find(opt => opt.id === currentlyPlayingMusicId);
         if (!music) return;
+        const { start, end } = getLoopBounds();
+        musicEngine?.updateLoop(start, end);
+        if (musicEngine?.isPlaying) {
+            musicEngine.seek(start);
+        }
         updateMusicListPlaybackState();
     }
 
@@ -3278,10 +3283,15 @@
         });
         if (shouldCheckDuration) {
             if (previewVideo.duration > 61) {
-                const sec = Math.round(previewVideo.duration);
-                hidePreview();
+                showError('La vidéo doit faire moins de 1 minute');
+                setTimeout(() => {
+                    hidePreview();
+                }, 1200);
+                shouldCheckDuration = false;
+                return;
             }
             shouldCheckDuration = false;
+            previewVideo.play().catch(() => {});
         }
         updateThumbnailSliderBounds();
         resizeThumbnailCanvasFromVideo();
@@ -3291,7 +3301,12 @@
         requestDrawThumbnail();
         if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(defaultTime);
         updateThumbnailTimeLabel(defaultTime);
-        setSeekLimits(currentMusicDuration);
+        const selectedMusic = getSelectedMusic();
+        if (selectedMusic) {
+            updateSeekDurationFromMeta(selectedMusic);
+        } else {
+            setSeekLimits(currentMusicDuration);
+        }
         updateMusicOverlay();
         restartPreviewIfPlaying();
     };
