@@ -39,12 +39,60 @@ const upload = multer({
     fileSize: 100 * 1024 * 1024 // 100 MB
   },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype && file.mimetype.startsWith('video/')) {
+    const mimetype = (file.mimetype || '').toLowerCase();
+    const originalname = file.originalname || '';
+    const contentType = req.headers['content-type'] || '';
+    const extension = path.extname(originalname).toLowerCase();
+    const isVideoMime = mimetype.startsWith('video/');
+    const isOctetStream = mimetype === 'application/octet-stream';
+    const hasVideoExtension = ['.mp4', '.webm', '.mov'].includes(extension);
+
+    if (isVideoMime || (isOctetStream && hasVideoExtension)) {
       return cb(null, true);
     }
-    cb(new Error('invalid file type: expected video/*'));
+
+    console.warn('[UPLOAD_REJECTED]', {
+      reason: 'invalid file type in multipart metadata',
+      mimetype,
+      originalname,
+      contentType,
+      extension
+    });
+
+    const error = new Error(
+      'invalid file type: expected video/* or application/octet-stream with .mp4/.webm/.mov'
+    );
+    error.statusCode = 400;
+    error.code = 'INVALID_FILE_TYPE';
+    cb(error);
   }
 });
+
+function getFileSignature(filePath, maxBytes = 12) {
+  const fd = fs.openSync(filePath, 'r');
+  try {
+    const buffer = Buffer.alloc(maxBytes);
+    const bytesRead = fs.readSync(fd, buffer, 0, maxBytes, 0);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function isLikelyVideoFile(filePath, originalname = '') {
+  const extension = path.extname(originalname).toLowerCase();
+  const signature = getFileSignature(filePath, 12);
+  const hex = signature.toString('hex');
+
+  const isWebm = hex.startsWith('1a45dfa3');
+  const isMp4OrMov = signature.length >= 8 && signature.subarray(4, 8).toString('ascii') === 'ftyp';
+  const hasKnownExtension = ['.mp4', '.webm', '.mov'].includes(extension);
+
+  return {
+    valid: isWebm || isMp4OrMov || hasKnownExtension,
+    signatureHex: hex
+  };
+}
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok' });
@@ -113,6 +161,9 @@ function buildAssetId(muxUploadUrl) {
 
 app.post('/process-upload', upload.single('video'), async (req, res) => {
   const inputFile = req.file?.path;
+  const uploadMimeType = req.file?.mimetype || '';
+  const uploadOriginalName = req.file?.originalname || '';
+  const requestContentType = req.headers['content-type'] || '';
   const {
     facingMode = 'environment',
     audioMode = 'original',
@@ -125,6 +176,32 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
   if (!inputFile) {
     return res.status(400).json({ error: 'missing video' });
   }
+
+  console.info('[UPLOAD_METADATA]', {
+    mimetype: uploadMimeType,
+    originalname: uploadOriginalName,
+    contentType: requestContentType
+  });
+
+  const videoSignatureCheck = isLikelyVideoFile(inputFile, uploadOriginalName);
+  console.info('[UPLOAD_SIGNATURE]', {
+    originalname: uploadOriginalName,
+    signatureHex: videoSignatureCheck.signatureHex
+  });
+
+  if (!videoSignatureCheck.valid) {
+    console.warn('[UPLOAD_REJECTED]', {
+      reason: 'invalid file signature/extension',
+      mimetype: uploadMimeType,
+      originalname: uploadOriginalName,
+      contentType: requestContentType,
+      signatureHex: videoSignatureCheck.signatureHex
+    });
+    return res.status(400).json({
+      error: 'invalid uploaded file: expected mp4/webm/mov video'
+    });
+  }
+
   if (!muxUploadUrl) {
     return res.status(400).json({ error: 'missing muxUploadUrl' });
   }
@@ -266,4 +343,28 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
   console.log(`Server listening on ${port}`);
+});
+
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({
+      error: err.message,
+      code: err.code || 'UPLOAD_ERROR'
+    });
+  }
+
+  if (err && err.code === 'INVALID_FILE_TYPE') {
+    return res.status(err.statusCode || 400).json({
+      error: err.message,
+      code: err.code
+    });
+  }
+
+  return res.status(err.statusCode || 500).json({
+    error: err.message || 'internal server error'
+  });
 });
