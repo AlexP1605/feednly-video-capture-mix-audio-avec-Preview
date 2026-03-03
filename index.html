@@ -544,7 +544,7 @@
       line-height: 1.5;
     }
     .visually-hidden { position: absolute !important; height: 1px; width: 1px; overflow: hidden; clip: rect(1px, 1px, 1px, 1px); white-space: nowrap; }
-    #preview-actions { width: 100%; height: 110px; min-height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px calc(env(safe-area-inset-bottom) + 10px); pointer-events: auto; position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; }
+    #preview-actions { width: 100%; height: 110px; min-height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px calc(env(safe-area-inset-bottom) + 10px); pointer-events: auto; position: absolute; left: 0; right: 0; bottom: 0; z-index: 10; }
     .action-btn { flex: 1; height: 54px; font-size: 16px; font-weight: 700; border: none; cursor: pointer; border-radius: 14px; }
     #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
     #next-button { background: #fff; color: #000; }
@@ -1785,7 +1785,6 @@
                     stopMusicPreview();
                     return;
                 }
-                console.debug('[music] start preview', { id: opt.id });
                 const audioCtx = ensureAudioReady();
                 if (!audioCtx) {
                     console.warn('[music] audio context not ready');
@@ -1957,7 +1956,6 @@
         closeMusicSheet();
         stopMusicPreview({ hard: true });
         musicEngine?.updateVolume(musicVolume);
-        console.debug('[music] reset defaults', { volume: musicVolume });
     }
 
     function clearMusicStateForGallery() {
@@ -2839,7 +2837,6 @@
 
     function logAudioPerf(payload) {
         if (!DEBUG_AUDIO) return;
-        console.log('[audio-perf]', payload);
     }
 
     async function startMusicPreview(opt) {
@@ -2881,7 +2878,6 @@
 
         const { start, end } = getLoopBounds();
         musicEngine.updateVolume(musicVolume);
-        console.debug('[music] preview graph', { volume: musicVolume, start, end });
         let started = false;
         try {
             await musicEngine.load(opt.url, { id: opt.id });
@@ -3069,7 +3065,6 @@
            torchSupported = !!caps.torch;
            updateFlashUI();
            if (!cameraPreview.dataset.trackSettingsLogged && track.getSettings) {
-             console.log('[camera] settings', track.getSettings());
              cameraPreview.dataset.trackSettingsLogged = 'true';
            }
         }, 300);
@@ -3107,7 +3102,6 @@
            torchSupported = !!caps.torch;
            updateFlashUI();
            if (!cameraPreview.dataset.trackSettingsLogged && track.getSettings) {
-             console.log('[camera] settings', track.getSettings());
              cameraPreview.dataset.trackSettingsLogged = 'true';
            }
         }, 300);
@@ -3177,24 +3171,12 @@
       };
       mediaRecorder.onstop = () => {
          recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-         const sizeMB = (recordedBlob.size / (1024 * 1024)).toFixed(2);
-         console.log('[recording] final size MB:', sizeMB);
-         console.info('[recording] stop complete', {
-            chunksCollected: recordedChunks.length,
-            recordedBlobSize: recordedBlob.size,
-            mimeType: mediaRecorder.mimeType,
-            elapsedMs: Date.now() - recordingStartTime
-         });
          isRecording = false;
          isStoppingRecording = false;
          finalizeRecording();
       };
       
       mediaRecorder.start(RECORDER_TIMESLICE_MS);
-      console.info('[recording] start', {
-        maxDurationMs: MAX_DURATION,
-        timesliceMs: RECORDER_TIMESLICE_MS
-      });
       isRecording = true;
       if (cameraReady) {
          document.body.classList.add('recording');
@@ -3290,8 +3272,6 @@
        applyPreviewSourceMode();
        previewOverlay.classList.add('active');
        document.body.classList.add('showing-preview');
-       console.debug('[music] gallery preview ready');
-
        // Sélection par défaut à chaque nouvelle preview
        resetThumbnailDefaults();
        if (!isGalleryVideoSource()) {
@@ -3347,11 +3327,6 @@
 
     previewVideo.onloadedmetadata = () => {
         videoDurationSeconds = Math.max(0, Number(previewVideo.duration) || 0);
-        console.info('[recording] preview metadata', {
-            previewDuration: previewVideo.duration,
-            recordedBlobSize: recordedBlob ? recordedBlob.size : 0,
-            chunksCollected: recordedChunks.length
-        });
         if (shouldCheckDuration) {
             if (previewVideo.duration > 61) {
                 showError('La vidéo doit faire moins de 1 minute');
@@ -3459,8 +3434,6 @@
     
     // --- CORRECTION CLÉ : Double nettoyage de la vidéo de prévisualisation ---
     restartBtn.onclick = () => {
-        // Nettoyage explicite AVANT d'appeler hidePreview pour vider la source
-        resetPreviewState();
         hidePreview();
     };
     // --- FIN CORRECTION CLÉ ---
@@ -3473,10 +3446,6 @@
        let processingStarted = false;
 
        const selectedThumbnailTimeForUpload = Number.isFinite(selectedThumbnailTime) ? selectedThumbnailTime : DEFAULT_THUMBNAIL_TIME;
-       console.log('[UPLOAD_THUMBNAIL_DEBUG]', {
-          selectedThumbnailTime: selectedThumbnailTimeForUpload
-       });
-
        function resetAfterUploadSuccess({ showMixingMessage = true } = {}) {
           if (uploadPhaseTimeout) {
               clearTimeout(uploadPhaseTimeout);
@@ -3526,10 +3495,6 @@
           if (showMixingMessage) {
               showUploadFinalizationMessage();
           }
-          console.log('[UPLOAD_NOTIFY_DEBUG]', {
-              selected_thumbnail_time: selectedThumbnailTimeForUpload,
-              thumbnail_time: selectedThumbnailTimeForUpload
-          });
           notifyHost({
               status: 'success',
               action: 'next_page',
@@ -3545,13 +3510,6 @@
        setUploadStatusText("Préparation...");
        const uploadBlob = recordedBlob;
 
-       try {
-          const sizeMB = uploadBlob ? (uploadBlob.size / 1024 / 1024).toFixed(2) : 'NO_BLOB';
-          alert('UPLOAD SIZE MB: ' + sizeMB);
-          console.log('[BLOB SIZE MB]', sizeMB);
-       } catch (e) {
-          alert('BLOB SIZE ERROR');
-       }
        if (!(uploadBlob instanceof Blob) || uploadBlob.size === 0) {
           fail('no-video');
           return;
@@ -3563,7 +3521,6 @@
        setUploadProgress(0);
 
        if (videoSourceType === 'gallery') {
-          console.log('[GALLERY_PIPELINE] direct mux upload');
           uploadOverlay.classList.add('active');
           setUploadStatusText("Upload en cours...");
           try {
@@ -3594,7 +3551,6 @@
           }
        }
 
-       const hasValidBlob = uploadBlob instanceof Blob && uploadBlob.size > 0;
        const selectedMusic = getSelectedMusic();
        const hasSelectedMusic = Boolean(selectedMusic && selectedMusic.url);
 
@@ -3608,25 +3564,7 @@
          !hasSelectedMusic &&
          isOriginalMuted === false;
 
-       console.log('[UPLOAD] before upload starts', {
-         audioMode,
-         isFastPath,
-         selectedMusicId,
-         hasSelectedMusic,
-         hasValidBlob,
-         blobSize: uploadBlob.size
-       });
-
        const startServerUpload = () => {
-         console.log('[UPLOAD_MERGE] before merge starts', {
-            audioMode,
-            selectedMusicId,
-            hasSelectedMusic,
-            blobSize: uploadBlob.size,
-            musicStartTime,
-            musicVolume,
-            isOriginalMuted
-         });
          const formData = new FormData();
          formData.append('video', uploadBlob, uploadBlob.name || 'recording.mp4');
          formData.append('facingMode', recordedFacingMode);
@@ -3645,13 +3583,6 @@
            'https://feednly-video-audio-v2-506631399204.europe-west1.run.app/process-upload',
            true
          );
-         console.log('[UPLOAD] sending request', {
-            url: xhr.responseURL || 'unknown',
-            audioMode,
-            hasMusic: hasSelectedMusic,
-            blobSize: uploadBlob.size,
-            thumbnailTime: selectedThumbnailTimeForUpload
-         });
        xhr.upload.onprogress = e => {
            if (!e.lengthComputable) return;
             const percent = Math.round((e.loaded / e.total) * 70);
@@ -3685,11 +3616,6 @@
                   fail('invalid-response', JSON.stringify(res));
                   return;
                }
-               console.log('[UPLOAD_MERGE] after merge finishes', {
-                  audioMode,
-                  hasSelectedMusic,
-                  assetId
-               });
                await handleUploadSuccess(assetId);
             } else {
                fail('http-error', 'status ' + xhr.status + ' – ' + xhr.responseText.slice(0,200));
@@ -3702,14 +3628,7 @@
        };
 
        const uploadDirectToMuxFastPath = async () => {
-         console.log('[FAST_PATH_DIRECT_MUX]', {
-           facingMode: recordedFacingMode,
-           audioMode,
-           hasMusic: hasSelectedMusic,
-           isOriginalMuted
-         });
          startEstimatedUploadProgress(uploadBlob.size || 0);
-         console.log('BLOB SIZE MB:', uploadBlob.size / 1024 / 1024);
          const uploadRes = await fetch(muxUploadUrl, {
            method: 'PUT',
            headers: { 'Content-Type': 'video/mp4' },
