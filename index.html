@@ -911,6 +911,7 @@
     const galleryBtn = document.getElementById('gallery-btn');
     const restartBtn = document.getElementById('restart-button');
     const nextBtn = document.getElementById('next-button');
+    const cameraInput = document.getElementById('camera-input');
     const galleryInput = document.getElementById('galleryInput');
     const uploadOverlay = document.getElementById('upload-overlay');
     const uploadText = document.getElementById('upload-text');
@@ -952,8 +953,12 @@
     const musicTabBar = document.getElementById('music-tab-bar');
     let currentlyPlayingMusicId = null;
     let pendingMusicId = null;
+    let videoSourceType = null; // 'webview-camera' | 'gallery'
     let isDraggingWaveform = false;
     let videoDurationSeconds = 0;
+    const isGalleryVideoSource = () => videoSourceType === 'gallery';
+    const isWebviewCameraSource = () => videoSourceType === 'webview-camera';
+    const musicOverlayRow = musicOverlay?.closest('.music-overlay-row');
     const revealCameraPreview = () => {
       cameraPreview.style.opacity = "1"; // garantir affichage plein écran
     };
@@ -1955,6 +1960,58 @@
         console.debug('[music] reset defaults', { volume: musicVolume });
     }
 
+    function clearMusicStateForGallery() {
+        stopMusicPreview({ hard: true });
+        invalidateMusicSession();
+        resetMusicSheetUI();
+        closeFilterSheet();
+        closeMusicSheet();
+        selectedMusicId = null;
+        currentlyPlayingMusicId = null;
+        pendingMusicId = null;
+        musicStartTime = 0;
+        currentMusicDuration = 0;
+        applyMusicVolume(0.5, { updateEngine: false });
+        syncVolumeLabels();
+        updateMusicOverlay();
+        updateMusicSelectionUI();
+        if (musicEngine?.clearBuffer) {
+            musicEngine.clearBuffer();
+        }
+    }
+
+    function applyPreviewSourceMode() {
+        const gallerySource = isGalleryVideoSource();
+        if (previewVideo) {
+            if (gallerySource) {
+                previewVideo.pause();
+                previewVideo.hidden = true;
+                previewVideo.style.display = 'none';
+            } else {
+                previewVideo.hidden = false;
+                previewVideo.style.display = 'block';
+            }
+        }
+
+        if (musicOverlayRow) {
+            musicOverlayRow.style.display = gallerySource ? 'none' : '';
+        }
+        if (musicSheet) {
+            musicSheet.style.display = gallerySource ? 'none' : '';
+        }
+        if (musicTabBar) {
+            if (gallerySource) {
+                musicTabBar.setAttribute('hidden', 'hidden');
+            } else {
+                musicTabBar.removeAttribute('hidden');
+            }
+        }
+
+        if (gallerySource) {
+            clearMusicStateForGallery();
+        }
+    }
+
     const MAX_PRELOAD_ITEMS = 2;
     const visibleMusicIds = new Set();
     const preloadedMusicIds = new Set();
@@ -2282,6 +2339,7 @@
     }
 
     function openMusicSheet() {
+        if (isGalleryVideoSource()) return;
         if (!musicSheet) return;
         setActiveTab('music');
         musicSheet.classList.add('active');
@@ -3084,6 +3142,7 @@
       }
       
       recordedFacingMode = facingMode; 
+      videoSourceType = 'webview-camera';
       recordedChunks = [];
       isStoppingRecording = false;
       
@@ -3223,20 +3282,27 @@
        previewVideo.preload = 'auto';
        previewVideo.style.transform = recordedFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
        previewVideo.load();
+       applyPreviewSourceMode();
        previewOverlay.classList.add('active');
        document.body.classList.add('showing-preview');
        console.debug('[music] gallery preview ready');
 
        // Sélection par défaut à chaque nouvelle preview
        resetThumbnailDefaults();
-       resetMusicDefaults();
+       if (!isGalleryVideoSource()) {
+           resetMusicDefaults();
+       } else {
+           shouldPreloadAfterGallery = false;
+       }
        closeFilterSheet();
        closeMusicSheet();
 
        syncOriginalMuteState();
        updateMusicSelectionUI();
-       preloadInitialPreviewTracks();
-       if (shouldPreloadAfterGallery) {
+       if (isWebviewCameraSource()) {
+           preloadInitialPreviewTracks();
+       }
+       if (shouldPreloadAfterGallery && isWebviewCameraSource()) {
            shouldPreloadAfterGallery = false;
            preloadVisibleMusicImmediately();
        }
@@ -3257,6 +3323,7 @@
             previewObjectURL = null;
        }
        recordedBlob = null;
+       videoSourceType = null;
        videoDurationSeconds = 0;
     }
 
@@ -3290,7 +3357,9 @@
                 return;
             }
             shouldCheckDuration = false;
-            previewVideo.play().catch(() => {});
+            if (!isGalleryVideoSource()) {
+                previewVideo.play().catch(() => {});
+            }
         }
         updateThumbnailSliderBounds();
         resizeThumbnailCanvasFromVideo();
@@ -3302,12 +3371,18 @@
         if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(defaultTime);
         updateThumbnailTimeLabel(defaultTime);
         const selectedMusic = getSelectedMusic();
-        if (selectedMusic) {
+        if (!isGalleryVideoSource() && selectedMusic) {
             updateSeekDurationFromMeta(selectedMusic);
-        } else {
+        } else if (!isGalleryVideoSource()) {
             setSeekLimits(currentMusicDuration);
         }
         updateMusicOverlay();
+        if (isGalleryVideoSource()) {
+            previewVideo.pause();
+            previewVideo.hidden = true;
+            previewVideo.style.display = 'none';
+            return;
+        }
         restartPreviewIfPlaying();
     };
 
@@ -3371,6 +3446,7 @@
            startCamera();
            return;
        }
+       videoSourceType = 'gallery';
        recordedBlob = file;
        shouldCheckDuration = true;
        shouldPreloadAfterGallery = true;
@@ -3379,6 +3455,7 @@
     }
 
     galleryInput.onchange = handleFileSelect;
+    if (cameraInput) cameraInput.onchange = handleFileSelect;
     
     // --- CORRECTION CLÉ : Double nettoyage de la vidéo de prévisualisation ---
     restartBtn.onclick = () => {
@@ -3484,6 +3561,47 @@
 
        const selectedMusic = getSelectedMusic();
        const hasSelectedMusic = Boolean(selectedMusic && selectedMusic.url);
+
+       const uploadDirectToMux = async ({ mode = 'standard' } = {}) => {
+         console.log('[DIRECT_MUX_UPLOAD]', {
+           mode,
+           source: videoSourceType,
+           blobSize: uploadBlob.size
+         });
+         startEstimatedUploadProgress(uploadBlob.size || 0);
+         const uploadRes = await fetch(muxUploadUrl, {
+           method: 'PUT',
+           headers: { 'Content-Type': 'video/mp4' },
+           body: uploadBlob,
+           duplex: 'half'
+         });
+         stopUploadProgressAnimation();
+         if (!uploadRes.ok) {
+           throw new Error(`Mux upload failed: ${uploadRes.status}`);
+         }
+         startProcessingProgress({ target: 99, durationMs: 4000 });
+         const assetId = buildAssetId(muxUploadUrl);
+         if (!assetId) {
+           throw new Error('invalid mux upload url');
+         }
+         return assetId;
+       };
+
+       if (isGalleryVideoSource()) {
+          try {
+             const assetId = await uploadDirectToMux({ mode: 'gallery' });
+             if (uploadPhaseTimeout) {
+                clearTimeout(uploadPhaseTimeout);
+                uploadPhaseTimeout = null;
+             }
+             await handleUploadSuccess(assetId);
+             return;
+          } catch (error) {
+             fail('direct-mux-upload', error?.message || 'unknown');
+             return;
+          }
+       }
+
        if (selectedMusicId && !selectedMusic) {
           console.warn('[UPLOAD MUSIC] selectedMusicId has no matching option', { selectedMusicId });
        }
@@ -3587,7 +3705,7 @@
          xhr.send(formData);
        };
 
-       const uploadDirectToMux = async () => {
+       const uploadDirectToMuxFastPath = async () => {
          console.log('[FAST_PATH_DIRECT_MUX]', {
            facingMode: recordedFacingMode,
            audioMode,
@@ -3616,7 +3734,7 @@
 
        if (isFastPath) {
           try {
-             const assetId = await uploadDirectToMux();
+             const assetId = await uploadDirectToMuxFastPath();
              if (uploadPhaseTimeout) {
                 clearTimeout(uploadPhaseTimeout);
                 uploadPhaseTimeout = null;
