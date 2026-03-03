@@ -46,8 +46,14 @@ const upload = multer({
     const isVideoMime = mimetype.startsWith('video/');
     const isOctetStream = mimetype === 'application/octet-stream';
     const hasVideoExtension = ['.mp4', '.webm', '.mov'].includes(extension);
+    const isVideoUploadField = file.fieldname === 'video';
+    const isMultipart = contentType.toLowerCase().startsWith('multipart/form-data');
 
-    if (isVideoMime || (isOctetStream && hasVideoExtension)) {
+    if (
+      isVideoMime
+      || (isOctetStream && hasVideoExtension)
+      || (isOctetStream && isVideoUploadField && isMultipart)
+    ) {
       return cb(null, true);
     }
 
@@ -79,7 +85,23 @@ function getFileSignature(filePath, maxBytes = 12) {
   }
 }
 
-function isLikelyVideoFile(filePath, originalname = '') {
+async function probeMediaFile(filePath) {
+  try {
+    const args = [
+      '-v', 'error',
+      '-print_format', 'json',
+      '-show_format',
+      '-show_streams',
+      filePath
+    ];
+    const { stdout } = await runCommand('ffprobe', args);
+    return JSON.parse(stdout || '{}');
+  } catch (error) {
+    return null;
+  }
+}
+
+async function validateUploadedVideo(filePath, originalname = '') {
   const extension = path.extname(originalname).toLowerCase();
   const signature = getFileSignature(filePath, 12);
   const hex = signature.toString('hex');
@@ -88,9 +110,26 @@ function isLikelyVideoFile(filePath, originalname = '') {
   const isMp4OrMov = signature.length >= 8 && signature.subarray(4, 8).toString('ascii') === 'ftyp';
   const hasKnownExtension = ['.mp4', '.webm', '.mov'].includes(extension);
 
+  const metadata = await probeMediaFile(filePath);
+  const streams = Array.isArray(metadata?.streams) ? metadata.streams : [];
+  const hasVideoStream = streams.some((stream) => stream.codec_type === 'video');
+  const formatName = String(metadata?.format?.format_name || '').toLowerCase();
+  const isExpectedContainer = [
+    'mp4',
+    'mov',
+    'webm',
+    'matroska'
+  ].some((name) => formatName.includes(name));
+
+  const validByFfprobe = hasVideoStream && isExpectedContainer;
+  const validBySignature = isWebm || isMp4OrMov || hasKnownExtension;
+
   return {
-    valid: isWebm || isMp4OrMov || hasKnownExtension,
-    signatureHex: hex
+    valid: validByFfprobe && (validBySignature || true), // <- on garde validBySignature seulement pour logs
+    signatureHex: hex,
+    extension,
+    formatName,
+    hasVideoStream
   };
 }
 
@@ -183,10 +222,13 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
     contentType: requestContentType
   });
 
-  const videoSignatureCheck = isLikelyVideoFile(inputFile, uploadOriginalName);
+  const videoSignatureCheck = await validateUploadedVideo(inputFile, uploadOriginalName);
   console.info('[UPLOAD_SIGNATURE]', {
     originalname: uploadOriginalName,
-    signatureHex: videoSignatureCheck.signatureHex
+    signatureHex: videoSignatureCheck.signatureHex,
+    extension: videoSignatureCheck.extension,
+    formatName: videoSignatureCheck.formatName,
+    hasVideoStream: videoSignatureCheck.hasVideoStream
   });
 
   if (!videoSignatureCheck.valid) {
@@ -195,10 +237,13 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
       mimetype: uploadMimeType,
       originalname: uploadOriginalName,
       contentType: requestContentType,
-      signatureHex: videoSignatureCheck.signatureHex
+      signatureHex: videoSignatureCheck.signatureHex,
+      extension: videoSignatureCheck.extension,
+      formatName: videoSignatureCheck.formatName,
+      hasVideoStream: videoSignatureCheck.hasVideoStream
     });
     return res.status(400).json({
-      error: 'invalid uploaded file: expected mp4/webm/mov video'
+      error: 'invalid uploaded file: expected a real mp4/webm/mov video stream'
     });
   }
 
