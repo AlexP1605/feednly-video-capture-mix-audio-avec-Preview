@@ -1980,18 +1980,23 @@
         }
     }
 
+    function setPreviewVideoVisibility(isVisible) {
+        if (!previewVideo) return;
+        if (isVisible) {
+            previewVideo.hidden = false;
+            previewVideo.style.display = 'block';
+            return;
+        }
+        previewVideo.pause();
+        previewVideo.hidden = true;
+        previewVideo.style.display = 'none';
+    }
+
     function applyPreviewSourceMode() {
         const gallerySource = isGalleryVideoSource();
-        if (previewVideo) {
-            if (gallerySource) {
-                previewVideo.pause();
-                previewVideo.hidden = true;
-                previewVideo.style.display = 'none';
-            } else {
-                previewVideo.hidden = false;
-                previewVideo.style.display = 'block';
-            }
-        }
+        // L'écran courant est un sélecteur de miniature : l'aperçu vidéo complet
+        // ne doit jamais rester visible derrière la miniature sélectionnée.
+        setPreviewVideoVisibility(false);
 
         if (musicOverlayRow) {
             musicOverlayRow.style.display = gallerySource ? 'none' : '';
@@ -3377,12 +3382,7 @@
             setSeekLimits(currentMusicDuration);
         }
         updateMusicOverlay();
-        if (isGalleryVideoSource()) {
-            previewVideo.pause();
-            previewVideo.hidden = true;
-            previewVideo.style.display = 'none';
-            return;
-        }
+        if (isGalleryVideoSource()) return;
         restartPreviewIfPlaying();
     };
 
