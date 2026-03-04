@@ -1855,7 +1855,9 @@
                 const started = await startMusicPreview(opt);
                 if (!started) return;
                 selectMusic(opt);
-                closeMusicSheet();
+                requestAnimationFrame(() => {
+                    closeMusicSheet();
+                });
             };
             fragment.appendChild(item);
         });
