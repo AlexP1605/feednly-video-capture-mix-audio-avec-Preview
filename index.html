@@ -1,5 +1,6 @@
 
 
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -955,8 +956,6 @@
     const musicTabBar = document.getElementById('music-tab-bar');
     let currentlyPlayingMusicId = null;
     let pendingMusicId = null;
-    let isMusicListScrolling = false;
-    let musicListScrollTimeout = null;
     let videoSourceType = null; // 'webview-camera' | 'gallery'
     let isDraggingWaveform = false;
     let videoDurationSeconds = 0;
@@ -1848,16 +1847,11 @@
             item.addEventListener('pointerdown', () => {
                 ensureAudioReady();
             }, { once: true, passive: true });
-            item.onclick = async (e) => {
+            item.onclick = (e) => {
                 e.stopPropagation();
-                if (isMusicListScrolling) return;
-                if (pendingMusicId === opt.id) return;
-                const started = await startMusicPreview(opt);
-                if (!started) return;
                 selectMusic(opt);
-                requestAnimationFrame(() => {
-                    closeMusicSheet();
-                });
+                startMusicPreview(opt);
+                closeMusicSheet();
             };
             fragment.appendChild(item);
         });
@@ -2512,19 +2506,6 @@
     const MUSIC_STOP_GRACE_MS = 120;
     let lastMusicPreviewStartAt = 0;
     let playIntentId = 0;
-    let previewIntentId = 0;
-
-    if (musicListEl) {
-        musicListEl.addEventListener('scroll', () => {
-            isMusicListScrolling = true;
-            if (musicListScrollTimeout) {
-                clearTimeout(musicListScrollTimeout);
-            }
-            musicListScrollTimeout = setTimeout(() => {
-                isMusicListScrolling = false;
-            }, 120);
-        }, { passive: true });
-    }
 
     // --- Optimisation Fluidité (Gérer la visibilité de la page) ---
     document.addEventListener('visibilitychange', () => {
@@ -2837,7 +2818,6 @@
         if (performance.now() - lastMusicPreviewStartAt < MUSIC_STOP_GRACE_MS) {
             return;
         }
-        previewIntentId += 1;
         if (!musicEngine) return;
         musicEngine.stop();
         if (hard) {
@@ -2865,16 +2845,12 @@
     }
 
     async function startMusicPreview(opt) {
-        if (!opt || !musicEngine) return false;
+        if (!opt || !musicEngine) return;
         lastMusicPreviewStartAt = performance.now();
-        previewIntentId += 1;
-        const intentId = previewIntentId;
         const audioCtx = await ensureAudioReady();
-        if (!audioCtx || intentId !== previewIntentId) {
-            if (!audioCtx) {
-                console.warn('[music] audio context not ready');
-            }
-            return false;
+        if (!audioCtx) {
+            console.warn('[music] audio context not ready');
+            return;
         }
         const sessionId = musicSessionId;
         const expectedId = opt.id;
@@ -2883,7 +2859,6 @@
 
         if (currentlyPlayingMusicId && currentlyPlayingMusicId !== opt.id) {
             stopMusicPreview({ hard: false });
-            if (intentId !== previewIntentId) return false;
         }
 
         selectedMusicId = opt.id;
@@ -2911,32 +2886,19 @@
         let started = false;
         try {
             await musicEngine.load(opt.url, { id: opt.id });
-            if (
-                intentId !== previewIntentId ||
-                sessionId !== musicSessionId ||
-                selectedMusicId !== expectedId
-            ) {
-                return false;
-            }
             started = await musicEngine.play(start, end);
         } catch (error) {
             started = false;
         }
-        if (intentId !== previewIntentId || sessionId !== musicSessionId || selectedMusicId !== expectedId) {
-            if (started) {
-                musicEngine.stop();
-            }
-            return false;
-        }
-
         if (started) {
-            pendingMusicId = null;
-            currentlyPlayingMusicId = opt.id;
-            updateMusicListPlaybackState();
             const playbackState = musicEngine.getPlaybackState();
             if (perf) {
                 perf.tSoundStart = playbackState.startPerf || performance.now();
                 logAudioPerf({ ...perf });
+            }
+            if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
+                pendingMusicId = null;
+                updateMusicListPlaybackState();
             }
         }
 
@@ -2946,18 +2908,17 @@
             }
         }).catch(() => {});
 
-        if (sessionId !== musicSessionId || selectedMusicId !== expectedId || intentId !== previewIntentId) {
+        if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
             if (!started) {
                 musicEngine.stop();
             }
-            return false;
+            return;
         }
         if (!started) {
             currentlyPlayingMusicId = null;
         }
         pendingMusicId = null;
         updateMusicListPlaybackState();
-        return started;
     }
 
     function playIconPlay() {
