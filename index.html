@@ -955,6 +955,8 @@
     const musicTabBar = document.getElementById('music-tab-bar');
     let currentlyPlayingMusicId = null;
     let pendingMusicId = null;
+    let isMusicListScrolling = false;
+    let musicListScrollTimeout = null;
     let videoSourceType = null; // 'webview-camera' | 'gallery'
     let isDraggingWaveform = false;
     let videoDurationSeconds = 0;
@@ -1846,10 +1848,13 @@
             item.addEventListener('pointerdown', () => {
                 ensureAudioReady();
             }, { once: true, passive: true });
-            item.onclick = (e) => {
+            item.onclick = async (e) => {
                 e.stopPropagation();
+                if (isMusicListScrolling) return;
+                if (pendingMusicId === opt.id) return;
+                const started = await startMusicPreview(opt);
+                if (!started) return;
                 selectMusic(opt);
-                startMusicPreview(opt);
                 closeMusicSheet();
             };
             fragment.appendChild(item);
@@ -2505,6 +2510,19 @@
     const MUSIC_STOP_GRACE_MS = 120;
     let lastMusicPreviewStartAt = 0;
     let playIntentId = 0;
+    let previewIntentId = 0;
+
+    if (musicListEl) {
+        musicListEl.addEventListener('scroll', () => {
+            isMusicListScrolling = true;
+            if (musicListScrollTimeout) {
+                clearTimeout(musicListScrollTimeout);
+            }
+            musicListScrollTimeout = setTimeout(() => {
+                isMusicListScrolling = false;
+            }, 120);
+        }, { passive: true });
+    }
 
     // --- Optimisation Fluidité (Gérer la visibilité de la page) ---
     document.addEventListener('visibilitychange', () => {
@@ -2817,6 +2835,7 @@
         if (performance.now() - lastMusicPreviewStartAt < MUSIC_STOP_GRACE_MS) {
             return;
         }
+        previewIntentId += 1;
         if (!musicEngine) return;
         musicEngine.stop();
         if (hard) {
@@ -2844,12 +2863,16 @@
     }
 
     async function startMusicPreview(opt) {
-        if (!opt || !musicEngine) return;
+        if (!opt || !musicEngine) return false;
         lastMusicPreviewStartAt = performance.now();
+        previewIntentId += 1;
+        const intentId = previewIntentId;
         const audioCtx = await ensureAudioReady();
-        if (!audioCtx) {
-            console.warn('[music] audio context not ready');
-            return;
+        if (!audioCtx || intentId !== previewIntentId) {
+            if (!audioCtx) {
+                console.warn('[music] audio context not ready');
+            }
+            return false;
         }
         const sessionId = musicSessionId;
         const expectedId = opt.id;
@@ -2858,6 +2881,7 @@
 
         if (currentlyPlayingMusicId && currentlyPlayingMusicId !== opt.id) {
             stopMusicPreview({ hard: false });
+            if (intentId !== previewIntentId) return false;
         }
 
         selectedMusicId = opt.id;
@@ -2885,10 +2909,20 @@
         let started = false;
         try {
             await musicEngine.load(opt.url, { id: opt.id });
+            if (intentId !== previewIntentId || sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+                return false;
+            }
             started = await musicEngine.play(start, end);
         } catch (error) {
             started = false;
         }
+        if (intentId !== previewIntentId || sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+            if (started) {
+                musicEngine.stop();
+            }
+            return false;
+        }
+
         if (started) {
             const playbackState = musicEngine.getPlaybackState();
             if (perf) {
@@ -2907,17 +2941,18 @@
             }
         }).catch(() => {});
 
-        if (sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+        if (sessionId !== musicSessionId || selectedMusicId !== expectedId || intentId !== previewIntentId) {
             if (!started) {
                 musicEngine.stop();
             }
-            return;
+            return false;
         }
         if (!started) {
             currentlyPlayingMusicId = null;
         }
         pendingMusicId = null;
         updateMusicListPlaybackState();
+        return started;
     }
 
     function playIconPlay() {
