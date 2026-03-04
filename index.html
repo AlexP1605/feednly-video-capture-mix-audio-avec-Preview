@@ -2475,23 +2475,72 @@
         }
     });
 
-    let sheetTouchStartY = null;
     [musicSheet, musicFilterSheet].forEach((sheet) => {
-        sheet?.addEventListener('touchstart', (e) => {
-            sheetTouchStartY = e.touches[0]?.clientY ?? null;
+        if (!sheet) return;
+
+        let touchStartY = null;
+        let touchLastY = null;
+        let dragStartedOnHandle = false;
+        let dragStartedInMusicScrollable = false;
+
+        sheet.addEventListener('touchstart', (e) => {
+            if (!sheet.classList.contains('active')) return;
+            const touch = e.touches[0];
+            if (!touch) return;
+
+            touchStartY = touch.clientY;
+            touchLastY = touch.clientY;
+            dragStartedOnHandle = Boolean(e.target.closest('.sheet-handle'));
+
+            if (sheet === musicSheet) {
+                const musicScroller = getMusicSheetScroller();
+                dragStartedInMusicScrollable = Boolean(
+                    !dragStartedOnHandle
+                    && musicScroller
+                    && e.target.closest('.sheet-content')
+                );
+            } else {
+                dragStartedInMusicScrollable = false;
+            }
         }, { passive: true });
 
-        sheet?.addEventListener('touchend', (e) => {
-            if (sheetTouchStartY === null || !sheet?.classList.contains('active')) return;
-            const endY = e.changedTouches[0]?.clientY ?? 0;
-            if (endY - sheetTouchStartY > 60) {
+        sheet.addEventListener('touchmove', (e) => {
+            const touch = e.touches[0];
+            if (!touch) return;
+            touchLastY = touch.clientY;
+        }, { passive: true });
+
+        sheet.addEventListener('touchend', () => {
+            if (touchStartY === null || touchLastY === null || !sheet.classList.contains('active')) {
+                touchStartY = null;
+                touchLastY = null;
+                dragStartedOnHandle = false;
+                dragStartedInMusicScrollable = false;
+                return;
+            }
+
+            const dragDistance = touchLastY - touchStartY;
+            const shouldClose = dragDistance > 75 && !dragStartedInMusicScrollable;
+
+            if (shouldClose) {
                 if (sheet === musicFilterSheet) {
                     closeFilterSheet();
                 } else {
                     closeMusicSheet();
                 }
             }
-            sheetTouchStartY = null;
+
+            touchStartY = null;
+            touchLastY = null;
+            dragStartedOnHandle = false;
+            dragStartedInMusicScrollable = false;
+        });
+
+        sheet.addEventListener('touchcancel', () => {
+            touchStartY = null;
+            touchLastY = null;
+            dragStartedOnHandle = false;
+            dragStartedInMusicScrollable = false;
         });
     });
     
