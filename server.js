@@ -11,6 +11,11 @@ const app = express();
 const uploadDir = path.join(os.tmpdir(), 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
 
+function extractMultipartBoundary(contentType = '') {
+  const match = String(contentType).match(/boundary=([^;]+)/i);
+  return match ? match[1] : '';
+}
+
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -39,38 +44,22 @@ const upload = multer({
     fileSize: 100 * 1024 * 1024 // 100 MB
   },
   fileFilter: (req, file, cb) => {
-    const mimetype = (file.mimetype || '').toLowerCase();
-    const originalname = file.originalname || '';
-    const contentType = req.headers['content-type'] || '';
-    const extension = path.extname(originalname).toLowerCase();
-    const isVideoMime = mimetype.startsWith('video/');
-    const isOctetStream = mimetype === 'application/octet-stream';
-    const hasVideoExtension = ['.mp4', '.webm', '.mov'].includes(extension);
-    const isVideoUploadField = file.fieldname === 'video';
-    const isMultipart = contentType.toLowerCase().startsWith('multipart/form-data');
+    const mimetype = String(file.mimetype || '').toLowerCase();
 
-    if (
-      isVideoMime
-      || (isOctetStream && hasVideoExtension)
-      || (isOctetStream && isVideoUploadField && isMultipart)
-    ) {
+    console.log('[UPLOAD_FILE]', {
+      mimetype,
+      originalname: file.originalname || '',
+      fieldname: file.fieldname || ''
+    });
+
+    if (mimetype.startsWith('video/') || mimetype === 'application/octet-stream') {
       return cb(null, true);
     }
 
-    console.warn('[UPLOAD_REJECTED]', {
-      reason: 'invalid file type in multipart metadata',
-      mimetype,
-      originalname,
-      contentType,
-      extension
-    });
-
-    const error = new Error(
-      'invalid file type: expected video/* or application/octet-stream with .mp4/.webm/.mov'
-    );
+    const error = new Error('invalid file type');
     error.statusCode = 400;
     error.code = 'INVALID_FILE_TYPE';
-    cb(error);
+    return cb(error, false);
   }
 });
 
@@ -129,7 +118,8 @@ async function validateUploadedVideo(filePath, originalname = '') {
     signatureHex: hex,
     extension,
     formatName,
-    hasVideoStream
+    hasVideoStream,
+    ffprobe: metadata
   };
 }
 
@@ -203,6 +193,7 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
   const uploadMimeType = req.file?.mimetype || '';
   const uploadOriginalName = req.file?.originalname || '';
   const requestContentType = req.headers['content-type'] || '';
+  const multipartBoundary = extractMultipartBoundary(requestContentType);
   const {
     facingMode = 'environment',
     audioMode = 'original',
@@ -219,8 +210,14 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
   console.info('[UPLOAD_METADATA]', {
     mimetype: uploadMimeType,
     originalname: uploadOriginalName,
-    contentType: requestContentType
+    contentType: requestContentType,
+    boundary: multipartBoundary,
+    fieldname: req.file?.fieldname || '',
+    size: req.file?.size || 0,
+    headers: req.headers
   });
+
+  console.log('UPLOAD MIMETYPE:', uploadMimeType);
 
   const videoSignatureCheck = await validateUploadedVideo(inputFile, uploadOriginalName);
   console.info('[UPLOAD_SIGNATURE]', {
@@ -230,6 +227,9 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
     formatName: videoSignatureCheck.formatName,
     hasVideoStream: videoSignatureCheck.hasVideoStream
   });
+  if (videoSignatureCheck.ffprobe) {
+    console.info('[UPLOAD_FFPROBE]', videoSignatureCheck.ffprobe);
+  }
 
   if (!videoSignatureCheck.valid) {
     console.warn('[UPLOAD_REJECTED]', {
@@ -391,6 +391,13 @@ app.listen(port, () => {
 });
 
 app.use((err, req, res, next) => {
+  console.error('[UPLOAD_ERROR]', {
+    name: err?.name || '',
+    message: err?.message || '',
+    code: err?.code || '',
+    stack: err?.stack || ''
+  });
+
   if (res.headersSent) {
     return next(err);
   }
