@@ -44,22 +44,14 @@ const upload = multer({
     fileSize: 100 * 1024 * 1024 // 100 MB
   },
   fileFilter: (req, file, cb) => {
-    const mimetype = String(file.mimetype || '').toLowerCase();
-
     console.log('[UPLOAD_FILE]', {
-      mimetype,
-      originalname: file.originalname || '',
-      fieldname: file.fieldname || ''
+      mimetype: file.mimetype,
+      originalname: file.originalname,
+      fieldname: file.fieldname
     });
 
-    if (mimetype.startsWith('video/') || mimetype === 'application/octet-stream') {
-      return cb(null, true);
-    }
-
-    const error = new Error('invalid file type');
-    error.statusCode = 400;
-    error.code = 'INVALID_FILE_TYPE';
-    return cb(error, false);
+    // Accept every uploaded file here; strict validation happens in validateUploadedVideo().
+    cb(null, true);
   }
 });
 
