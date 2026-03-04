@@ -1851,7 +1851,6 @@
                 e.stopPropagation();
                 selectMusic(opt);
                 startMusicPreview(opt);
-                closeMusicSheet();
             };
             fragment.appendChild(item);
         });
@@ -2899,6 +2898,9 @@
             if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
                 pendingMusicId = null;
                 updateMusicListPlaybackState();
+            }
+            if (sessionId === musicSessionId && selectedMusicId === expectedId) {
+                closeMusicSheet();
             }
         }
 
