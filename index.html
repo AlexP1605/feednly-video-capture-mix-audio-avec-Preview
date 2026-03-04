@@ -1286,14 +1286,16 @@
     let torchEnabled = false;
     let uploadURL = '';
     // UX: texte unifié + progression estimée pour l'upload
-    const UPLOAD_FINAL_MESSAGE = 'Mixage de l’audio avec la vidéo\nCette opération peut prendre quelques instants selon votre connexion';
+    const UPLOAD_FINAL_MESSAGE_WITH_MUSIC = 'Mixage audio en cours, cela peut prendre quelques instants selon votre connexion';
+    const UPLOAD_FINAL_MESSAGE_PROCESSING = 'Téléchargement en cours, cela peut prendre quelques instants selon votre connexion';
     let uploadProgressRaf = null;
     let uploadProgressValue = 0;
     let uploadProcessingRaf = null;
     let uploadCompleted = false;
+    let uploadHasMusic = false;
     
     if (uploadMixText) {
-        uploadMixText.textContent = UPLOAD_FINAL_MESSAGE;
+        uploadMixText.textContent = UPLOAD_FINAL_MESSAGE_PROCESSING;
     }
 
     let timerDuration = 0;
@@ -1489,7 +1491,11 @@
         if (uploadProgressText) {
             uploadProgressText.textContent = `${nextValue}%`;
         }
-        setUploadMixingState(nextValue >= 95 && nextValue < 100);
+        if (nextValue >= 99 && nextValue < 100) {
+            showUploadFinalizationMessage();
+            return;
+        }
+        setUploadMixingState(false);
     }
 
     function stopUploadProgressAnimation() {
@@ -1523,9 +1529,34 @@
         uploadProgressRaf = requestAnimationFrame(tick);
     }
 
+    function uploadBlobToMuxWithProgress(uploadUrl, blob, { contentType = 'video/mp4' } = {}) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', uploadUrl, true);
+            xhr.setRequestHeader('Content-Type', contentType || 'video/mp4');
+
+            xhr.upload.onprogress = (e) => {
+                if (!e.lengthComputable) return;
+                const percent = Math.round((e.loaded / e.total) * 100);
+                setUploadProgress(percent);
+            };
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve();
+                    return;
+                }
+                reject(new Error(`Mux upload failed: ${xhr.status}`));
+            };
+
+            xhr.onerror = () => reject(new Error('network-error'));
+            xhr.send(blob);
+        });
+    }
+
     function showUploadFinalizationMessage() {
         if (uploadMixText) {
-            uploadMixText.textContent = UPLOAD_FINAL_MESSAGE;
+            uploadMixText.textContent = uploadHasMusic ? UPLOAD_FINAL_MESSAGE_WITH_MUSIC : UPLOAD_FINAL_MESSAGE_PROCESSING;
         }
         setUploadMixingState(true);
     }
@@ -3595,6 +3626,7 @@
        const muxUploadUrl = getUploadURL();
        uploadOverlay.classList.add('active');
        setUploadStatusText("Préparation...");
+       uploadHasMusic = false;
        const uploadBlob = recordedBlob;
 
        if (!(uploadBlob instanceof Blob) || uploadBlob.size === 0) {
@@ -3611,19 +3643,9 @@
           uploadOverlay.classList.add('active');
           setUploadStatusText("Upload en cours...");
           try {
-             startEstimatedUploadProgress(uploadBlob.size || 0);
-
-             const uploadRes = await fetch(muxUploadUrl, {
-               method: 'PUT',
-               headers: { 'Content-Type': uploadBlob.type || 'video/mp4' },
-               body: uploadBlob
+             await uploadBlobToMuxWithProgress(muxUploadUrl, uploadBlob, {
+               contentType: uploadBlob.type || 'video/mp4'
              });
-
-             stopUploadProgressAnimation();
-
-             if (!uploadRes.ok) {
-                throw new Error(`Mux upload failed: ${uploadRes.status}`);
-             }
 
              const assetId = buildAssetId(muxUploadUrl);
              if (!assetId) {
@@ -3640,6 +3662,7 @@
 
        const selectedMusic = getSelectedMusic();
        const hasSelectedMusic = Boolean(selectedMusic && selectedMusic.url);
+       uploadHasMusic = hasSelectedMusic;
 
        if (selectedMusicId && !selectedMusic) {
           console.warn('[UPLOAD MUSIC] selectedMusicId has no matching option', { selectedMusicId });
