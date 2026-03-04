@@ -1849,6 +1849,8 @@
             item.onclick = (e) => {
                 e.stopPropagation();
                 selectMusic(opt);
+                startMusicPreview(opt);
+                closeMusicSheet();
             };
             fragment.appendChild(item);
         });
