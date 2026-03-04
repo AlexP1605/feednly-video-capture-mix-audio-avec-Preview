@@ -2911,7 +2911,11 @@
         let started = false;
         try {
             await musicEngine.load(opt.url, { id: opt.id });
-            if (intentId !== previewIntentId || sessionId !== musicSessionId || selectedMusicId !== expectedId) {
+            if (
+                intentId !== previewIntentId ||
+                sessionId !== musicSessionId ||
+                selectedMusicId !== expectedId
+            ) {
                 return false;
             }
             started = await musicEngine.play(start, end);
@@ -2926,14 +2930,13 @@
         }
 
         if (started) {
+            pendingMusicId = null;
+            currentlyPlayingMusicId = opt.id;
+            updateMusicListPlaybackState();
             const playbackState = musicEngine.getPlaybackState();
             if (perf) {
                 perf.tSoundStart = playbackState.startPerf || performance.now();
                 logAudioPerf({ ...perf });
-            }
-            if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) {
-                pendingMusicId = null;
-                updateMusicListPlaybackState();
             }
         }
 
