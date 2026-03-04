@@ -11,11 +11,6 @@ const app = express();
 const uploadDir = path.join(os.tmpdir(), 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
 
-function extractMultipartBoundary(contentType = '') {
-  const match = String(contentType).match(/boundary=([^;]+)/i);
-  return match ? match[1] : '';
-}
-
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -44,13 +39,6 @@ const upload = multer({
     fileSize: 100 * 1024 * 1024 // 100 MB
   },
   fileFilter: (req, file, cb) => {
-    console.log('[UPLOAD_FILE]', {
-      mimetype: file.mimetype,
-      originalname: file.originalname,
-      fieldname: file.fieldname
-    });
-
-    // Accept every uploaded file here; strict validation happens in validateUploadedVideo().
     cb(null, true);
   }
 });
@@ -82,36 +70,36 @@ async function probeMediaFile(filePath) {
   }
 }
 
-async function validateUploadedVideo(filePath, originalname = '') {
-  const extension = path.extname(originalname).toLowerCase();
+async function validateUploadedVideo(filePath) {
   const signature = getFileSignature(filePath, 12);
-  const hex = signature.toString('hex');
 
-  const isWebm = hex.startsWith('1a45dfa3');
-  const isMp4OrMov = signature.length >= 8 && signature.subarray(4, 8).toString('ascii') === 'ftyp';
-  const hasKnownExtension = ['.mp4', '.webm', '.mov'].includes(extension);
+  const hasEbmlHeader = signature.toString('hex').startsWith('1a45dfa3');
+  const hasMp4OrMovHeader = signature.length >= 8 && signature.subarray(4, 8).toString('ascii') === 'ftyp';
+  const hasKnownSignature = hasEbmlHeader || hasMp4OrMovHeader;
 
   const metadata = await probeMediaFile(filePath);
   const streams = Array.isArray(metadata?.streams) ? metadata.streams : [];
   const hasVideoStream = streams.some((stream) => stream.codec_type === 'video');
-  const formatName = String(metadata?.format?.format_name || '').toLowerCase();
-  const isExpectedContainer = [
+  const container = String(metadata?.format?.format_name || '').toLowerCase();
+  const allowedContainers = [
     'mp4',
     'mov',
     'webm',
     'matroska'
-  ].some((name) => formatName.includes(name));
+  ];
+  const detectedContainers = container
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+  const isExpectedContainer = hasKnownSignature
+    && detectedContainers.some((name) => allowedContainers.includes(name));
 
-  const validByFfprobe = hasVideoStream && isExpectedContainer;
-  const validBySignature = isWebm || isMp4OrMov || hasKnownExtension;
+  const valid = hasVideoStream && isExpectedContainer;
 
   return {
-    valid: validByFfprobe && (validBySignature || true), // <- on garde validBySignature seulement pour logs
-    signatureHex: hex,
-    extension,
-    formatName,
-    hasVideoStream,
-    ffprobe: metadata
+    valid,
+    container,
+    hasVideoStream
   };
 }
 
@@ -182,10 +170,7 @@ function buildAssetId(muxUploadUrl) {
 
 app.post('/process-upload', upload.single('video'), async (req, res) => {
   const inputFile = req.file?.path;
-  const uploadMimeType = req.file?.mimetype || '';
   const uploadOriginalName = req.file?.originalname || '';
-  const requestContentType = req.headers['content-type'] || '';
-  const multipartBoundary = extractMultipartBoundary(requestContentType);
   const {
     facingMode = 'environment',
     audioMode = 'original',
@@ -199,41 +184,15 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
     return res.status(400).json({ error: 'missing video' });
   }
 
-  console.info('[UPLOAD_METADATA]', {
-    mimetype: uploadMimeType,
-    originalname: uploadOriginalName,
-    contentType: requestContentType,
-    boundary: multipartBoundary,
-    fieldname: req.file?.fieldname || '',
-    size: req.file?.size || 0,
-    headers: req.headers
+  console.info('video uploaded', {
+    filename: req.file?.originalname,
+    size: req.file?.size
   });
 
-  console.log('UPLOAD MIMETYPE:', uploadMimeType);
-
-  const videoSignatureCheck = await validateUploadedVideo(inputFile, uploadOriginalName);
-  console.info('[UPLOAD_SIGNATURE]', {
-    originalname: uploadOriginalName,
-    signatureHex: videoSignatureCheck.signatureHex,
-    extension: videoSignatureCheck.extension,
-    formatName: videoSignatureCheck.formatName,
-    hasVideoStream: videoSignatureCheck.hasVideoStream
-  });
-  if (videoSignatureCheck.ffprobe) {
-    console.info('[UPLOAD_FFPROBE]', videoSignatureCheck.ffprobe);
-  }
+  const videoSignatureCheck = await validateUploadedVideo(inputFile);
 
   if (!videoSignatureCheck.valid) {
-    console.warn('[UPLOAD_REJECTED]', {
-      reason: 'invalid file signature/extension',
-      mimetype: uploadMimeType,
-      originalname: uploadOriginalName,
-      contentType: requestContentType,
-      signatureHex: videoSignatureCheck.signatureHex,
-      extension: videoSignatureCheck.extension,
-      formatName: videoSignatureCheck.formatName,
-      hasVideoStream: videoSignatureCheck.hasVideoStream
-    });
+    console.warn('[UPLOAD_REJECTED]', { originalname: uploadOriginalName });
     return res.status(400).json({
       error: 'invalid uploaded file: expected a real mp4/webm/mov video stream'
     });
@@ -383,12 +342,7 @@ app.listen(port, () => {
 });
 
 app.use((err, req, res, next) => {
-  console.error('[UPLOAD_ERROR]', {
-    name: err?.name || '',
-    message: err?.message || '',
-    code: err?.code || '',
-    stack: err?.stack || ''
-  });
+  console.error('[UPLOAD_ERROR]', err?.message || 'upload failed');
 
   if (res.headersSent) {
     return next(err);
