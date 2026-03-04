@@ -1537,7 +1537,7 @@
 
             xhr.upload.onprogress = (e) => {
                 if (!e.lengthComputable) return;
-                const percent = Math.round((e.loaded / e.total) * 100);
+                const percent = Math.min(99, Math.round((e.loaded / e.total) * 100));
                 setUploadProgress(percent);
             };
 
@@ -3564,17 +3564,13 @@
        let processingStarted = false;
 
        const selectedThumbnailTimeForUpload = Number.isFinite(selectedThumbnailTime) ? selectedThumbnailTime : DEFAULT_THUMBNAIL_TIME;
-       function resetAfterUploadSuccess({ showMixingMessage = true } = {}) {
+       function resetAfterUploadSuccess() {
           if (uploadPhaseTimeout) {
               clearTimeout(uploadPhaseTimeout);
               uploadPhaseTimeout = null;
           }
           stopUploadProgressAnimation();
           stopProcessingProgressAnimation();
-          setUploadProgress(100);
-          if (showMixingMessage) {
-              showUploadFinalizationMessage();
-          }
           uploadCompleted = true;
           hidePreview();
           recordedChunks = [];
@@ -3605,14 +3601,12 @@
           setTimeout(() => uploadOverlay.classList.remove('active'), 4000);
        }
 
-       async function handleUploadSuccess(assetId, { showMixingMessage = true } = {}) {
+       async function handleUploadSuccess(assetId) {
           if (!assetId || uploadSuccessNotified) return;
           uploadSuccessNotified = true;
           stopProcessingProgressAnimation();
-          setUploadProgress(100);
-          if (showMixingMessage) {
-              showUploadFinalizationMessage();
-          }
+          setUploadProgress(99);
+          showUploadFinalizationMessage();
           notifyHost({
               status: 'success',
               action: 'next_page',
@@ -3620,12 +3614,12 @@
               selected_thumbnail_time: selectedThumbnailTimeForUpload,
               thumbnail_time: selectedThumbnailTimeForUpload
           });
-          resetAfterUploadSuccess({ showMixingMessage });
+          resetAfterUploadSuccess();
        }
 
        const muxUploadUrl = getUploadURL();
        uploadOverlay.classList.add('active');
-       setUploadStatusText("Préparation...");
+       setUploadProgress(0);
        uploadHasMusic = false;
        const uploadBlob = recordedBlob;
 
@@ -3637,11 +3631,8 @@
           fail('no-mux-upload-url');
           return;
        }
-       setUploadProgress(0);
-
        if (videoSourceType === 'gallery') {
           uploadOverlay.classList.add('active');
-          setUploadStatusText("Upload en cours...");
           try {
              await uploadBlobToMuxWithProgress(muxUploadUrl, uploadBlob, {
                contentType: uploadBlob.type || 'video/mp4'
@@ -3652,7 +3643,7 @@
                 throw new Error('invalid mux upload url');
              }
 
-             await handleUploadSuccess(assetId, { showMixingMessage: false });
+             await handleUploadSuccess(assetId);
              return;
           } catch (error) {
              fail('direct-mux-upload', error?.message || 'unknown', { includeMusicDebug: false });
