@@ -1506,7 +1506,7 @@
     }
 
     // UX: estimation progressive pour l'upload direct Mux sans accès aux bytes réels
-    function startEstimatedUploadProgress(blobSize = 0) {
+    function startEstimatedUploadProgress(blobSize = 0, { maxPercent = 90, onComplete = null } = {}) {
         stopUploadProgressAnimation();
         const minMs = 4500;
         const maxMs = 20000;
@@ -1516,12 +1516,18 @@
             Math.max(minMs, Math.round((blobSize / bytesPerSecond) * 1000))
         );
         const startTime = performance.now();
-        const maxPercent = 90;
         const tick = (now) => {
             const ratio = Math.min(1, (now - startTime) / estimatedMs);
             const eased = 1 - Math.pow(1 - ratio, 2);
             setUploadProgress(Math.min(maxPercent, Math.floor(eased * maxPercent)));
-            if (ratio < 1) uploadProgressRaf = requestAnimationFrame(tick);
+            if (ratio < 1) {
+                uploadProgressRaf = requestAnimationFrame(tick);
+                return;
+            }
+            uploadProgressRaf = null;
+            if (typeof onComplete === 'function') {
+                onComplete();
+            }
         };
         uploadProgressRaf = requestAnimationFrame(tick);
     }
@@ -3614,7 +3620,14 @@
           uploadOverlay.classList.add('active');
           setUploadStatusText("Upload en cours...");
           try {
-             startEstimatedUploadProgress(uploadBlob.size || 0);
+             startEstimatedUploadProgress(uploadBlob.size || 0, {
+               maxPercent: 90,
+               onComplete: () => {
+                 if (!uploadCompleted) {
+                   startProcessingProgress({ target: 99, durationMs: 10000 });
+                 }
+               }
+             });
 
              const uploadRes = await fetch(muxUploadUrl, {
                method: 'PUT',
