@@ -1282,8 +1282,14 @@
       originalVolume = clamped;
       isOriginalMuted = clamped === 0;
       if (previewVideo) {
-        previewVideo.muted = false; // forcer unmuted — iOS peut le mettre à true
-        previewVideo.volume = clamped;
+        // Sur iOS, muted=true bloque tout changement de volume
+        // On doit passer par muted pour couper, et volume pour le reste
+        if (clamped === 0) {
+          previewVideo.muted = true;
+        } else {
+          previewVideo.muted = false;
+          try { previewVideo.volume = clamped; } catch(e) {}
+        }
       }
       if (syncInput && originalVolumeSlider) originalVolumeSlider.value = String(clamped);
       if (originalVolumeValue) originalVolumeValue.textContent = Math.round(clamped * 100);
@@ -1303,20 +1309,29 @@
       }
     }
 
+    let originalVolumeBeforeMute = 1; // mémorise le volume avant coupure
+
     originalMuteBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (originalVolume > 0) {
+      if (!isOriginalMuted && originalVolume > 0) {
+        // Couper : mémoriser le volume actuel
+        originalVolumeBeforeMute = originalVolume || 1;
         applyOriginalVolume(0);
       } else {
-        applyOriginalVolume(1);
+        // Remettre : restaurer le volume mémorisé (min 0.5 si était à 0)
+        applyOriginalVolume(originalVolumeBeforeMute || 1);
       }
     });
 
     originalVolumeSlider?.addEventListener('input', (e) => {
-      applyOriginalVolume(parseFloat(e.target.value), { syncInput: false });
+      const val = parseFloat(e.target.value);
+      if (val > 0) originalVolumeBeforeMute = val;
+      applyOriginalVolume(val, { syncInput: false });
     });
     originalVolumeSlider?.addEventListener('change', (e) => {
-      applyOriginalVolume(parseFloat(e.target.value), { syncInput: false });
+      const val = parseFloat(e.target.value);
+      if (val > 0) originalVolumeBeforeMute = val;
+      applyOriginalVolume(val, { syncInput: false });
     });
 
     /* =====================================================
@@ -2263,7 +2278,7 @@
       if (!isGalleryVideoSource()) resetMusicDefaults();
       else shouldPreloadAfterGallery = false;
       closeFilterSheet(); closeMusicSheet();
-      applyOriginalVolume(originalVolume);
+      // Le volume est appliqué dans onloadedmetadata après le play
       updateMusicSelectionUI();
       if (isWebviewCameraSource()) preloadInitialPreviewTracks();
       if (shouldPreloadAfterGallery && isWebviewCameraSource()) { shouldPreloadAfterGallery = false; preloadVisibleMusicImmediately(); }
@@ -2318,7 +2333,15 @@
       else if (!isGalleryVideoSource()) setSeekLimits(currentMusicDuration);
       updateMusicOverlay();
       // Lancer la vidéo automatiquement
-      previewVideo.play().catch(() => {});
+      // iOS autoplay exige muted=true au départ, on unmute après
+      previewVideo.muted = true;
+      previewVideo.play().then(() => {
+        // Après le play, appliquer le volume souhaité
+        if (originalVolume > 0) {
+          previewVideo.muted = false;
+          try { previewVideo.volume = originalVolume; } catch(e) {}
+        }
+      }).catch(() => {});
       if (!isGalleryVideoSource()) restartPreviewIfPlaying();
     };
 
