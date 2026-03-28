@@ -1175,13 +1175,24 @@
       }
     }
 
-    function requestDrawThumbnail() {
+    function requestDrawThumbnail(targetCanvas = 'both') {
       if (thumbnailDrawRaf !== null) return;
       thumbnailDrawRaf = requestAnimationFrame(() => {
         thumbnailDrawRaf = null;
-        drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas);
+        // 'sheet' = live pendant le drag du slider (ne touche pas le bouton)
+        // 'both'  = quand on valide la miniature (met à jour le bouton aussi)
+        if (targetCanvas === 'both') {
+          drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas);
+        }
         drawThumbnailToCanvas(thumbnailCtxSheet, thumbnailCanvasSheet);
       });
+    }
+
+    function freezeThumbnailButton() {
+      // Figer le canvas du bouton sur le frame sélectionné
+      if (thumbnailDrawRaf !== null) cancelAnimationFrame(thumbnailDrawRaf);
+      thumbnailDrawRaf = null;
+      drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas);
     }
 
     function cancelScheduledThumbnailPreparation() {
@@ -1250,6 +1261,7 @@
     }
     function closeThumbnailSheet() {
       thumbnailSheet?.classList.remove('active');
+      freezeThumbnailButton(); // figer le bouton sur le frame validé
       // Relancer la vidéo
       if (previewVideo && previewVideo.paused) {
         previewVideo.play().catch(() => {});
@@ -1265,14 +1277,20 @@
         const value = Number(e.target.value);
         previewVideo.currentTime = value;
         updateThumbnailTimeLabel(value);
-        requestDrawThumbnail();
+        requestDrawThumbnail('sheet'); // live dans la sheet uniquement
       });
       thumbnailTimeSlider.addEventListener('change', (e) => {
         selectedThumbnailTime = Number(e.target.value);
+        freezeThumbnailButton(); // figer le bouton sur le frame choisi
       });
     }
 
-    previewVideo.addEventListener('seeked', requestDrawThumbnail);
+    previewVideo.addEventListener('seeked', () => {
+      // Ne redessiner que la sheet si elle est ouverte, sinon ignorer
+      if (thumbnailSheet?.classList.contains('active')) {
+        requestDrawThumbnail('sheet');
+      }
+    });
     previewVideo.addEventListener('loadeddata', () => {
       resizeThumbnailCanvases();
       requestDrawThumbnail();
@@ -1527,18 +1545,49 @@
       if (waveformHandleStart) waveformHandleStart.style.left = `${startRatio * 100}%`;
       if (waveformHandleEnd) waveformHandleEnd.style.left = `${endRatio * 100}%`;
     }
-    function updateStartFromClientX(clientX) {
+    let waveformSeekRaf = null;
+
+    function updateStartFromClientX(clientX, { final = false } = {}) {
       if (!waveformVisual) return;
       const rect = waveformVisual.getBoundingClientRect();
       const x = Math.min(Math.max(clientX - rect.left, 0), rect.width);
       musicStartTime = (x / rect.width) * currentMusicDuration;
-      clampStartForVideoDuration(); updateWaveformProgress(); updatePositionLabel();
-      const { start, end } = getLoopBounds();
+      clampStartForVideoDuration();
+      updateWaveformProgress();
+      updatePositionLabel();
+
       if (!musicEngine) return;
+      const { start, end } = getLoopBounds();
+
+      // Pendant le drag : mettre à jour juste les boucle bounds sans seek
+      // (évite les arrêts/relances répétés qui causent les grésillements)
+      if (!final) {
+        // Throttle via RAF pour limiter les updates
+        if (waveformSeekRaf) return;
+        waveformSeekRaf = requestAnimationFrame(() => {
+          waveformSeekRaf = null;
+          if (musicEngine.isPlaying) {
+            // Mise à jour silencieuse des bounds de loop sans stopper
+            const src = musicEngine._getSourceNode?.();
+            if (src) {
+              try {
+                src.loopStart = Math.max(0, start);
+                src.loopEnd = Math.max(start + 0.05, end);
+              } catch(e) {}
+            }
+          }
+        });
+        return;
+      }
+
+      // Final (mouseup/touchend) : seek propre
       musicEngine.updateLoop(start, end);
       if (musicEngine.isPlaying) musicEngine.seek(start);
     }
-    function handleWaveformInteraction(clientX) { updateStartFromClientX(clientX); }
+
+    function handleWaveformInteraction(clientX) {
+      updateStartFromClientX(clientX, { final: true });
+    }
     function normalizeTag(tag) { return String(tag || '').trim().toLowerCase(); }
     function isDefaultTag(tag) { return !tag || tag === DEFAULT_TAG_VALUE; }
     function resetFilterTag() { activeTag = DEFAULT_TAG_VALUE; renderFilterTags(); renderMusicList(musicSearchInput.value); }
@@ -1851,16 +1900,57 @@
     musicVolumeInput?.addEventListener('input', handleMusicVolumeInput);
     musicVolumeInput?.addEventListener('change', handleMusicVolumeInput);
     musicVolumeInput?.addEventListener('pointermove', handleMusicVolumeInput);
-    musicVolumeInput?.addEventListener('touchmove', handleMusicVolumeInput, { passive: true });
+    musicVolumeInput?.addEventListener('touchmove', handleMusicVolumeInput, { passive: false });
+    musicVolumeInput?.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+
+    // Bloquer le scroll page sur tous les sliders vol
+    [originalVolumeSlider, musicVolumeInput, thumbnailTimeSlider].forEach(slider => {
+      if (!slider) return;
+      slider.addEventListener('touchstart', (e) => { e.stopPropagation(); }, { passive: true });
+      slider.addEventListener('touchmove', (e) => { e.stopPropagation(); }, { passive: false });
+    });
 
     if (waveformVisual) {
-      waveformVisual.addEventListener('pointerdown', (e) => { isDraggingWaveform = true; waveformVisual.setPointerCapture?.(e.pointerId); updateStartFromClientX(e.clientX); });
-      waveformVisual.addEventListener('pointermove', (e) => { if (!isDraggingWaveform) return; updateStartFromClientX(e.clientX); });
-      const endDrag = (e) => { if (!isDraggingWaveform) return; isDraggingWaveform = false; waveformVisual.releasePointerCapture?.(e.pointerId); };
+      waveformVisual.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); // bloquer scroll page
+        isDraggingWaveform = true;
+        waveformVisual.setPointerCapture?.(e.pointerId);
+        updateStartFromClientX(e.clientX);
+      }, { passive: false });
+      waveformVisual.addEventListener('pointermove', (e) => {
+        if (!isDraggingWaveform) return;
+        e.preventDefault();
+        updateStartFromClientX(e.clientX);
+      }, { passive: false });
+      const endDrag = (e) => {
+        if (!isDraggingWaveform) return;
+        isDraggingWaveform = false;
+        waveformVisual.releasePointerCapture?.(e.pointerId);
+        // Seek final pour appliquer proprement la position
+        const { start, end } = getLoopBounds();
+        if (musicEngine) {
+          musicEngine.updateLoop(start, end);
+          if (musicEngine.isPlaying) musicEngine.seek(start);
+        }
+      };
       waveformVisual.addEventListener('pointerup', endDrag);
       waveformVisual.addEventListener('pointercancel', endDrag);
-      waveformVisual.onclick = (e) => handleWaveformInteraction(e.clientX);
-      waveformVisual.addEventListener('touchend', (e) => { const touch = e.changedTouches?.[0]; if (touch) handleWaveformInteraction(touch.clientX); }, { passive: true });
+      // Touch events explicites pour iOS
+      waveformVisual.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        if (touch) updateStartFromClientX(touch.clientX);
+      }, { passive: false });
+      waveformVisual.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        if (touch) updateStartFromClientX(touch.clientX);
+      }, { passive: false });
+      waveformVisual.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        const touch = e.changedTouches?.[0];
+        if (touch) handleWaveformInteraction(touch.clientX);
+      }, { passive: false });
     }
 
     function setActiveTab(tabKey = 'music') {
@@ -2090,7 +2180,8 @@
         playBufferAudio(currentUrl, nextStart, end, { id: currentId, buffer: currentBuffer, restart: true });
       };
       const getPlaybackState = () => ({ isPlaying, currentTime: loopStartTime || 0, startPerf });
-      return { load, play, stop, updateLoop, updateVolume, clearBuffer, playBufferAudio, playImmediateFromCache, seek, getPlaybackState, get isPlaying() { return isPlaying; } };
+      const _getSourceNode = () => musicSourceNode;
+      return { load, play, stop, updateLoop, updateVolume, clearBuffer, playBufferAudio, playImmediateFromCache, seek, getPlaybackState, _getSourceNode, get isPlaying() { return isPlaying; } };
     }
 
     musicEngine = createMusicEngine();
