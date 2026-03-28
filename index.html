@@ -269,20 +269,24 @@
     .music-clear svg { width: 12px; height: 12px; }
     .music-clear:active { transform: scale(0.92); }
 
-    /* --- BARRE DE PROGRESSION VIDÉO --- */
+    /* --- BARRE DE PROGRESSION VIDÉO (draggable) --- */
     .video-progress-bar {
       position: absolute;
       left: 0; right: 0;
-      height: 3px;
-      z-index: 10;
-      pointer-events: none;
+      height: 28px; /* zone de touch large */
+      z-index: 15;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      padding: 0;
+      touch-action: pan-y;
     }
     .video-progress-bar-bg {
       width: 100%;
-      height: 100%;
+      height: 3px;
       background: rgba(255,255,255,0.2);
       position: relative;
-      overflow: hidden;
+      flex-shrink: 0;
     }
     .video-progress-bar-fill {
       position: absolute;
@@ -290,7 +294,23 @@
       width: 0%;
       background: #fff;
       border-radius: 0 2px 2px 0;
-      transition: width 0.1s linear;
+    }
+    /* Indicateur de position (thumb) */
+    .video-progress-thumb {
+      position: absolute;
+      top: 50%; left: 0%;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      pointer-events: none;
+    }
+    .video-progress-bar:active .video-progress-thumb,
+    .video-progress-bar.dragging .video-progress-thumb {
+      opacity: 1;
     }
 
     /* --- PREVIEW ACTIONS (bas, toujours visible, même hauteur qu'avant) --- */
@@ -437,32 +457,32 @@
     .timeline-row .time-chip { background: rgba(255,255,255,0.1); border-radius: 10px; padding: 6px 10px; font-size: 12px; letter-spacing: 0.2px; }
     .waveform-visual {
       height: 72px; border-radius: 14px; border: 1px solid #1f1f24;
-      background: linear-gradient(145deg, #0f0f12, #121216);
+      background: rgba(255,255,255,0.04);
       display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
-      gap: 3px; padding: 10px 12px; align-items: end;
+      gap: 2px; padding: 8px 10px; align-items: center;
       cursor: pointer; overflow: hidden; position: relative;
       touch-action: none;
       overscroll-behavior: none;
     }
     .waveform-visual span {
-      display: block; width: 6px; align-self: end; border-radius: 6px 6px 2px 2px;
-      background: linear-gradient(180deg, #7f7ff5, #5ecbfa);
-      opacity: 0.35; transition: opacity 0.2s, transform 0.2s, background 0.2s;
+      display: block; width: 3px; align-self: center; border-radius: 3px;
+      background: rgba(255,255,255,0.22);
+      transition: background 0.15s, transform 0.15s;
       height: var(--bar-height, 30%);
     }
-    .waveform-visual span.active { opacity: 1; box-shadow: 0 6px 14px rgba(94,203,250,0.35); transform: translateY(-2px); background: linear-gradient(180deg, #9dd8ff, #6ccfff); }
+    .waveform-visual span.active {
+      background: rgba(255,255,255,0.9);
+      transform: scaleY(1.08);
+    }
     .waveform-handle {
-      position: absolute; top: 6px; bottom: 6px; width: 2px;
-      background: rgba(255,255,255,0.9); transform: translateX(-50%);
-      display: flex; align-items: flex-end; justify-content: center; pointer-events: none;
+      position: absolute; top: 4px; bottom: 4px; width: 2px;
+      background: rgba(255,255,255,0.95); transform: translateX(-50%);
+      border-radius: 2px;
+      pointer-events: none;
     }
-    .waveform-handle::after {
-      content: ''; position: absolute; bottom: -6px; width: 12px; height: 12px;
-      border-radius: 50%; background: #9dd8ff; box-shadow: 0 4px 10px rgba(0,0,0,0.35);
-      transform: translateY(50%);
-    }
-    .waveform-handle.end { background: rgba(255,255,255,0.65); }
-    .waveform-handle.end::after { background: #6ccfff; }
+    .waveform-handle::after { content: none; }
+    .waveform-handle.end { background: rgba(255,255,255,0.5); }
+    .waveform-handle.end::after { content: none; }
     .slider-row { display: flex; align-items: center; gap: 10px; }
 
     /* Bouton icône générique */
@@ -505,7 +525,7 @@
 
     /* Slider style unifié */
     .vol-slider {
-      --slider-hit-padding: 18px;
+      --slider-hit-padding: 22px;
       -webkit-appearance: none; appearance: none;
       width: 100%; height: calc(8px + var(--slider-hit-padding) * 2);
       padding: var(--slider-hit-padding) 0;
@@ -742,10 +762,11 @@
       </div>
     </div>
 
-    <!-- Barre de progression vidéo (style Instagram) -->
+    <!-- Barre de progression vidéo draggable -->
     <div class="video-progress-bar" id="video-progress-bar">
       <div class="video-progress-bar-bg">
         <div class="video-progress-bar-fill" id="video-progress-fill"></div>
+        <div class="video-progress-thumb" id="video-progress-thumb"></div>
       </div>
     </div>
 
@@ -1220,14 +1241,19 @@
        ===================================================== */
     const videoProgressFill = document.getElementById('video-progress-fill');
     const videoProgressBar = document.getElementById('video-progress-bar');
+    const videoProgressThumb = document.getElementById('video-progress-thumb');
     let videoProgressRaf = null;
+    let isDraggingProgress = false;
 
     function updateVideoProgress() {
       if (!previewVideo || !videoProgressFill) return;
       const dur = previewVideo.duration;
       if (!dur || isNaN(dur)) { videoProgressRaf = requestAnimationFrame(updateVideoProgress); return; }
-      const pct = Math.min(100, (previewVideo.currentTime / dur) * 100);
-      videoProgressFill.style.width = pct + '%';
+      if (!isDraggingProgress) {
+        const pct = Math.min(100, (previewVideo.currentTime / dur) * 100);
+        videoProgressFill.style.width = pct + '%';
+        if (videoProgressThumb) videoProgressThumb.style.left = pct + '%';
+      }
       videoProgressRaf = requestAnimationFrame(updateVideoProgress);
     }
 
@@ -1239,6 +1265,65 @@
     function stopVideoProgress() {
       if (videoProgressRaf) { cancelAnimationFrame(videoProgressRaf); videoProgressRaf = null; }
       if (videoProgressFill) videoProgressFill.style.width = '0%';
+      if (videoProgressThumb) videoProgressThumb.style.left = '0%';
+    }
+
+    function seekVideoFromClientX(clientX) {
+      if (!videoProgressBar || !previewVideo) return;
+      const rect = videoProgressBar.getBoundingClientRect();
+      const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+      const dur = previewVideo.duration;
+      if (!dur || isNaN(dur)) return;
+      const newTime = pct * dur;
+      previewVideo.currentTime = newTime;
+      videoProgressFill.style.width = (pct * 100) + '%';
+      if (videoProgressThumb) videoProgressThumb.style.left = (pct * 100) + '%';
+    }
+
+    if (videoProgressBar) {
+      videoProgressBar.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        isDraggingProgress = true;
+        videoProgressBar.classList.add('dragging');
+        videoProgressBar.setPointerCapture?.(e.pointerId);
+        seekVideoFromClientX(e.clientX);
+      }, { passive: false });
+
+      videoProgressBar.addEventListener('pointermove', (e) => {
+        if (!isDraggingProgress) return;
+        e.preventDefault();
+        seekVideoFromClientX(e.clientX);
+      }, { passive: false });
+
+      const endProgressDrag = (e) => {
+        if (!isDraggingProgress) return;
+        isDraggingProgress = false;
+        videoProgressBar.classList.remove('dragging');
+        videoProgressBar.releasePointerCapture?.(e.pointerId);
+      };
+      videoProgressBar.addEventListener('pointerup', endProgressDrag);
+      videoProgressBar.addEventListener('pointercancel', endProgressDrag);
+
+      videoProgressBar.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isDraggingProgress = true;
+        videoProgressBar.classList.add('dragging');
+        const touch = e.touches[0];
+        if (touch) seekVideoFromClientX(touch.clientX);
+      }, { passive: false });
+
+      videoProgressBar.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        if (touch) seekVideoFromClientX(touch.clientX);
+      }, { passive: false });
+
+      videoProgressBar.addEventListener('touchend', (e) => {
+        isDraggingProgress = false;
+        videoProgressBar.classList.remove('dragging');
+        const touch = e.changedTouches?.[0];
+        if (touch) seekVideoFromClientX(touch.clientX);
+      }, { passive: false });
     }
 
     function positionPreviewOverlays() {
@@ -1262,10 +1347,17 @@
     function closeThumbnailSheet() {
       thumbnailSheet?.classList.remove('active');
       freezeThumbnailButton(); // figer le bouton sur le frame validé
-      // Relancer la vidéo
+      // Relancer la vidéo en s'assurant que le graph audio est bien connecté
       if (previewVideo && previewVideo.paused) {
-        previewVideo.play().catch(() => {});
-        restartMusicSync();
+        previewVideo.muted = true;
+        previewVideo.play().then(() => {
+          // Reconnecter le graph si nécessaire (peut être perdu après pause)
+          if (!videoMediaSource) {
+            connectVideoToAudioGraph();
+          }
+          applyOriginalVolume(originalVolume);
+          restartMusicSync();
+        }).catch(() => {});
       }
     }
 
@@ -2459,25 +2551,37 @@
         shouldCheckDuration = false;
       }
       updateThumbnailSliderBounds(); resizeThumbnailCanvases();
-      const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME);
-      selectedThumbnailTime = defaultTime;
-      previewVideo.currentTime = defaultTime;
-      requestDrawThumbnail();
-      if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(defaultTime);
-      updateThumbnailTimeLabel(defaultTime);
+      if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(DEFAULT_THUMBNAIL_TIME);
+      updateThumbnailTimeLabel(DEFAULT_THUMBNAIL_TIME);
       const selectedMusic = getSelectedMusic();
       if (!isGalleryVideoSource() && selectedMusic) updateSeekDurationFromMeta(selectedMusic);
       else if (!isGalleryVideoSource()) setSeekLimits(currentMusicDuration);
       updateMusicOverlay();
-      // Lancer la vidéo automatiquement
-      // On démarre muted pour satisfaire l'autoplay policy iOS
+      // Lancer la vidéo d'abord — NE PAS seeker avant le play sur iOS
       previewVideo.muted = true;
       previewVideo.play().then(() => {
         // Connecter au Web Audio graph APRÈS le play (requis par iOS)
         connectVideoToAudioGraph();
-        // Appliquer le volume via le GainNode
         applyOriginalVolume(originalVolume);
-      }).catch(() => {});
+        // Maintenant que la vidéo joue, faire le seek miniature
+        // sans risquer de bloquer le play
+        const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME);
+        selectedThumbnailTime = defaultTime;
+        // Dessiner la miniature via un frame capturé proprement
+        requestAnimationFrame(() => {
+          drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas);
+          drawThumbnailToCanvas(thumbnailCtxSheet, thumbnailCanvasSheet);
+        });
+      }).catch((err) => {
+        // Si play échoue, essayer sans muted après un court délai
+        setTimeout(() => {
+          previewVideo.muted = false;
+          previewVideo.play().then(() => {
+            connectVideoToAudioGraph();
+            applyOriginalVolume(originalVolume);
+          }).catch(() => {});
+        }, 100);
+      });
       if (!isGalleryVideoSource()) restartPreviewIfPlaying();
     };
 
