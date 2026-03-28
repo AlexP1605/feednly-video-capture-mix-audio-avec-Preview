@@ -43,6 +43,9 @@
     }
 
     body.camera-starting * { transition: none !important; animation: none !important; }
+    /* Stabiliser la bottom-bar dès le chargement pour éviter le saut */
+    .bottom-bar { will-change: auto; }
+    .record-wrap { flex-shrink: 0; }
 
     /* --- CAMERA --- */
     #camera-container { position: absolute; inset: 0; z-index: 1; background: #000; }
@@ -76,6 +79,8 @@
       padding: 0 30px calc(20px + env(safe-area-inset-bottom)) 30px;
       display: flex; align-items: center; justify-content: space-between;
       z-index: 30;
+      min-height: 130px;
+      contain: layout style;
     }
     body.recording .top-bar, body.recording .bottom-bar .side { opacity: 0; pointer-events: none; }
     .side { pointer-events: auto; }
@@ -175,13 +180,15 @@
       position: absolute;
       top: 0; left: 0; right: 0;
       padding-top: max(16px, env(safe-area-inset-top));
-      padding-right: 16px;
+      padding-left: 0;
+      padding-right: 0;
       display: flex;
       justify-content: center;
       align-items: center;
       z-index: 10;
-      pointer-events: auto;
+      pointer-events: none; /* laisser passer les clics vers la vidéo */
     }
+    .preview-top-controls > * { pointer-events: auto; }
 
     /* Bouton volume son original — position absolute haut droit */
     .original-mute-btn {
@@ -262,6 +269,30 @@
     .music-clear svg { width: 12px; height: 12px; }
     .music-clear:active { transform: scale(0.92); }
 
+    /* --- BARRE DE PROGRESSION VIDÉO --- */
+    .video-progress-bar {
+      position: absolute;
+      left: 0; right: 0;
+      height: 3px;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .video-progress-bar-bg {
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,255,0.2);
+      position: relative;
+      overflow: hidden;
+    }
+    .video-progress-bar-fill {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 0%;
+      background: #fff;
+      border-radius: 0 2px 2px 0;
+      transition: width 0.1s linear;
+    }
+
     /* --- PREVIEW ACTIONS (bas, toujours visible, même hauteur qu'avant) --- */
     #preview-actions {
       position: absolute;
@@ -332,7 +363,7 @@
     .thumbnail-slider-label {
       font-size: 12px; color: rgba(255,255,255,0.65); flex: 0 0 auto;
     }
-    .thumbnail-time-slider { flex: 1; min-width: 0; }
+    .thumbnail-time-slider { flex: 1; min-width: 0; touch-action: pan-x; cursor: pointer; }
     .thumbnail-time-display {
       font-size: 12px; color: rgba(255,255,255,0.9);
       min-width: 36px; text-align: right;
@@ -410,6 +441,8 @@
       display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
       gap: 3px; padding: 10px 12px; align-items: end;
       cursor: pointer; overflow: hidden; position: relative;
+      touch-action: none;
+      overscroll-behavior: none;
     }
     .waveform-visual span {
       display: block; width: 6px; align-self: end; border-radius: 6px 6px 2px 2px;
@@ -472,11 +505,13 @@
 
     /* Slider style unifié */
     .vol-slider {
-      --slider-hit-padding: 14px;
+      --slider-hit-padding: 18px;
       -webkit-appearance: none; appearance: none;
       width: 100%; height: calc(8px + var(--slider-hit-padding) * 2);
       padding: var(--slider-hit-padding) 0;
       background: transparent; border-radius: 999px; outline: none; border: none;
+      touch-action: pan-x;
+      cursor: pointer;
     }
     .vol-slider::-webkit-slider-thumb {
       -webkit-appearance: none; appearance: none;
@@ -704,6 +739,13 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Barre de progression vidéo (style Instagram) -->
+    <div class="video-progress-bar" id="video-progress-bar">
+      <div class="video-progress-bar-bg">
+        <div class="video-progress-bar-fill" id="video-progress-fill"></div>
       </div>
     </div>
 
@@ -1161,11 +1203,35 @@
        On positionne le bouton miniature et le bouton musique
        par rapport à la zone disponible (entre haut et preview-actions)
        ===================================================== */
+    const videoProgressFill = document.getElementById('video-progress-fill');
+    const videoProgressBar = document.getElementById('video-progress-bar');
+    let videoProgressRaf = null;
+
+    function updateVideoProgress() {
+      if (!previewVideo || !videoProgressFill) return;
+      const dur = previewVideo.duration;
+      if (!dur || isNaN(dur)) { videoProgressRaf = requestAnimationFrame(updateVideoProgress); return; }
+      const pct = Math.min(100, (previewVideo.currentTime / dur) * 100);
+      videoProgressFill.style.width = pct + '%';
+      videoProgressRaf = requestAnimationFrame(updateVideoProgress);
+    }
+
+    function startVideoProgress() {
+      if (videoProgressRaf) cancelAnimationFrame(videoProgressRaf);
+      videoProgressRaf = requestAnimationFrame(updateVideoProgress);
+    }
+
+    function stopVideoProgress() {
+      if (videoProgressRaf) { cancelAnimationFrame(videoProgressRaf); videoProgressRaf = null; }
+      if (videoProgressFill) videoProgressFill.style.width = '0%';
+    }
+
     function positionPreviewOverlays() {
       // Lecture offsetHeight en batch (1 reflow)
       const actionsH = previewActions?.offsetHeight || 110;
       // Écriture groupée (0 reflow supplémentaire)
       if (thumbnailBtnOverlay) thumbnailBtnOverlay.style.bottom = `${actionsH + 16}px`;
+      if (videoProgressBar) videoProgressBar.style.bottom = `${actionsH}px`;
       // music-trigger-row est dans la top bar — pas de positionnement JS
     }
 
@@ -1215,7 +1281,10 @@
       const clamped = clampVolume(Number.isFinite(value) ? value : 1);
       originalVolume = clamped;
       isOriginalMuted = clamped === 0;
-      if (previewVideo) previewVideo.volume = clamped;
+      if (previewVideo) {
+        previewVideo.muted = false; // forcer unmuted — iOS peut le mettre à true
+        previewVideo.volume = clamped;
+      }
       if (syncInput && originalVolumeSlider) originalVolumeSlider.value = String(clamped);
       if (originalVolumeValue) originalVolumeValue.textContent = Math.round(clamped * 100);
       updateMicIcon();
@@ -1272,6 +1341,11 @@
     // À chaque loop de la vidéo, on resync la musique
     previewVideo.addEventListener('play', () => {
       if (selectedMusicId) restartMusicSync();
+      startVideoProgress();
+    });
+
+    previewVideo.addEventListener('pause', () => {
+      if (videoProgressRaf) cancelAnimationFrame(videoProgressRaf);
     });
 
     // Quand la vidéo boucle (timeupdate proche de la fin → début)
@@ -1491,7 +1565,13 @@
         };
         item.appendChild(cover); item.appendChild(meta); item.appendChild(duration); item.appendChild(playBtn);
         item.addEventListener('pointerdown', () => ensureAudioReady(), { once: true, passive: true });
-        item.onclick = (e) => { e.stopPropagation(); selectMusic(opt); startMusicPreview(opt); };
+        item.onclick = (e) => {
+          // Ne pas re-déclencher si le clic vient du bouton play
+          if (e.target.closest('.icon-btn')) return;
+          e.stopPropagation();
+          selectMusic(opt);
+          startMusicPreview(opt);
+        };
         fragment.appendChild(item);
       });
       musicListEl.appendChild(fragment);
@@ -2195,6 +2275,7 @@
     function resetPreviewState() {
       if (previewTimeout) { clearTimeout(previewTimeout); previewTimeout = null; }
       stopMusicPreview({ hard: true }); invalidateMusicSession(); resetThumbnailDefaults();
+      stopVideoProgress();
       previewVideo.src = '';
       if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = null; }
       recordedBlob = null; videoSourceType = null; videoDurationSeconds = 0;
