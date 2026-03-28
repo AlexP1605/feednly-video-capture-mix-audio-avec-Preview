@@ -11,7 +11,7 @@
       --primary: #ff3b30;
       --active-timer: #ffcc00;
       --flash-active: #ffcc00;
-      --preview-actions-height: 110px;
+      --preview-actions-height: 86px;
       --app-viewport-height: 100svh;
       --app-viewport-width: 100vw;
     }
@@ -277,9 +277,9 @@
       z-index: 15;
       cursor: pointer;
       display: flex;
-      align-items: center;
-      padding: 0;
-      touch-action: pan-y;
+      align-items: flex-end; /* ligne en bas de la zone touch */
+      padding: 0 0 0 0;
+      touch-action: none;
     }
     .video-progress-bar-bg {
       width: 100%;
@@ -317,16 +317,14 @@
     #preview-actions {
       position: absolute;
       left: 0; right: 0; bottom: 0;
-      height: var(--preview-actions-height, 110px);
-      min-height: var(--preview-actions-height, 110px);
       background: #000;
       display: flex; align-items: center; justify-content: center;
-      gap: 15px;
-      padding: 0 24px calc(env(safe-area-inset-bottom) + 10px);
+      gap: 12px;
+      padding: 10px 20px calc(env(safe-area-inset-bottom) + 8px);
       pointer-events: auto;
       z-index: 20;
     }
-    .action-btn { flex: 1; height: 54px; font-size: 16px; font-weight: 700; border: none; cursor: pointer; border-radius: 14px; }
+    .action-btn { flex: 1; height: 50px; font-size: 16px; font-weight: 700; border: none; cursor: pointer; border-radius: 14px; }
     #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
     #next-button { background: #fff; color: #000; }
 
@@ -1328,10 +1326,12 @@
 
     function positionPreviewOverlays() {
       // Lecture offsetHeight en batch (1 reflow)
-      const actionsH = previewActions?.offsetHeight || 110;
+      const actionsH = previewActions?.offsetHeight || 86;
       // Écriture groupée (0 reflow supplémentaire)
-      if (thumbnailBtnOverlay) thumbnailBtnOverlay.style.bottom = `${actionsH + 16}px`;
+      // Barre de progression : collée exactement en bas de la vidéo
       if (videoProgressBar) videoProgressBar.style.bottom = `${actionsH}px`;
+      // Miniature : au-dessus de la barre de progression + marge
+      if (thumbnailBtnOverlay) thumbnailBtnOverlay.style.bottom = `${actionsH + 28 + 10}px`;
       // music-trigger-row est dans la top bar — pas de positionnement JS
     }
 
@@ -2460,7 +2460,20 @@
       if (recordingTimer) recordingTimer.textContent = '0:00';
       shouldCheckDuration = false;
       if (previewTimeout) clearTimeout(previewTimeout);
-      previewTimeout = setTimeout(() => { previewTimeout = null; if (recordedBlob) showPreview(recordedBlob); }, 16);
+      // Attendre que onstop soit déclenché (async sur iOS)
+      // On poll jusqu'à ce que recordedBlob soit prêt
+      let attempts = 0;
+      const tryShowPreview = () => {
+        previewTimeout = null;
+        if (recordedBlob) {
+          showPreview(recordedBlob);
+        } else if (attempts < 30) {
+          // Pas encore prêt, réessayer dans 100ms (max 3s d'attente)
+          attempts++;
+          previewTimeout = setTimeout(tryShowPreview, 100);
+        }
+      };
+      previewTimeout = setTimeout(tryShowPreview, 50);
     }
 
     function getViewportSize() {
