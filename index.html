@@ -442,9 +442,9 @@
     /* --- SHEET (musique) --- */
     .sheet-backdrop {
       position: absolute; inset: 0;
-      background: rgba(0,0,0,0.55);
+      background: linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.65));
       opacity: 0; pointer-events: none;
-      transition: opacity 0.25s ease; z-index: 85;
+      transition: opacity 0.25s ease; z-index: 12;
     }
     .sheet-backdrop.active { opacity: 1; pointer-events: auto; }
 
@@ -464,15 +464,7 @@
       will-change: transform;
     }
     .sheet.active { transform: translateY(0); pointer-events: auto; }
-    #music-filter-sheet {
-      height: auto;
-      max-height: 40dvh;
-      z-index: 90; /* au-dessus de music-controls (z-index 80) */
-      will-change: transform;
-    }
-    #music-filter-sheet .sheet-content {
-      padding-bottom: max(20px, env(safe-area-inset-bottom));
-    }
+    #music-filter-sheet { height: 30dvh; max-height: 30dvh; }
     .sheet .sheet-handle { width: 70px; height: 6px; border-radius: 10px; background: #2f2f2f; align-self: center; margin-bottom: 4px; }
     .sheet-content { display: flex; flex-direction: column; gap: 18px; flex: 1; overflow-y: auto; overflow-x: hidden; padding-bottom: 24px; }
     .sheet header { display: flex; align-items: center; justify-content: center; gap: 10px; }
@@ -778,10 +770,7 @@
           <div class="music-search-row">
             <input id="music-search" type="search" placeholder="Rechercher un titre ou un artiste" />
             <button type="button" id="music-filter-btn" class="music-filter-btn" aria-label="Filtre">
-              <!-- Icône filter/sliders classique -->
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
-                <path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-              </svg>
+              <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M40 64a8 8 0 0 1 8-8h160a8 8 0 0 1 0 16h-24v112a8 8 0 0 1-8 8h-40a8 8 0 0 1-8-8V72h-24v64a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V72h-0a8 8 0 0 1-8-8Zm24 8v56h24V72Zm80 0v104h24V72Z"></path></svg>
             </button>
           </div>
           <div id="music-list" class="music-list"></div>
@@ -847,9 +836,7 @@
       <div class="sheet-content">
         <header>
           <div class="title">
-            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;">
-              <path d="M4 6h16M7 12h10M10 18h4"/>
-            </svg>
+            <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M40 64a8 8 0 0 1 8-8h160a8 8 0 0 1 0 16h-24v112a8 8 0 0 1-8 8h-40a8 8 0 0 1-8-8V72h-24v64a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V72h0a8 8 0 0 1-8-8Zm24 8v56h24V72Zm80 0v104h24V72Z"></path></svg>
             <span>Filtres</span>
           </div>
         </header>
@@ -1806,12 +1793,8 @@
         const empty = document.createElement('div'); empty.textContent = 'Aucun titre'; empty.style.cssText = 'opacity:.7;text-align:center;padding:12px;'; musicListEl.appendChild(empty);
         setupMusicPreloadObserver(); return;
       }
-      // Rendre les 40 premiers immédiatement, le reste en idle
-      const BATCH_SIZE = 40;
-      const firstBatch = items.slice(0, BATCH_SIZE);
-      const restBatch = items.slice(BATCH_SIZE);
       const fragment = document.createDocumentFragment();
-      firstBatch.forEach(opt => {
+      items.forEach(opt => {
         const item = document.createElement('div');
         item.className = 'music-item' + (opt.id === selectedMusicId ? ' active' : '');
         item.dataset.musicId = String(opt.id || ''); item.dataset.musicUrl = opt.url || '';
@@ -1872,45 +1855,7 @@
         fragment.appendChild(item);
       });
       musicListEl.appendChild(fragment);
-      // Charger le reste en idle (ne bloque pas l'UI)
-      if (restBatch.length > 0) {
-        scheduleIdleTask(() => {
-          const restFragment = document.createDocumentFragment();
-          restBatch.forEach(opt => {
-            restFragment.appendChild(createMusicItem(opt));
-          });
-          musicListEl.appendChild(restFragment);
-          setupMusicPreloadObserver();
-        }, { timeout: 300, fallbackDelay: 50 });
-      } else {
-        setupMusicPreloadObserver();
-      }
-    }
-
-    function createMusicItem(opt) {
-      // Extrait de renderMusicList — crée un item DOM
-      const item = document.createElement('div');
-      item.className = 'music-item' + (opt.id === selectedMusicId ? ' active' : '');
-      item.dataset.musicId = String(opt.id || ''); item.dataset.musicUrl = opt.url || '';
-      const cover = document.createElement('div'); cover.className = 'music-list-cover'; cover.style.backgroundImage = opt.cover ? `url(${opt.cover})` : '';
-      const meta = document.createElement('div'); meta.className = 'music-list-meta';
-      const title = document.createElement('div'); title.className = 'title'; title.textContent = opt.title;
-      const artist = document.createElement('div'); artist.className = 'artist'; artist.textContent = opt.artist;
-      meta.appendChild(title); meta.appendChild(artist);
-      const duration = document.createElement('div'); duration.className = 'music-list-duration'; duration.textContent = opt.duration ? formatTimeLabel(Math.floor(Number(opt.duration) / 1000)) : '';
-      const playBtn = document.createElement('button'); playBtn.type = 'button'; playBtn.className = 'icon-btn';
-      const isPendingThis = pendingMusicId === opt.id;
-      const isPlayingThis = currentlyPlayingMusicId === opt.id && (musicEngine?.isPlaying || isPendingThis);
-      playBtn.innerHTML = isPlayingThis ? playIconPause() : playIconPlay();
-      if (isPendingThis) { playBtn.classList.add('loading'); playBtn.disabled = true; playBtn.setAttribute('aria-busy', 'true'); }
-      playBtn.onclick = (e) => { e.stopPropagation(); /* géré dans renderMusicList */ };
-      item.appendChild(cover); item.appendChild(meta); item.appendChild(duration); item.appendChild(playBtn);
-      item.addEventListener('pointerdown', () => ensureAudioReady(), { once: true, passive: true });
-      item.onclick = (e) => {
-        if (e.target.closest('.icon-btn')) return;
-        e.stopPropagation(); selectMusic(opt); startMusicPreview(opt);
-      };
-      return item;
+      setupMusicPreloadObserver();
     }
     function updateMusicListPlaybackState() {
       if (!musicListEl) return;
@@ -2213,11 +2158,6 @@
         resetFilterTag(); pendingMusicId = null;
         requestAnimationFrame(() => { const scroller = getMusicSheetScroller(); if (scroller) scroller.scrollTop = 0; });
       }
-      // Preload immédiat des 3 premiers tracks dès l'ouverture
-      const firstTracks = musicOptions.slice(0, 3);
-      firstTracks.forEach(opt => {
-        if (opt?.url) enqueueMusicPreload(opt.id, opt.url, { allowWhenSelected: true });
-      });
       burstPreloadVisibleTracks();
     }
     function openFilterSheet() { if (!musicFilterSheet) return; musicFilterSheet.classList.add('active'); updateSheetBackdrop(); }
@@ -2250,20 +2190,9 @@
 
     musicOverlay.onclick = (e) => { e.stopPropagation(); openMusicSheet(); };
     if (musicClearBtn) musicClearBtn.onclick = (e) => { e.stopPropagation(); clearMusicSelection(); };
-    let searchDebounceTimer = null;
-    musicSearchInput.addEventListener('input', (e) => {
-      // Debounce 120ms pour éviter un re-render à chaque frappe
-      clearTimeout(searchDebounceTimer);
-      searchDebounceTimer = setTimeout(() => renderMusicList(e.target.value), 120);
-    });
-    musicSearchInput.addEventListener('focus', (e) => {
-      // Ne pas scroller — laisser iOS gérer le clavier naturellement
-      e.stopPropagation();
-    });
-    musicSearchInput.addEventListener('blur', () => {
-      // Reset scroll horizontal si déplacé
-      document.documentElement.scrollLeft = 0;
-      document.body.scrollLeft = 0;
+    musicSearchInput.oninput = (e) => renderMusicList(e.target.value);
+    musicSearchInput.addEventListener('focus', () => {
+      requestAnimationFrame(() => { musicSearchInput.scrollIntoView({ block: 'center', inline: 'nearest' }); document.documentElement.scrollLeft = 0; document.body.scrollLeft = 0; });
     });
     musicFilterBtn?.addEventListener('click', (e) => { e.stopPropagation(); if (musicFilterSheet?.classList.contains('active')) { closeFilterSheet(); return; } openFilterSheet(); });
     musicSheet.onclick = (e) => e.stopPropagation();
