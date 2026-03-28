@@ -130,6 +130,50 @@
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.5); } 70% { box-shadow: 0 0 0 15px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } }
     body.camera-starting .record-button { animation: none !important; box-shadow: none !important; }
 
+    /* --- TAP TO PLAY OVERLAY --- */
+    #tap-to-play {
+      position: absolute;
+      inset: 0;
+      z-index: 60;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      cursor: pointer;
+      pointer-events: none; /* transparent par défaut */
+    }
+    #tap-to-play.active {
+      display: flex;
+      pointer-events: auto;
+    }
+    #tap-to-play.paused {
+      display: flex;
+      pointer-events: auto;
+      background: rgba(0,0,0,0.3);
+    }
+    .tap-to-play-btn {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.45);
+      border: 2px solid rgba(255,255,255,0.7);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 10px;
+      backdrop-filter: blur(8px);
+      transition: transform 0.15s ease;
+    }
+    #tap-to-play:active .tap-to-play-btn { transform: scale(0.9); }
+    .tap-to-play-btn svg { width: 32px; height: 32px; fill: #fff; }
+    .tap-to-play-icon-play { margin-left: 4px; }
+    .tap-to-play-icon-pause { display: none; }
+    #tap-to-play.paused .tap-to-play-icon-play { display: none; }
+    #tap-to-play.paused .tap-to-play-icon-pause { display: block; }
+    .tap-to-play-label {
+      font-size: 13px; font-weight: 600;
+      color: rgba(255,255,255,0.9);
+      letter-spacing: 0.2px;
+    }
+
     /* =====================================================
        PREVIEW OVERLAY — TikTok style fullscreen
        ===================================================== */
@@ -320,8 +364,7 @@
       background: #000;
       display: flex; align-items: center; justify-content: center;
       gap: 12px;
-      /* padding égal haut/bas pour centrer les boutons dans la zone noire */
-      padding: 10px 20px max(10px, env(safe-area-inset-bottom));
+      padding: 18px 20px max(14px, env(safe-area-inset-bottom));
       pointer-events: auto;
       z-index: 20;
     }
@@ -653,6 +696,15 @@
     <!-- Gradient de lisibilité -->
     <div class="preview-scrim"></div>
 
+    <!-- Tap to play / pause overlay -->
+    <div id="tap-to-play">
+      <div class="tap-to-play-btn">
+        <svg class="tap-to-play-icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        <svg class="tap-to-play-icon-pause" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+      </div>
+      <span class="tap-to-play-label">Appuyer pour lire</span>
+    </div>
+
     <!-- Haut centre : bouton Ajouter un son -->
     <div class="preview-top-controls">
 
@@ -889,6 +941,7 @@
     const musicTabBar = document.getElementById('music-tab-bar');
 
     let currentlyPlayingMusicId = null;
+    const tapToPlay = document.getElementById('tap-to-play');
     let pendingMusicId = null;
     let videoSourceType = null;
     let isDraggingWaveform = false;
@@ -1392,6 +1445,29 @@
     /* =====================================================
        VOLUME SON ORIGINAL
        ===================================================== */
+    // Débloquer le AudioContext via le mediaStream micro (pendant enregistrement)
+    // iOS autorise le play() si le AudioContext a déjà traité un stream actif
+    let micUnlockSource = null;
+    function unlockAudioContextViaStream(stream) {
+      if (!stream || !stream.active) return;
+      try {
+        const audioCtx = ensureMusicAudioContext();
+        if (!audioCtx) return;
+        // Connecter le micro au contexte (silencieux — gain=0)
+        const src = audioCtx.createMediaStreamSource(stream);
+        const silentGain = audioCtx.createGain();
+        silentGain.gain.value = 0; // silencieux, juste pour débloquer
+        src.connect(silentGain);
+        // NE PAS connecter à destination (on ne veut pas entendre le micro)
+        micUnlockSource = src;
+        // Déconnecter après 500ms (juste le temps de débloquer)
+        setTimeout(() => {
+          try { src.disconnect(); silentGain.disconnect(); } catch(e) {}
+          micUnlockSource = null;
+        }, 500);
+      } catch(e) {}
+    }
+
     function connectVideoToAudioGraph() {
       if (videoMediaSource) return; // déjà connecté
       try {
@@ -2283,6 +2359,54 @@
     musicEngine.updateVolume(musicVolume);
     document.addEventListener('pointerdown', ensureAudioReady, { once: true, passive: true });
 
+    // Tap-to-play : user gesture → play autorisé par iOS/Android
+    function doVideoPlay() {
+      const ctx = ensureMusicAudioContext();
+      const connect = () => {
+        connectVideoToAudioGraph();
+        applyOriginalVolume(originalVolume);
+        if (!isGalleryVideoSource()) restartPreviewIfPlaying();
+        tapToPlay.classList.remove('active');
+        tapToPlay.classList.remove('paused');
+      };
+      previewVideo.muted = true;
+      previewVideo.play().then(() => {
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().then(connect).catch(connect);
+        } else {
+          connect();
+        }
+      }).catch(() => {
+        tapToPlay.classList.add('active');
+      });
+    }
+
+    tapToPlay?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (previewVideo.paused) {
+        doVideoPlay();
+      } else {
+        previewVideo.pause();
+        if (selectedMusicId) musicEngine?.stop();
+        tapToPlay.classList.remove('active');
+        tapToPlay.classList.add('paused');
+      }
+    });
+
+    // Tap sur la vidéo elle-même = toggle pause/play
+    previewVideo.style.pointerEvents = 'auto';
+    previewVideo.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!previewVideo.paused) {
+        previewVideo.pause();
+        if (selectedMusicId) musicEngine?.stop();
+        tapToPlay.classList.remove('active');
+        tapToPlay.classList.add('paused');
+      } else {
+        doVideoPlay();
+      }
+    });
+
     function stopMusicPreview({ hard = false } = {}) {
       if (performance.now() - lastMusicPreviewStartAt < MUSIC_STOP_GRACE_MS) return;
       if (!musicEngine) return;
@@ -2429,6 +2553,9 @@
       else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) options.mimeType = 'video/webm;codecs=vp8,opus';
       const streamForRecording = mediaStream;
       try { mediaRecorder = new MediaRecorder(streamForRecording, options); } catch (e) { mediaRecorder = new MediaRecorder(streamForRecording); }
+      // Débloquer le AudioContext via le stream micro actif
+      // iOS autorisera ensuite le play() sans geste user
+      unlockAudioContextViaStream(streamForRecording);
       mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
       mediaRecorder.onstop = () => {
         // Créer le blob immédiatement
@@ -2544,8 +2671,8 @@
     function hidePreview() {
       previewOverlay.classList.remove('active'); document.body.classList.remove('showing-preview');
       shouldResetMusicSheetOnOpen = true; resetMusicSheetUI(); unlockPreviewViewport();
-      // Fermer la sheet miniature si ouverte
       thumbnailSheet?.classList.remove('active');
+      if (tapToPlay) tapToPlay.classList.remove('active');
       resetPreviewState();
       if (!uploadCompleted && (!mediaStream || !mediaStream.active)) startCamera();
     }
@@ -2574,39 +2701,31 @@
       else if (!isGalleryVideoSource()) setSeekLimits(currentMusicDuration);
       updateMusicOverlay();
       // Lancer la vidéo d'abord — NE PAS seeker avant le play sur iOS
-      previewVideo.muted = true;
-      previewVideo.play().then(() => {
-        // Résumer le AudioContext (peut être suspendu après autoplay)
-        const ctx = ensureMusicAudioContext();
-        const doConnect = () => {
-          connectVideoToAudioGraph();
-          applyOriginalVolume(originalVolume);
-        };
-        if (ctx && ctx.state === 'suspended') {
-          ctx.resume().then(doConnect).catch(doConnect);
-        } else {
-          doConnect();
-        }
-        // Maintenant que la vidéo joue, faire le seek miniature
-        // sans risquer de bloquer le play
+      // Tenter l'autoplay (débloqué si unlockAudioContextViaStream a fonctionné)
+      const ctx = ensureMusicAudioContext();
+      const connectAfterPlay = () => {
+        connectVideoToAudioGraph();
+        applyOriginalVolume(originalVolume);
         const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME);
         selectedThumbnailTime = defaultTime;
-        // Dessiner la miniature via un frame capturé proprement
         requestAnimationFrame(() => {
           drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas);
           drawThumbnailToCanvas(thumbnailCtxSheet, thumbnailCanvasSheet);
         });
-      }).catch((err) => {
-        // Si play échoue, essayer sans muted après un court délai
-        setTimeout(() => {
-          previewVideo.muted = false;
-          previewVideo.play().then(() => {
-            connectVideoToAudioGraph();
-            applyOriginalVolume(originalVolume);
-          }).catch(() => {});
-        }, 100);
+        if (!isGalleryVideoSource()) restartPreviewIfPlaying();
+        if (tapToPlay) { tapToPlay.classList.remove('active'); tapToPlay.classList.remove('paused'); }
+      };
+      previewVideo.muted = true;
+      previewVideo.play().then(() => {
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().then(connectAfterPlay).catch(connectAfterPlay);
+        } else {
+          connectAfterPlay();
+        }
+      }).catch(() => {
+        // Autoplay bloqué → bouton tap-to-play
+        if (tapToPlay) tapToPlay.classList.add('active');
       });
-      if (!isGalleryVideoSource()) restartPreviewIfPlaying();
     };
 
     flashBtn.onclick = toggleFlash;
