@@ -136,6 +136,8 @@
       width: var(--preview-viewport-width, var(--app-viewport-width, 100vw));
       height: var(--preview-viewport-height, var(--app-viewport-height, 100svh));
       overflow: hidden;
+      contain: strict;
+      isolation: isolate;
     }
     #preview-overlay.active { display: block; opacity: 1; }
 
@@ -149,6 +151,8 @@
       display: none;
       pointer-events: none;
       background: #000;
+      will-change: transform;
+      transform: translateZ(0);
     }
 
     /* Gradient de lisibilité en bas */
@@ -205,16 +209,17 @@
     }
     .thumbnail-btn-overlay:active { transform: scale(0.92); }
     .thumbnail-btn-overlay canvas {
-      width: 58px !important;
-      height: 78px !important;
-      min-width: 58px !important;
-      max-width: 58px !important;
-      min-height: 78px !important;
-      max-height: 78px !important;
-      border-radius: 12px;
-      border: 2px solid rgba(255,255,255,0.6);
+      width: 70px !important;
+      height: 95px !important;
+      min-width: 70px !important;
+      max-width: 70px !important;
+      min-height: 95px !important;
+      max-height: 95px !important;
+      border-radius: 14px;
+      border: 2px solid rgba(255,255,255,0.65);
       display: block;
       background: rgba(255,255,255,0.08);
+      image-rendering: -webkit-optimize-contrast;
     }
 
     /* Bouton "Ajouter un son" — centré dans la barre du haut */
@@ -317,7 +322,7 @@
       background: rgba(255,255,255,0.06);
       box-shadow: 0 12px 24px rgba(0,0,0,0.45);
     }
-    #thumbnailCanvas { width: 100%; height: 100%; display: block; }
+    #thumbnailCanvas { width: 100%; height: 100%; display: block; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; }
     .thumbnail-slider-row {
       display: flex; align-items: center; gap: 10px;
       padding: 10px 14px; border-radius: 14px;
@@ -589,7 +594,7 @@
   <div id="preview-overlay">
 
     <!-- Vidéo plein écran -->
-    <video id="preview-video" playsinline webkit-playsinline preload="auto" loop></video>
+    <video id="preview-video" playsinline webkit-playsinline preload="auto" loop disablepictureinpicture x-webkit-airplay="deny"></video>
 
     <!-- Gradient de lisibilité -->
     <div class="preview-scrim"></div>
@@ -1111,10 +1116,10 @@
 
     function resizeThumbnailCanvases() {
       if (thumbnailCanvas) {
-        // Résolution 2x pour la qualité du petit bouton (46×62px CSS)
-        thumbnailCanvas.width = 92;
-        thumbnailCanvas.height = 124;
-        // Le CSS force la taille affichée — ne pas écraser avec style
+        // Résolution 2x pour la qualité du bouton (70×95px CSS → 140×190 interne)
+        thumbnailCanvas.width = 140;
+        thumbnailCanvas.height = 190;
+        // Le CSS force la taille affichée via !important
       }
       if (thumbnailCanvasSheet) {
         thumbnailCanvasSheet.width = 720;
@@ -1157,12 +1162,11 @@
        par rapport à la zone disponible (entre haut et preview-actions)
        ===================================================== */
     function positionPreviewOverlays() {
+      // Lecture offsetHeight en batch (1 reflow)
       const actionsH = previewActions?.offsetHeight || 110;
-      // Bouton miniature : 16px au-dessus des boutons du bas
-      if (thumbnailBtnOverlay) {
-        thumbnailBtnOverlay.style.bottom = `${actionsH + 16}px`;
-      }
-      // music-trigger-row est dans la top bar, pas besoin de positionner
+      // Écriture groupée (0 reflow supplémentaire)
+      if (thumbnailBtnOverlay) thumbnailBtnOverlay.style.bottom = `${actionsH + 16}px`;
+      // music-trigger-row est dans la top bar — pas de positionnement JS
     }
 
     /* =====================================================
@@ -2066,7 +2070,7 @@
         setTimeout(() => { const track = mediaStream.getVideoTracks()[0]; const caps = track.getCapabilities ? track.getCapabilities() : {}; torchSupported = !!caps.torch; updateFlashUI(); }, 300);
         return;
       }
-      const constraints = { audio: true, video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } } };
+      const constraints = { audio: true, video: { facingMode: facingMode, width: { ideal: 1920, max: 1920 }, height: { ideal: 1080, max: 1080 }, frameRate: { ideal: 30, max: 30 }, aspectRatio: { ideal: 16/9 } } };
       try {
         startCamera.isStarting = true;
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -2090,9 +2094,12 @@
       const hasAudioTrack = mediaStream && mediaStream.getAudioTracks().length > 0;
       if (isRecording || !mediaStream || !hasAudioTrack) return;
       recordedFacingMode = facingMode; videoSourceType = 'webview-camera'; recordedChunks = []; isStoppingRecording = false;
-      const targetVideoBitrate = 1_200_000, targetAudioBitrate = 128_000;
+      const targetVideoBitrate = 4_000_000, targetAudioBitrate = 192_000;
       let options = { videoBitsPerSecond: targetVideoBitrate, audioBitsPerSecond: targetAudioBitrate };
-      if (MediaRecorder.isTypeSupported('video/mp4')) options.mimeType = 'video/mp4';
+      // Priorité codec : H264 iOS → mp4 générique → webm vp9 → webm vp8
+      if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) options.mimeType = 'video/mp4;codecs=avc1';
+      else if (MediaRecorder.isTypeSupported('video/mp4')) options.mimeType = 'video/mp4';
+      else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) options.mimeType = 'video/webm;codecs=vp9,opus';
       else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) options.mimeType = 'video/webm;codecs=vp8,opus';
       const streamForRecording = mediaStream;
       try { mediaRecorder = new MediaRecorder(streamForRecording, options); } catch (e) { mediaRecorder = new MediaRecorder(streamForRecording); }
