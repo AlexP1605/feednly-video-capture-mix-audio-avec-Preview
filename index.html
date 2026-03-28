@@ -205,12 +205,15 @@
     }
     .thumbnail-btn-overlay:active { transform: scale(0.92); }
     .thumbnail-btn-overlay canvas {
-      width: 46px;
-      height: 62px;
+      width: 46px !important;
+      height: 62px !important;
+      min-width: 46px !important;
+      max-width: 46px !important;
+      min-height: 62px !important;
+      max-height: 62px !important;
       border-radius: 10px;
       border: 2px solid rgba(255,255,255,0.55);
       display: block;
-      object-fit: cover;
       background: rgba(255,255,255,0.08);
     }
 
@@ -1107,12 +1110,16 @@
 
     function resizeThumbnailCanvases() {
       if (thumbnailCanvas) {
-        thumbnailCanvas.width = 720; thumbnailCanvas.height = 1280;
-        thumbnailCanvas.style.width = '100%'; thumbnailCanvas.style.height = 'auto';
+        // Résolution 2x pour la qualité du petit bouton (46×62px CSS)
+        thumbnailCanvas.width = 92;
+        thumbnailCanvas.height = 124;
+        // Le CSS force la taille affichée — ne pas écraser avec style
       }
       if (thumbnailCanvasSheet) {
-        thumbnailCanvasSheet.width = 720; thumbnailCanvasSheet.height = 1280;
-        thumbnailCanvasSheet.style.width = '100%'; thumbnailCanvasSheet.style.height = 'auto';
+        thumbnailCanvasSheet.width = 720;
+        thumbnailCanvasSheet.height = 1280;
+        thumbnailCanvasSheet.style.width = '100%';
+        thumbnailCanvasSheet.style.height = 'auto';
       }
     }
 
