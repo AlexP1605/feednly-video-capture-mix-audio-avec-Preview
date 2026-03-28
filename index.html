@@ -320,7 +320,8 @@
       background: #000;
       display: flex; align-items: center; justify-content: center;
       gap: 12px;
-      padding: 10px 20px calc(env(safe-area-inset-bottom) + 8px);
+      /* padding égal haut/bas pour centrer les boutons dans la zone noire */
+      padding: 10px 20px max(10px, env(safe-area-inset-bottom));
       pointer-events: auto;
       z-index: 20;
     }
@@ -1331,7 +1332,7 @@
       // Barre de progression : collée exactement en bas de la vidéo
       if (videoProgressBar) videoProgressBar.style.bottom = `${actionsH}px`;
       // Miniature : au-dessus de la barre de progression + marge
-      if (thumbnailBtnOverlay) thumbnailBtnOverlay.style.bottom = `${actionsH + 28 + 10}px`;
+      if (thumbnailBtnOverlay) thumbnailBtnOverlay.style.bottom = `${actionsH + 28 + 6}px`;
       // music-trigger-row est dans la top bar — pas de positionnement JS
     }
 
@@ -1392,25 +1393,27 @@
        VOLUME SON ORIGINAL
        ===================================================== */
     function connectVideoToAudioGraph() {
-      // Connecter la vidéo au Web Audio graph si pas encore fait
       if (videoMediaSource) return; // déjà connecté
       try {
         const audioCtx = ensureMusicAudioContext();
         if (!audioCtx) return;
-        // Créer le GainNode pour le volume
+        // Résumer le contexte si suspendu (requis après autoplay policy)
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume().catch(() => {});
+        }
         videoGainNode = audioCtx.createGain();
-        videoGainNode.gain.value = originalVolume;
+        videoGainNode.gain.value = clampVolume(originalVolume);
         videoGainNode.connect(audioCtx.destination);
-        // Connecter la vidéo comme source audio
         videoMediaSource = audioCtx.createMediaElementSource(previewVideo);
         videoMediaSource.connect(videoGainNode);
-        // Sur iOS : muted=false + volume=1 pour que le son passe par le graph
         previewVideo.muted = false;
-        previewVideo.volume = 1;
+        previewVideo.volume = 1; // volume géré par le GainNode
       } catch(e) {
-        // Fallback si Web Audio indisponible
+        // Fallback : volume natif HTML5
         videoMediaSource = null;
         videoGainNode = null;
+        previewVideo.muted = false;
+        try { previewVideo.volume = clampVolume(originalVolume); } catch(_) {}
       }
     }
 
@@ -2573,9 +2576,17 @@
       // Lancer la vidéo d'abord — NE PAS seeker avant le play sur iOS
       previewVideo.muted = true;
       previewVideo.play().then(() => {
-        // Connecter au Web Audio graph APRÈS le play (requis par iOS)
-        connectVideoToAudioGraph();
-        applyOriginalVolume(originalVolume);
+        // Résumer le AudioContext (peut être suspendu après autoplay)
+        const ctx = ensureMusicAudioContext();
+        const doConnect = () => {
+          connectVideoToAudioGraph();
+          applyOriginalVolume(originalVolume);
+        };
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().then(doConnect).catch(doConnect);
+        } else {
+          doConnect();
+        }
         // Maintenant que la vidéo joue, faire le seek miniature
         // sans risquer de bloquer le play
         const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME);
