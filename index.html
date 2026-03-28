@@ -2430,7 +2430,21 @@
       const streamForRecording = mediaStream;
       try { mediaRecorder = new MediaRecorder(streamForRecording, options); } catch (e) { mediaRecorder = new MediaRecorder(streamForRecording); }
       mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
-      mediaRecorder.onstop = () => { recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType }); isRecording = false; isStoppingRecording = false; finalizeRecording(); };
+      mediaRecorder.onstop = () => {
+        // Créer le blob immédiatement
+        const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+        recordedBlob = blob;
+        isRecording = false;
+        isStoppingRecording = false;
+        // Nettoyer l'UI
+        finalizeRecording();
+        // Lancer la preview directement — plus de poll nécessaire
+        if (previewTimeout) clearTimeout(previewTimeout);
+        previewTimeout = setTimeout(() => {
+          previewTimeout = null;
+          showPreview(blob);
+        }, 32);
+      };
       mediaRecorder.start(RECORDER_TIMESLICE_MS); isRecording = true;
       if (cameraReady) document.body.classList.add('recording'); else pendingRecordUI = true;
       recordingStartTime = Date.now();
@@ -2456,27 +2470,13 @@
     }
 
     function finalizeRecording() {
+      // Nettoyage UI uniquement — showPreview est géré par onstop
       if (progressInterval) cancelAnimationFrame(progressInterval);
       document.body.classList.remove('recording'); pendingRecordUI = false;
       progressCircle.style.strokeDashoffset = circumference;
       if (torchEnabled) toggleFlash();
       if (recordingTimer) recordingTimer.textContent = '0:00';
       shouldCheckDuration = false;
-      if (previewTimeout) clearTimeout(previewTimeout);
-      // Attendre que onstop soit déclenché (async sur iOS)
-      // On poll jusqu'à ce que recordedBlob soit prêt
-      let attempts = 0;
-      const tryShowPreview = () => {
-        previewTimeout = null;
-        if (recordedBlob) {
-          showPreview(recordedBlob);
-        } else if (attempts < 30) {
-          // Pas encore prêt, réessayer dans 100ms (max 3s d'attente)
-          attempts++;
-          previewTimeout = setTimeout(tryShowPreview, 100);
-        }
-      };
-      previewTimeout = setTimeout(tryShowPreview, 50);
     }
 
     function getViewportSize() {
