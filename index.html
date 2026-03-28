@@ -879,6 +879,10 @@
     // Volume son original (0→1, défaut 1 = 100%)
     let originalVolume = 1;
 
+    // Web Audio graph pour le volume de la vidéo (contournement iOS)
+    let videoMediaSource = null;  // MediaElementAudioSourceNode
+    let videoGainNode = null;     // GainNode pour le volume
+
     const revealCameraPreview = () => { cameraPreview.style.opacity = "1"; };
     const ensureCameraVisible = () => {
       revealCameraPreview();
@@ -1277,13 +1281,53 @@
     /* =====================================================
        VOLUME SON ORIGINAL
        ===================================================== */
+    function connectVideoToAudioGraph() {
+      // Connecter la vidéo au Web Audio graph si pas encore fait
+      if (videoMediaSource) return; // déjà connecté
+      try {
+        const audioCtx = ensureMusicAudioContext();
+        if (!audioCtx) return;
+        // Créer le GainNode pour le volume
+        videoGainNode = audioCtx.createGain();
+        videoGainNode.gain.value = originalVolume;
+        videoGainNode.connect(audioCtx.destination);
+        // Connecter la vidéo comme source audio
+        videoMediaSource = audioCtx.createMediaElementSource(previewVideo);
+        videoMediaSource.connect(videoGainNode);
+        // Sur iOS : muted=false + volume=1 pour que le son passe par le graph
+        previewVideo.muted = false;
+        previewVideo.volume = 1;
+      } catch(e) {
+        // Fallback si Web Audio indisponible
+        videoMediaSource = null;
+        videoGainNode = null;
+      }
+    }
+
+    function disconnectVideoFromAudioGraph() {
+      // Déconnecter proprement quand on quitte la preview
+      try {
+        if (videoMediaSource) { videoMediaSource.disconnect(); videoMediaSource = null; }
+        if (videoGainNode) { videoGainNode.disconnect(); videoGainNode = null; }
+      } catch(e) {}
+    }
+
     function applyOriginalVolume(value, { syncInput = true } = {}) {
       const clamped = clampVolume(Number.isFinite(value) ? value : 1);
       originalVolume = clamped;
       isOriginalMuted = clamped === 0;
-      if (previewVideo) {
-        // Sur iOS, muted=true bloque tout changement de volume
-        // On doit passer par muted pour couper, et volume pour le reste
+
+      if (videoGainNode) {
+        // Via Web Audio GainNode — fonctionne sur iOS, contrôle précis 0→1
+        const audioCtx = ensureMusicAudioContext();
+        if (audioCtx) {
+          videoGainNode.gain.setTargetAtTime(clamped, audioCtx.currentTime, 0.01);
+        } else {
+          videoGainNode.gain.value = clamped;
+        }
+        previewVideo.muted = false; // toujours unmuted, c'est le GainNode qui gère
+      } else {
+        // Fallback sans Web Audio (navigateurs très anciens)
         if (clamped === 0) {
           previewVideo.muted = true;
         } else {
@@ -1291,6 +1335,7 @@
           try { previewVideo.volume = clamped; } catch(e) {}
         }
       }
+
       if (syncInput && originalVolumeSlider) originalVolumeSlider.value = String(clamped);
       if (originalVolumeValue) originalVolumeValue.textContent = Math.round(clamped * 100);
       updateMicIcon();
@@ -2291,6 +2336,7 @@
       if (previewTimeout) { clearTimeout(previewTimeout); previewTimeout = null; }
       stopMusicPreview({ hard: true }); invalidateMusicSession(); resetThumbnailDefaults();
       stopVideoProgress();
+      disconnectVideoFromAudioGraph();
       previewVideo.src = '';
       if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = null; }
       recordedBlob = null; videoSourceType = null; videoDurationSeconds = 0;
@@ -2333,14 +2379,13 @@
       else if (!isGalleryVideoSource()) setSeekLimits(currentMusicDuration);
       updateMusicOverlay();
       // Lancer la vidéo automatiquement
-      // iOS autoplay exige muted=true au départ, on unmute après
+      // On démarre muted pour satisfaire l'autoplay policy iOS
       previewVideo.muted = true;
       previewVideo.play().then(() => {
-        // Après le play, appliquer le volume souhaité
-        if (originalVolume > 0) {
-          previewVideo.muted = false;
-          try { previewVideo.volume = originalVolume; } catch(e) {}
-        }
+        // Connecter au Web Audio graph APRÈS le play (requis par iOS)
+        connectVideoToAudioGraph();
+        // Appliquer le volume via le GainNode
+        applyOriginalVolume(originalVolume);
       }).catch(() => {});
       if (!isGalleryVideoSource()) restartPreviewIfPlaying();
     };
