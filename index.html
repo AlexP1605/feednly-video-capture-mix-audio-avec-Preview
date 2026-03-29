@@ -2553,7 +2553,7 @@
       const hasAudioTrack = mediaStream && mediaStream.getAudioTracks().length > 0;
       if (isRecording || !mediaStream || !hasAudioTrack) return;
       recordedFacingMode = facingMode; videoSourceType = 'webview-camera'; recordedChunks = []; isStoppingRecording = false;
-      const targetVideoBitrate = 4_000_000, targetAudioBitrate = 192_000;
+      const targetVideoBitrate = 2_000_000, targetAudioBitrate = 128_000;
       let options = { videoBitsPerSecond: targetVideoBitrate, audioBitsPerSecond: targetAudioBitrate };
       if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) options.mimeType = 'video/mp4;codecs=avc1';
       else if (MediaRecorder.isTypeSupported('video/mp4')) options.mimeType = 'video/mp4';
@@ -2764,6 +2764,7 @@
 
     nextBtn.onclick = async () => {
       stopMusicPreview({ hard: true });
+      previewVideo.pause();
       let uploadPhaseTimeout = null, uploadSuccessNotified = false, processingStarted = false;
       const selectedThumbnailTimeForUpload = Number.isFinite(selectedThumbnailTime) ? selectedThumbnailTime : DEFAULT_THUMBNAIL_TIME;
 
