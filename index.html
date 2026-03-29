@@ -43,7 +43,6 @@
     }
 
     body.camera-starting * { transition: none !important; animation: none !important; }
-    /* Stabiliser la bottom-bar dès le chargement pour éviter le saut */
     .bottom-bar { will-change: auto; }
     .record-wrap { flex-shrink: 0; }
 
@@ -141,7 +140,7 @@
       justify-content: center;
       background: transparent;
       cursor: pointer;
-      pointer-events: none; /* transparent par défaut */
+      pointer-events: none;
     }
     #tap-to-play.active {
       display: flex;
@@ -190,7 +189,6 @@
     }
     #preview-overlay.active { display: block; opacity: 1; }
 
-    /* Vidéo plein écran en fond */
     #preview-video {
       position: absolute;
       inset: 0;
@@ -204,7 +202,6 @@
       transform: translateZ(0);
     }
 
-    /* Gradient de lisibilité en bas */
     .preview-scrim {
       position: absolute;
       inset: 0;
@@ -219,7 +216,7 @@
       z-index: 1;
     }
 
-    /* --- OVERLAY CONTROLS (au-dessus de la vidéo) --- */
+    /* --- OVERLAY CONTROLS --- */
     .preview-top-controls {
       position: absolute;
       top: 0; left: 0; right: 0;
@@ -230,11 +227,10 @@
       justify-content: center;
       align-items: center;
       z-index: 10;
-      pointer-events: none; /* laisser passer les clics vers la vidéo */
+      pointer-events: none;
     }
     .preview-top-controls > * { pointer-events: auto; }
 
-    /* Bouton volume son original — position absolute haut droit */
     .original-mute-btn {
       width: 44px; height: 44px; border-radius: 50%;
       background: rgba(15,15,15,0.7);
@@ -249,7 +245,6 @@
     .original-mute-btn.muted { background: rgba(255,59,48,0.25); border-color: rgba(255,59,48,0.5); }
     .original-mute-btn.muted svg { fill: #ff3b30; }
 
-    /* Bouton miniature (bas gauche, au-dessus de la sheet) */
     .thumbnail-btn-overlay {
       position: absolute;
       left: 16px;
@@ -273,7 +268,6 @@
       image-rendering: -webkit-optimize-contrast;
     }
 
-    /* Bouton "Ajouter un son" — centré dans la barre du haut */
     .music-trigger-row {
       display: flex;
       justify-content: center;
@@ -313,16 +307,15 @@
     .music-clear svg { width: 12px; height: 12px; }
     .music-clear:active { transform: scale(0.92); }
 
-    /* --- BARRE DE PROGRESSION VIDÉO (draggable) --- */
+    /* --- BARRE DE PROGRESSION VIDÉO --- */
     .video-progress-bar {
       position: absolute;
       left: 0; right: 0;
-      height: 28px; /* zone de touch large */
+      height: 28px;
       z-index: 15;
       cursor: pointer;
       display: flex;
-      align-items: flex-end; /* ligne en bas de la zone touch */
-      padding: 0 0 0 0;
+      align-items: flex-end;
       touch-action: none;
     }
     .video-progress-bar-bg {
@@ -339,7 +332,6 @@
       background: #fff;
       border-radius: 0 2px 2px 0;
     }
-    /* Indicateur de position (thumb) */
     .video-progress-thumb {
       position: absolute;
       top: 50%; left: 0%;
@@ -357,14 +349,18 @@
       opacity: 1;
     }
 
-    /* --- PREVIEW ACTIONS (bas, toujours visible, même hauteur qu'avant) --- */
+    /* --- PREVIEW ACTIONS (bas d'écran) ---
+       FIX: on supprime le fond noir en utilisant un fond transparent
+       avec un dégradé sombre pour la lisibilité, et on s'assure que
+       la progress bar est visible au-dessus */
     #preview-actions {
       position: absolute;
       left: 0; right: 0; bottom: 0;
-      background: #000;
+      /* FIX: pas de background #000 plein, on utilise un dégradé */
+      background: linear-gradient(0deg, rgba(0,0,0,0.92) 60%, rgba(0,0,0,0) 100%);
       display: flex; align-items: center; justify-content: center;
       gap: 12px;
-      padding: 18px 20px max(14px, env(safe-area-inset-bottom));
+      padding: 32px 20px max(14px, env(safe-area-inset-bottom));
       pointer-events: auto;
       z-index: 20;
     }
@@ -372,14 +368,16 @@
     #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
     #next-button { background: #fff; color: #000; }
 
-    /* --- MUSIC SHEET (bottom sheet, s'ouvre sur tap) --- */
+    /* --- MUSIC SHEET ---
+       FIX: z-index élevé pour passer par-dessus tout (progress bar, boutons) */
     #music-controls {
       position: absolute;
       left: 0; right: 0;
-      bottom: var(--preview-actions-height, 110px);
-      height: 75dvh; max-height: 75dvh;
+      bottom: 0;
+      /* FIX: la sheet démarre depuis le bas et couvre tout */
+      height: 80dvh; max-height: 80dvh;
       pointer-events: auto;
-      z-index: 15;
+      z-index: 100; /* FIX: au-dessus de tout */
     }
 
     /* --- THUMBNAIL SHEET --- */
@@ -387,7 +385,7 @@
       position: absolute; left: 0; right: 0; bottom: 0;
       background: rgba(10,10,10,0.97);
       border-top-left-radius: 26px; border-top-right-radius: 26px;
-      z-index: 25;
+      z-index: 90;
       transform: translateY(100%);
       transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
       pointer-events: none;
@@ -444,7 +442,8 @@
       position: absolute; inset: 0;
       background: linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.65));
       opacity: 0; pointer-events: none;
-      transition: opacity 0.25s ease; z-index: 12;
+      transition: opacity 0.25s ease;
+      z-index: 98; /* juste sous les sheets */
     }
     .sheet-backdrop.active { opacity: 1; pointer-events: auto; }
 
@@ -455,8 +454,9 @@
       background: rgba(10,10,10,0.96); color: #fff;
       border-top-left-radius: 26px; border-top-right-radius: 26px;
       transform: translateY(100%);
-      transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
-      z-index: 80;
+      /* FIX: transition plus fluide pour le filtre */
+      transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+      z-index: 100; /* FIX: au-dessus de tout */
       box-shadow: 0 -18px 40px rgba(0,0,0,0.55);
       height: 80dvh; max-height: 80dvh;
       overflow: hidden; overflow-x: hidden;
@@ -464,27 +464,58 @@
       will-change: transform;
     }
     .sheet.active { transform: translateY(0); pointer-events: auto; }
-    #music-filter-sheet { height: 30dvh; max-height: 30dvh; }
+    /* FIX: sheet filtre avec transition améliorée */
+    #music-filter-sheet {
+      height: 35dvh; max-height: 35dvh;
+      z-index: 101; /* au-dessus de la sheet musique */
+      transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    }
     .sheet .sheet-handle { width: 70px; height: 6px; border-radius: 10px; background: #2f2f2f; align-self: center; margin-bottom: 4px; }
     .sheet-content { display: flex; flex-direction: column; gap: 18px; flex: 1; overflow-y: auto; overflow-x: hidden; padding-bottom: 24px; }
     .sheet header { display: flex; align-items: center; justify-content: center; gap: 10px; }
     .sheet .title { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; font-weight: 800; letter-spacing: 0.3px; text-align: center; }
     .sheet label { font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .sheet input[type="search"] { width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid #2b2b2d; background: #131316; color: #fff; font-size: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
-    @supports (-webkit-touch-callout: none) { .sheet input[type="search"] { font-size: 16px; } }
+
+    /* FIX: input search — empêcher le saut hors écran sur iOS */
+    .sheet input[type="search"] {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid #2b2b2d;
+      background: #131316;
+      color: #fff;
+      font-size: 16px; /* FIX: 16px minimum évite le zoom iOS */
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+      /* FIX: empêcher le redimensionnement */
+      -webkit-appearance: none;
+      appearance: none;
+      transform: translateZ(0); /* force GPU layer, évite le saut */
+    }
+    .sheet input[type="search"]:focus {
+      outline: none;
+      border-color: rgba(255,255,255,0.35);
+    }
     .sheet select, .sheet input[type="range"] { flex: 1; padding: 8px 10px; border-radius: 12px; border: 1px solid #2b2b2d; background: #151519; color: #fff; }
     .sheet .toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; background: rgba(255,255,255,0.04); padding: 12px; border-radius: 14px; border: 1px solid #1f1f24; }
-    .music-search-row { display: flex; gap: 10px; align-items: center; }
+
+    /* FIX: search row — s'assurer qu'il reste dans l'écran */
+    .music-search-row {
+      display: flex; gap: 10px; align-items: center;
+      width: 100%;
+      /* FIX: éviter que le focus iOS scroll la page */
+      position: relative;
+    }
     .music-search-row input[type="search"] { flex: 1 1 auto; min-width: 0; width: auto; }
     .music-filter-btn {
-      height: 44px; min-width: 44px; padding: 0 12px;
+      height: 44px; min-width: 44px; width: 44px; padding: 0;
       border-radius: 14px; border: 1px solid #2b2b2d;
       background: #151519; color: #fff;
       display: grid; place-items: center; cursor: pointer;
+      flex-shrink: 0;
     }
-    .music-filter-btn svg { width: 18px; height: 18px; fill: currentColor; }
+    .music-filter-btn svg { width: 20px; height: 20px; fill: currentColor; }
     .tag-grid { display: flex; flex-wrap: wrap; gap: 10px; }
-    .tag-chip { border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #fff; padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .tag-chip { border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #fff; padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease; }
     .tag-chip.active { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.4); }
     #music-list { flex: 1; min-height: 0; max-height: none; overflow: auto; display: flex; flex-direction: column; gap: 8px; margin: 6px 0 4px; }
     .music-item { padding: 12px 12px; border-radius: 14px; border: 1px solid #1f1f1f; background: linear-gradient(145deg, #121216, #0e0e10); display: flex; align-items: center; gap: 10px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
@@ -527,7 +558,6 @@
     .waveform-handle.end::after { content: none; }
     .slider-row { display: flex; align-items: center; gap: 10px; }
 
-    /* Bouton icône générique */
     .icon-btn {
       border: 1px solid var(--glass-border); background: var(--glass-bg); color: #fff;
       border-radius: 12px; padding: 8px 10px; cursor: pointer;
@@ -546,7 +576,6 @@
     .icon-btn:active { transform: scale(0.95); }
     .icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-    /* --- ONGLET SON — 2 sliders --- */
     .audio-tab-content { display: flex; flex-direction: column; gap: 14px; }
     .volume-section {
       display: flex; flex-direction: column; gap: 10px;
@@ -565,7 +594,6 @@
       color: #fff;
     }
 
-    /* Slider style unifié */
     .vol-slider {
       --slider-hit-padding: 22px;
       -webkit-appearance: none; appearance: none;
@@ -613,7 +641,7 @@
     .sheet header .title svg { width: 18px; height: 18px; fill: currentColor; }
 
     /* --- UPLOAD --- */
-    #upload-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.2s; }
+    #upload-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.2s; }
     #upload-overlay.active { opacity: 1; visibility: visible; }
     .spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.2); border-top: 4px solid #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -630,7 +658,7 @@
       position: fixed; top: 100px; left: 50%; transform: translateX(-50%) translateY(-20px);
       background: rgba(255, 59, 48, 0.9); border: 1px solid rgba(255,255,255,0.2);
       color: white; padding: 12px 24px; border-radius: 30px;
-      font-weight: 600; font-size: 14px; z-index: 200;
+      font-weight: 600; font-size: 14px; z-index: 300;
       opacity: 0; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       pointer-events: none; text-align: center; width: 90%; max-width: 300px;
     }
@@ -690,13 +718,10 @@
   <!-- ===================== PREVIEW OVERLAY ===================== -->
   <div id="preview-overlay">
 
-    <!-- Vidéo plein écran -->
     <video id="preview-video" playsinline webkit-playsinline preload="auto" loop disablepictureinpicture x-webkit-airplay="deny"></video>
 
-    <!-- Gradient de lisibilité -->
     <div class="preview-scrim"></div>
 
-    <!-- Tap to play / pause overlay -->
     <div id="tap-to-play">
       <div class="tap-to-play-btn">
         <svg class="tap-to-play-icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -707,7 +732,6 @@
 
     <!-- Haut centre : bouton Ajouter un son -->
     <div class="preview-top-controls">
-
       <div class="music-trigger-row" id="music-trigger-row">
         <div id="music-overlay" class="music-overlay empty">
           <div class="music-visual">
@@ -727,26 +751,24 @@
       </div>
     </div>
 
-    <!-- Haut droit : bouton volume son original (indépendant) -->
+    <!-- Haut droit : bouton volume son original -->
     <div style="position:absolute;top:0;right:16px;padding-top:max(16px,env(safe-area-inset-top));z-index:11;pointer-events:auto;">
       <button type="button" class="original-mute-btn" id="original-mute-btn" aria-label="Volume son original">
-        <!-- Icône volume actif (son ON) -->
         <svg id="mic-icon-on" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
         </svg>
-        <!-- Icône volume coupé (son OFF) -->
         <svg id="mic-icon-off" viewBox="0 0 24 24" aria-hidden="true" style="display:none;">
           <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
         </svg>
       </button>
     </div>
 
-    <!-- Bouton miniature (bas gauche, positionné dynamiquement par JS) -->
+    <!-- Bouton miniature (bas gauche) -->
     <div class="thumbnail-btn-overlay" id="thumbnail-btn-overlay" aria-label="Choisir la miniature">
       <canvas id="thumbnailCanvas"></canvas>
     </div>
 
-    <!-- Sheet musique -->
+    <!-- Sheet musique — z-index 100, couvre tout -->
     <div id="music-controls" class="sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-content">
@@ -768,9 +790,12 @@
         <!-- Onglet Musique -->
         <div id="tab-music" class="tab-panel active">
           <div class="music-search-row">
-            <input id="music-search" type="search" placeholder="Rechercher un titre ou un artiste" />
+            <input id="music-search" type="search" placeholder="Rechercher un titre ou un artiste" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+            <!-- FIX: vraie icône filtre (entonnoir) -->
             <button type="button" id="music-filter-btn" class="music-filter-btn" aria-label="Filtre">
-              <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M40 64a8 8 0 0 1 8-8h160a8 8 0 0 1 0 16h-24v112a8 8 0 0 1-8 8h-40a8 8 0 0 1-8-8V72h-24v64a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V72h-0a8 8 0 0 1-8-8Zm24 8v56h24V72Zm80 0v104h24V72Z"></path></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4.25 5.61C6.27 8.2 10 13 10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-6s3.72-4.8 5.74-7.39A.998.998 0 0 0 18.95 4H5.04a1 1 0 0 0-.79 1.61z"/>
+              </svg>
             </button>
           </div>
           <div id="music-list" class="music-list"></div>
@@ -789,10 +814,9 @@
           </div>
         </div>
 
-        <!-- Onglet Son — 2 sliders -->
+        <!-- Onglet Son -->
         <div id="tab-audio" class="tab-panel">
           <div class="audio-tab-content">
-            <!-- Slider son original -->
             <div class="volume-section">
               <div class="volume-section-label">
                 <span>Son original</span>
@@ -800,7 +824,6 @@
               </div>
               <input id="original-volume-slider" class="vol-slider" type="range" min="0" max="1" step="0.01" value="1" />
             </div>
-            <!-- Slider musique -->
             <div class="volume-section">
               <div class="volume-section-label">
                 <span>Volume musique</span>
@@ -821,13 +844,13 @@
       </div>
     </div>
 
-    <!-- Actions bas d'écran (toujours visibles) -->
+    <!-- Actions bas d'écran -->
     <div id="preview-actions">
       <button type="button" id="restart-button" class="action-btn">Recommencer</button>
       <button type="button" id="next-button" class="action-btn">Suivant</button>
     </div>
 
-    <!-- Sheet backdrop (pour sheets musique et filtre) -->
+    <!-- Sheet backdrop -->
     <div id="sheet-backdrop" class="sheet-backdrop"></div>
 
     <!-- Sheet filtre musique -->
@@ -836,7 +859,10 @@
       <div class="sheet-content">
         <header>
           <div class="title">
-            <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M40 64a8 8 0 0 1 8-8h160a8 8 0 0 1 0 16h-24v112a8 8 0 0 1-8 8h-40a8 8 0 0 1-8-8V72h-24v64a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V72h0a8 8 0 0 1-8-8Zm24 8v56h24V72Zm80 0v104h24V72Z"></path></svg>
+            <!-- FIX: même vraie icône filtre -->
+            <svg viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;fill:currentColor;">
+              <path d="M4.25 5.61C6.27 8.2 10 13 10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-6s3.72-4.8 5.74-7.39A.998.998 0 0 0 18.95 4H5.04a1 1 0 0 0-.79 1.61z"/>
+            </svg>
             <span>Filtres</span>
           </div>
         </header>
@@ -949,12 +975,9 @@
     const isGalleryVideoSource = () => videoSourceType === 'gallery';
     const isWebviewCameraSource = () => videoSourceType === 'webview-camera';
 
-    // Volume son original (0→1, défaut 1 = 100%)
     let originalVolume = 1;
-
-    // Web Audio graph pour le volume de la vidéo (contournement iOS)
-    let videoMediaSource = null;  // MediaElementAudioSourceNode
-    let videoGainNode = null;     // GainNode pour le volume
+    let videoMediaSource = null;
+    let videoGainNode = null;
 
     const revealCameraPreview = () => { cameraPreview.style.opacity = "1"; };
     const ensureCameraVisible = () => {
@@ -1192,7 +1215,7 @@
     }
 
     /* =====================================================
-       THUMBNAIL — canvas miniature
+       THUMBNAIL
        ===================================================== */
     const DEFAULT_THUMBNAIL_TIME = 0.5;
 
@@ -1235,10 +1258,8 @@
 
     function resizeThumbnailCanvases() {
       if (thumbnailCanvas) {
-        // Résolution 2x pour la qualité du bouton (70×95px CSS → 140×190 interne)
         thumbnailCanvas.width = 140;
         thumbnailCanvas.height = 190;
-        // Le CSS force la taille affichée via !important
       }
       if (thumbnailCanvasSheet) {
         thumbnailCanvasSheet.width = 720;
@@ -1252,8 +1273,6 @@
       if (thumbnailDrawRaf !== null) return;
       thumbnailDrawRaf = requestAnimationFrame(() => {
         thumbnailDrawRaf = null;
-        // 'sheet' = live pendant le drag du slider (ne touche pas le bouton)
-        // 'both'  = quand on valide la miniature (met à jour le bouton aussi)
         if (targetCanvas === 'both') {
           drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas);
         }
@@ -1262,7 +1281,6 @@
     }
 
     function freezeThumbnailButton() {
-      // Figer le canvas du bouton sur le frame sélectionné
       if (thumbnailDrawRaf !== null) cancelAnimationFrame(thumbnailDrawRaf);
       thumbnailDrawRaf = null;
       drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas);
@@ -1287,9 +1305,7 @@
     }
 
     /* =====================================================
-       POSITIONNEMENT DYNAMIQUE DES OVERLAYS
-       On positionne le bouton miniature et le bouton musique
-       par rapport à la zone disponible (entre haut et preview-actions)
+       POSITIONNEMENT DYNAMIQUE
        ===================================================== */
     const videoProgressFill = document.getElementById('video-progress-fill');
     const videoProgressBar = document.getElementById('video-progress-bar');
@@ -1379,14 +1395,11 @@
     }
 
     function positionPreviewOverlays() {
-      // Lecture offsetHeight en batch (1 reflow)
       const actionsH = previewActions?.offsetHeight || 86;
-      // Écriture groupée (0 reflow supplémentaire)
-      // Barre de progression : collée exactement en bas de la vidéo
+      // FIX: progress bar positionnée juste au-dessus des boutons
       if (videoProgressBar) videoProgressBar.style.bottom = `${actionsH}px`;
-      // Miniature : au-dessus de la barre de progression + marge
+      // Miniature : au-dessus de la barre de progression
       if (thumbnailBtnOverlay) thumbnailBtnOverlay.style.bottom = `${actionsH + 28 + 6}px`;
-      // music-trigger-row est dans la top bar — pas de positionnement JS
     }
 
     /* =====================================================
@@ -1394,18 +1407,15 @@
        ===================================================== */
     function openThumbnailSheet() {
       thumbnailSheet?.classList.add('active');
-      // Pause vidéo pour naviguer dans la timeline
       if (previewVideo && !previewVideo.paused) previewVideo.pause();
       stopMusicPreview({ hard: false });
     }
     function closeThumbnailSheet() {
       thumbnailSheet?.classList.remove('active');
-      freezeThumbnailButton(); // figer le bouton sur le frame validé
-      // Relancer la vidéo en s'assurant que le graph audio est bien connecté
+      freezeThumbnailButton();
       if (previewVideo && previewVideo.paused) {
         previewVideo.muted = true;
         previewVideo.play().then(() => {
-          // Reconnecter le graph si nécessaire (peut être perdu après pause)
           if (!videoMediaSource) {
             connectVideoToAudioGraph();
           }
@@ -1423,16 +1433,15 @@
         const value = Number(e.target.value);
         previewVideo.currentTime = value;
         updateThumbnailTimeLabel(value);
-        requestDrawThumbnail('sheet'); // live dans la sheet uniquement
+        requestDrawThumbnail('sheet');
       });
       thumbnailTimeSlider.addEventListener('change', (e) => {
         selectedThumbnailTime = Number(e.target.value);
-        freezeThumbnailButton(); // figer le bouton sur le frame choisi
+        freezeThumbnailButton();
       });
     }
 
     previewVideo.addEventListener('seeked', () => {
-      // Ne redessiner que la sheet si elle est ouverte, sinon ignorer
       if (thumbnailSheet?.classList.contains('active')) {
         requestDrawThumbnail('sheet');
       }
@@ -1445,22 +1454,17 @@
     /* =====================================================
        VOLUME SON ORIGINAL
        ===================================================== */
-    // Débloquer le AudioContext via le mediaStream micro (pendant enregistrement)
-    // iOS autorise le play() si le AudioContext a déjà traité un stream actif
     let micUnlockSource = null;
     function unlockAudioContextViaStream(stream) {
       if (!stream || !stream.active) return;
       try {
         const audioCtx = ensureMusicAudioContext();
         if (!audioCtx) return;
-        // Connecter le micro au contexte (silencieux — gain=0)
         const src = audioCtx.createMediaStreamSource(stream);
         const silentGain = audioCtx.createGain();
-        silentGain.gain.value = 0; // silencieux, juste pour débloquer
+        silentGain.gain.value = 0;
         src.connect(silentGain);
-        // NE PAS connecter à destination (on ne veut pas entendre le micro)
         micUnlockSource = src;
-        // Déconnecter après 500ms (juste le temps de débloquer)
         setTimeout(() => {
           try { src.disconnect(); silentGain.disconnect(); } catch(e) {}
           micUnlockSource = null;
@@ -1469,11 +1473,10 @@
     }
 
     function connectVideoToAudioGraph() {
-      if (videoMediaSource) return; // déjà connecté
+      if (videoMediaSource) return;
       try {
         const audioCtx = ensureMusicAudioContext();
         if (!audioCtx) return;
-        // Résumer le contexte si suspendu (requis après autoplay policy)
         if (audioCtx.state === 'suspended') {
           audioCtx.resume().catch(() => {});
         }
@@ -1483,9 +1486,8 @@
         videoMediaSource = audioCtx.createMediaElementSource(previewVideo);
         videoMediaSource.connect(videoGainNode);
         previewVideo.muted = false;
-        previewVideo.volume = 1; // volume géré par le GainNode
+        previewVideo.volume = 1;
       } catch(e) {
-        // Fallback : volume natif HTML5
         videoMediaSource = null;
         videoGainNode = null;
         previewVideo.muted = false;
@@ -1494,7 +1496,6 @@
     }
 
     function disconnectVideoFromAudioGraph() {
-      // Déconnecter proprement quand on quitte la preview
       try {
         if (videoMediaSource) { videoMediaSource.disconnect(); videoMediaSource = null; }
         if (videoGainNode) { videoGainNode.disconnect(); videoGainNode = null; }
@@ -1507,16 +1508,14 @@
       isOriginalMuted = clamped === 0;
 
       if (videoGainNode) {
-        // Via Web Audio GainNode — fonctionne sur iOS, contrôle précis 0→1
         const audioCtx = ensureMusicAudioContext();
         if (audioCtx) {
           videoGainNode.gain.setTargetAtTime(clamped, audioCtx.currentTime, 0.01);
         } else {
           videoGainNode.gain.value = clamped;
         }
-        previewVideo.muted = false; // toujours unmuted, c'est le GainNode qui gère
+        previewVideo.muted = false;
       } else {
-        // Fallback sans Web Audio (navigateurs très anciens)
         if (clamped === 0) {
           previewVideo.muted = true;
         } else {
@@ -1543,16 +1542,14 @@
       }
     }
 
-    let originalVolumeBeforeMute = 1; // mémorise le volume avant coupure
+    let originalVolumeBeforeMute = 1;
 
     originalMuteBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       if (!isOriginalMuted && originalVolume > 0) {
-        // Couper : mémoriser le volume actuel
         originalVolumeBeforeMute = originalVolume || 1;
         applyOriginalVolume(0);
       } else {
-        // Remettre : restaurer le volume mémorisé (min 0.5 si était à 0)
         applyOriginalVolume(originalVolumeBeforeMute || 1);
       }
     });
@@ -1587,7 +1584,6 @@
       }
     }
 
-    // À chaque loop de la vidéo, on resync la musique
     previewVideo.addEventListener('play', () => {
       if (selectedMusicId) restartMusicSync();
       startVideoProgress();
@@ -1597,12 +1593,10 @@
       if (videoProgressRaf) cancelAnimationFrame(videoProgressRaf);
     });
 
-    // Quand la vidéo boucle (timeupdate proche de la fin → début)
     let lastVideoTime = 0;
     previewVideo.addEventListener('timeupdate', () => {
       const ct = previewVideo.currentTime;
       const dur = previewVideo.duration;
-      // Détection de boucle : le temps a reculé significativement
       if (lastVideoTime > 0 && ct < lastVideoTime - 0.5 && dur > 0) {
         if (selectedMusicId && musicEngine?.isPlaying) {
           const { start, end } = getLoopBounds();
@@ -1730,15 +1724,11 @@
       if (!musicEngine) return;
       const { start, end } = getLoopBounds();
 
-      // Pendant le drag : mettre à jour juste les boucle bounds sans seek
-      // (évite les arrêts/relances répétés qui causent les grésillements)
       if (!final) {
-        // Throttle via RAF pour limiter les updates
         if (waveformSeekRaf) return;
         waveformSeekRaf = requestAnimationFrame(() => {
           waveformSeekRaf = null;
           if (musicEngine.isPlaying) {
-            // Mise à jour silencieuse des bounds de loop sans stopper
             const src = musicEngine._getSourceNode?.();
             if (src) {
               try {
@@ -1751,7 +1741,6 @@
         return;
       }
 
-      // Final (mouseup/touchend) : seek propre
       musicEngine.updateLoop(start, end);
       if (musicEngine.isPlaying) musicEngine.seek(start);
     }
@@ -1780,6 +1769,16 @@
         musicFilterTags.appendChild(btn);
       });
     }
+
+    /* FIX: debounce pour la recherche — évite les lags et bugs d'affichage */
+    let musicSearchDebounceTimer = null;
+    function debouncedRenderMusicList(query) {
+      clearTimeout(musicSearchDebounceTimer);
+      musicSearchDebounceTimer = setTimeout(() => {
+        renderMusicList(query);
+      }, 120);
+    }
+
     function renderMusicList(filter = '') {
       const query = (filter || '').toLowerCase();
       musicListEl.innerHTML = '';
@@ -1846,7 +1845,6 @@
         item.appendChild(cover); item.appendChild(meta); item.appendChild(duration); item.appendChild(playBtn);
         item.addEventListener('pointerdown', () => ensureAudioReady(), { once: true, passive: true });
         item.onclick = (e) => {
-          // Ne pas re-déclencher si le clic vient du bouton play
           if (e.target.closest('.icon-btn')) return;
           e.stopPropagation();
           selectMusic(opt);
@@ -1923,7 +1921,7 @@
     }
 
     /* =====================================================
-       PREVIEW SOURCE MODE — affichage vidéo plein écran
+       PREVIEW SOURCE MODE
        ===================================================== */
     function setPreviewVideoVisibility(isVisible) {
       if (!previewVideo) return;
@@ -1933,19 +1931,12 @@
 
     function applyPreviewSourceMode() {
       const gallerySource = isGalleryVideoSource();
-
-      // Vidéo visible pour les deux sources
       setPreviewVideoVisibility(true);
-
-      // Masquer les contrôles musique pour la galerie
       const musicControlsEl = document.getElementById('music-controls');
       if (musicControlsEl) musicControlsEl.style.display = gallerySource ? 'none' : '';
       if (musicTabBar) { if (gallerySource) musicTabBar.setAttribute('hidden', 'hidden'); else musicTabBar.removeAttribute('hidden'); }
       if (musicTriggerRow) musicTriggerRow.style.display = gallerySource ? 'none' : '';
-
       if (gallerySource) clearMusicStateForGallery();
-
-      // Positionner les overlays après le rendu
       requestAnimationFrame(positionPreviewOverlays);
     }
 
@@ -2074,7 +2065,6 @@
     musicVolumeInput?.addEventListener('touchmove', handleMusicVolumeInput, { passive: false });
     musicVolumeInput?.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
 
-    // Bloquer le scroll page sur tous les sliders vol
     [originalVolumeSlider, musicVolumeInput, thumbnailTimeSlider].forEach(slider => {
       if (!slider) return;
       slider.addEventListener('touchstart', (e) => { e.stopPropagation(); }, { passive: true });
@@ -2083,7 +2073,7 @@
 
     if (waveformVisual) {
       waveformVisual.addEventListener('pointerdown', (e) => {
-        e.preventDefault(); // bloquer scroll page
+        e.preventDefault();
         isDraggingWaveform = true;
         waveformVisual.setPointerCapture?.(e.pointerId);
         updateStartFromClientX(e.clientX);
@@ -2097,7 +2087,6 @@
         if (!isDraggingWaveform) return;
         isDraggingWaveform = false;
         waveformVisual.releasePointerCapture?.(e.pointerId);
-        // Seek final pour appliquer proprement la position
         const { start, end } = getLoopBounds();
         if (musicEngine) {
           musicEngine.updateLoop(start, end);
@@ -2106,7 +2095,6 @@
       };
       waveformVisual.addEventListener('pointerup', endDrag);
       waveformVisual.addEventListener('pointercancel', endDrag);
-      // Touch events explicites pour iOS
       waveformVisual.addEventListener('touchstart', (e) => {
         e.preventDefault();
         const touch = e.touches[0];
@@ -2160,7 +2148,11 @@
       }
       burstPreloadVisibleTracks();
     }
-    function openFilterSheet() { if (!musicFilterSheet) return; musicFilterSheet.classList.add('active'); updateSheetBackdrop(); }
+    function openFilterSheet() {
+      if (!musicFilterSheet) return;
+      musicFilterSheet.classList.add('active');
+      updateSheetBackdrop();
+    }
     function closeMusicSheet() {
       musicSheet?.classList.remove('active');
       if (musicFilterSheet?.classList.contains('active')) { musicFilterSheet.classList.remove('active'); resetFilterTag(); }
@@ -2174,7 +2166,6 @@
       if (musicVolumeValue) musicVolumeValue.textContent = Math.round((Number.isFinite(musicVolume) ? musicVolume : 0) * 100);
     }
 
-    // Remplacer l'ancienne logique de mute par le nouveau slider
     function syncOriginalMuteState() {
       applyOriginalVolume(isOriginalMuted ? 0 : originalVolume || 1);
     }
@@ -2190,11 +2181,33 @@
 
     musicOverlay.onclick = (e) => { e.stopPropagation(); openMusicSheet(); };
     if (musicClearBtn) musicClearBtn.onclick = (e) => { e.stopPropagation(); clearMusicSelection(); };
-    musicSearchInput.oninput = (e) => renderMusicList(e.target.value);
+
+    /* FIX: input search — debounce + empêcher le scroll iOS */
+    musicSearchInput.oninput = (e) => {
+      debouncedRenderMusicList(e.target.value);
+    };
     musicSearchInput.addEventListener('focus', () => {
-      requestAnimationFrame(() => { musicSearchInput.scrollIntoView({ block: 'center', inline: 'nearest' }); document.documentElement.scrollLeft = 0; document.body.scrollLeft = 0; });
+      // FIX: ne pas scroller — juste s'assurer que l'input est visible
+      // sans provoquer de saut de page
+      setTimeout(() => {
+        // Bloquer tout scroll parasite
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }, 100);
     });
-    musicFilterBtn?.addEventListener('click', (e) => { e.stopPropagation(); if (musicFilterSheet?.classList.contains('active')) { closeFilterSheet(); return; } openFilterSheet(); });
+    musicSearchInput.addEventListener('blur', () => {
+      // Réinitialiser le scroll après la fermeture du clavier
+      setTimeout(() => {
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }, 100);
+    });
+
+    musicFilterBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (musicFilterSheet?.classList.contains('active')) { closeFilterSheet(); return; }
+      openFilterSheet();
+    });
     musicSheet.onclick = (e) => e.stopPropagation();
     musicFilterSheet.onclick = (e) => e.stopPropagation();
     sheetBackdrop.onclick = (e) => {
@@ -2234,7 +2247,6 @@
     let musicEngine = null;
     const audioPreloadCache = new Map();
     const MAX_AUDIO_PRELOADS = 12;
-    const DEBUG_AUDIO = false;
     const MUSIC_STOP_GRACE_MS = 120;
     let lastMusicPreviewStartAt = 0;
     let playIntentId = 0;
@@ -2248,7 +2260,7 @@
       }
     });
 
-    const BEEP_SOURCES = { short: 'data:audio/wav;base64,UklGRiQFAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAFAAAAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2w==', long: 'data:audio/wav;base64,UklGRqQMAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYAMAAAAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0A==' };
+    const BEEP_SOURCES = { short: 'data:audio/wav;base64,UklGRiQFAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAFAAAAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2w==', long: 'data:audio/wav;base64,UklGRqQMAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYAMAAAAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0A==' };
 
     let musicAudioCtx = null;
     let audioCtxPrimed = false;
@@ -2359,7 +2371,6 @@
     musicEngine.updateVolume(musicVolume);
     document.addEventListener('pointerdown', ensureAudioReady, { once: true, passive: true });
 
-    // Tap-to-play : user gesture → play autorisé par iOS/Android
     function doVideoPlay() {
       const ctx = ensureMusicAudioContext();
       const connect = () => {
@@ -2393,7 +2404,6 @@
       }
     });
 
-    // Tap sur la vidéo elle-même = toggle pause/play
     previewVideo.style.pointerEvents = 'auto';
     previewVideo.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2456,14 +2466,6 @@
 
     function notifyHost(payload) {
       try { const msg = JSON.stringify(payload); if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(msg); else if (window.parent) window.parent.postMessage(msg, '*'); } catch (e) {}
-    }
-
-    function getFinalAudioMode() {
-      const hasMusic = !!getSelectedMusic();
-      if (!hasMusic && originalVolume > 0) return 'original';
-      if (!hasMusic && originalVolume === 0) return 'mute';
-      if (hasMusic && originalVolume === 0) return 'music';
-      return 'music+original';
     }
 
     function getUploadURL() {
@@ -2546,26 +2548,23 @@
       recordedFacingMode = facingMode; videoSourceType = 'webview-camera'; recordedChunks = []; isStoppingRecording = false;
       const targetVideoBitrate = 4_000_000, targetAudioBitrate = 192_000;
       let options = { videoBitsPerSecond: targetVideoBitrate, audioBitsPerSecond: targetAudioBitrate };
-      // Priorité codec : H264 iOS → mp4 générique → webm vp9 → webm vp8
       if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) options.mimeType = 'video/mp4;codecs=avc1';
       else if (MediaRecorder.isTypeSupported('video/mp4')) options.mimeType = 'video/mp4';
       else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) options.mimeType = 'video/webm;codecs=vp9,opus';
       else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) options.mimeType = 'video/webm;codecs=vp8,opus';
       const streamForRecording = mediaStream;
       try { mediaRecorder = new MediaRecorder(streamForRecording, options); } catch (e) { mediaRecorder = new MediaRecorder(streamForRecording); }
-      // Débloquer le AudioContext via le stream micro actif
-      // iOS autorisera ensuite le play() sans geste user
       unlockAudioContextViaStream(streamForRecording);
       mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
       mediaRecorder.onstop = () => {
-        // Créer le blob immédiatement
         const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
         recordedBlob = blob;
         isRecording = false;
         isStoppingRecording = false;
-        // Nettoyer l'UI
         finalizeRecording();
-        // Lancer la preview directement — plus de poll nécessaire
+        // FIX: reset le graph audio avant d'afficher la preview
+        // pour que connectVideoToAudioGraph() puisse recréer un nœud frais
+        disconnectVideoFromAudioGraph();
         if (previewTimeout) clearTimeout(previewTimeout);
         previewTimeout = setTimeout(() => {
           previewTimeout = null;
@@ -2597,7 +2596,6 @@
     }
 
     function finalizeRecording() {
-      // Nettoyage UI uniquement — showPreview est géré par onstop
       if (progressInterval) cancelAnimationFrame(progressInterval);
       document.body.classList.remove('recording'); pendingRecordUI = false;
       progressCircle.style.strokeDashoffset = circumference;
@@ -2649,12 +2647,10 @@
       if (!isGalleryVideoSource()) resetMusicDefaults();
       else shouldPreloadAfterGallery = false;
       closeFilterSheet(); closeMusicSheet();
-      // Le volume est appliqué dans onloadedmetadata après le play
       updateMusicSelectionUI();
       if (isWebviewCameraSource()) preloadInitialPreviewTracks();
       if (shouldPreloadAfterGallery && isWebviewCameraSource()) { shouldPreloadAfterGallery = false; preloadVisibleMusicImmediately(); }
       scheduleThumbnailPreparation();
-      // Positionner les overlays
       requestAnimationFrame(positionPreviewOverlays);
     }
 
@@ -2700,10 +2696,10 @@
       if (!isGalleryVideoSource() && selectedMusic) updateSeekDurationFromMeta(selectedMusic);
       else if (!isGalleryVideoSource()) setSeekLimits(currentMusicDuration);
       updateMusicOverlay();
-      // Lancer la vidéo d'abord — NE PAS seeker avant le play sur iOS
-      // Tenter l'autoplay (débloqué si unlockAudioContextViaStream a fonctionné)
       const ctx = ensureMusicAudioContext();
       const connectAfterPlay = () => {
+        // FIX: connectVideoToAudioGraph est déjà appelé ici — le graph est frais
+        // car on a appelé disconnectVideoFromAudioGraph() dans onstop
         connectVideoToAudioGraph();
         applyOriginalVolume(originalVolume);
         const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME);
@@ -2723,7 +2719,6 @@
           connectAfterPlay();
         }
       }).catch(() => {
-        // Autoplay bloqué → bouton tap-to-play
         if (tapToPlay) tapToPlay.classList.add('active');
       });
     };
@@ -2771,7 +2766,7 @@
         recordedChunks = []; pendingRecordUI = false;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
       }
-      function fail(step, detail = '', { includeMusicDebug = true } = {}) {
+      function fail(step, detail = '') {
         stopUploadProgressAnimation(); stopProcessingProgressAnimation();
         if (uploadPhaseTimeout) { clearTimeout(uploadPhaseTimeout); uploadPhaseTimeout = null; }
         setUploadStatusText(`Échec (${step})${detail ? ' : ' + detail : ''}`);
@@ -2796,13 +2791,12 @@
           await uploadBlobToMuxWithProgress(muxUploadUrl, uploadBlob, { contentType: uploadBlob.type || 'video/mp4' });
           const assetId = buildAssetId(muxUploadUrl); if (!assetId) throw new Error('invalid mux upload url');
           await handleUploadSuccess(assetId); return;
-        } catch (error) { fail('direct-mux-upload', error?.message || 'unknown', { includeMusicDebug: false }); return; }
+        } catch (error) { fail('direct-mux-upload', error?.message || 'unknown'); return; }
       }
 
       const selectedMusic = getSelectedMusic();
       const hasSelectedMusic = Boolean(selectedMusic && selectedMusic.url);
       uploadHasMusic = hasSelectedMusic;
-      // Pour l'upload, on utilise originalVolume au lieu de isOriginalMuted
       const audioMode = (() => {
         const hasMusic = hasSelectedMusic;
         if (!hasMusic && originalVolume > 0) return 'original';
@@ -2825,7 +2819,6 @@
           formData.append('musicStart', String(musicStartTime || 0));
           formData.append('musicVolume', String(musicVolume || 0));
         }
-        // Passer le volume son original au serveur
         formData.append('originalVolume', String(originalVolume || 1));
 
         const xhr = new XMLHttpRequest();
