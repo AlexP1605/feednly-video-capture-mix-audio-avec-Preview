@@ -177,6 +177,7 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
     musicUrl = '',
     musicStart = '0',
     musicVolume = '1',
+    originalVolume = '1', // FIX: récupérer le volume son original
     muxUploadUrl = ''
   } = req.body || {};
 
@@ -208,31 +209,47 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
   if (needsMusic && !musicUrl) {
     return res.status(400).json({ error: 'missing musicUrl' });
   }
+
   let musicPath = '';
   let outputPath = '';
 
   try {
     const shouldUploadOnly = facingMode === 'environment' && audioMode === 'original' && !hasMusicUrl;
     const shouldMirrorOnly = facingMode === 'user' && audioMode === 'original' && !hasMusicUrl;
-    const duration = await getVideoDuration(inputFile);
+
+    // FIX: lancer le probe vidéo ET le download musique en parallèle
+    // au lieu de les faire séquentiellement
+    const [duration] = await Promise.all([
+      getVideoDuration(inputFile),
+      needsMusic ? (async () => {
+        let ext = '.mp3';
+        try {
+          ext = path.extname(new URL(musicUrl).pathname) || '.mp3';
+        } catch (error) {
+          ext = '.mp3';
+        }
+        musicPath = path.join(uploadDir, `music-${Date.now()}${ext}`);
+        await downloadToFile(musicUrl, musicPath);
+      })() : Promise.resolve()
+    ]);
+
     const args = ['-y'];
 
-    if (needsMusic) {
-      let ext = '.mp3';
-      try {
-        ext = path.extname(new URL(musicUrl).pathname) || '.mp3';
-      } catch (error) {
-        ext = '.mp3';
-      }
-      musicPath = path.join(uploadDir, `music-${Date.now()}${ext}`);
-      await downloadToFile(musicUrl, musicPath);
-    }
+    // FIX: scale intelligent — réduit à 720p seulement si la vidéo est en 1080p ou plus
+    // n'agrandit jamais une vidéo déjà en dessous de 720p
+    const scaleFilter = 'scale=\'if(gt(iw,1280),1280,iw)\':\'if(gt(ih,720),720,ih)\':force_original_aspect_ratio=decrease';
 
     if (!shouldUploadOnly && shouldMirrorOnly) {
       args.push('-i', inputFile);
       outputPath = path.join(uploadDir, `output-${Date.now()}.mp4`);
-      args.push('-vf', 'hflip', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'copy');
-      args.push('-movflags', '+faststart', outputPath);
+      // FIX: ultrafast au lieu de veryfast + scale 720p
+      args.push(
+        '-vf', `hflip,${scaleFilter}`,
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+        '-c:a', 'copy',
+        '-movflags', '+faststart',
+        outputPath
+      );
     } else if (!shouldUploadOnly) {
       if (!['original', 'mute', 'music', 'music+original'].includes(audioMode)) {
         return res.status(400).json({ error: 'invalid audioMode' });
@@ -243,49 +260,63 @@ app.post('/process-upload', upload.single('video'), async (req, res) => {
         args.push('-i', inputFile);
       }
       outputPath = path.join(uploadDir, `output-${Date.now()}.mp4`);
-      const videoFilters = shouldFlip ? 'hflip' : '';
-      const baseVideoArgs = [];
-      if (videoFilters) {
-        baseVideoArgs.push('-vf', videoFilters);
-      }
+
+      // FIX: volume son original pris en compte
+      const origVol = Math.max(0, Math.min(1, parseFloat(originalVolume) || 1));
+      const musicVol = Math.max(0, Math.min(1, parseFloat(musicVolume) || 0));
+
       if (audioMode === 'original') {
         if (shouldFlip) {
-          args.push(...baseVideoArgs, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'copy');
+          // FIX: ultrafast + scale 720p
+          args.push(
+            '-vf', `hflip,${scaleFilter}`,
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+            '-c:a', 'copy',
+            '-movflags', '+faststart',
+            outputPath
+          );
         } else {
-          args.push('-c:v', 'copy', '-c:a', 'copy');
+          args.push('-c:v', 'copy', '-c:a', 'copy', '-movflags', '+faststart', outputPath);
         }
-        args.push('-movflags', '+faststart', outputPath);
       } else if (audioMode === 'mute') {
-        args.push(...baseVideoArgs, '-map', '0:v:0', '-an');
         if (shouldFlip) {
-          args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20');
+          // FIX: ultrafast + scale 720p
+          args.push(
+            '-vf', `hflip,${scaleFilter}`,
+            '-map', '0:v:0', '-an',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+            '-movflags', '+faststart',
+            outputPath
+          );
         } else {
-          args.push('-c:v', 'copy');
+          args.push('-map', '0:v:0', '-an', '-c:v', 'copy', '-movflags', '+faststart', outputPath);
         }
-        args.push('-movflags', '+faststart', outputPath);
       } else if (audioMode === 'music') {
-        const volumeValue = Math.max(0, Math.min(1, parseFloat(musicVolume) || 0));
+        // FIX: originalVolume ignoré avant — maintenant on coupe le son original
+        // et on applique le volume musique correctement
         const trimFilter = Number.isFinite(duration) ? `atrim=0:${duration},asetpts=N/SR/TB` : 'asetpts=N/SR/TB';
-        const filter = `[1:a]volume=${volumeValue}[ma];[ma]${trimFilter}[a]`;
+        const videoFilter = shouldFlip ? `hflip,${scaleFilter}` : scaleFilter;
+        const filter = `[1:a]volume=${musicVol}[ma];[ma]${trimFilter}[a]`;
         args.push(
           '-filter_complex', filter,
           '-map', '0:v:0', '-map', '[a]',
-          ...baseVideoArgs,
+          '-vf', videoFilter,
           '-shortest',
-          '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', // FIX: ultrafast
           '-c:a', 'aac',
           '-movflags', '+faststart',
           outputPath
         );
       } else if (audioMode === 'music+original') {
-        const volumeValue = Math.max(0, Math.min(1, parseFloat(musicVolume) || 0));
-        const filter = `[1:a]volume=${volumeValue}[ma];[0:a][ma]amix=inputs=2:duration=first:dropout_transition=2[a]`;
+        // FIX: originalVolume maintenant appliqué sur le son original
+        const videoFilter = shouldFlip ? `hflip,${scaleFilter}` : scaleFilter;
+        const filter = `[0:a]volume=${origVol}[oa];[1:a]volume=${musicVol}[ma];[oa][ma]amix=inputs=2:duration=first:dropout_transition=2[a]`;
         args.push(
           '-filter_complex', filter,
           '-map', '0:v:0', '-map', '[a]',
-          ...baseVideoArgs,
+          '-vf', videoFilter,
           '-shortest',
-          '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', // FIX: ultrafast
           '-c:a', 'aac',
           '-movflags', '+faststart',
           outputPath
