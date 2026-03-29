@@ -2154,6 +2154,10 @@
       updateSheetBackdrop();
     }
     function closeMusicSheet() {
+      // FIX: blur l'input avant de fermer pour que le clavier iOS se ferme
+      if (musicSearchInput && document.activeElement === musicSearchInput) {
+        musicSearchInput.blur();
+      }
       musicSheet?.classList.remove('active');
       if (musicFilterSheet?.classList.contains('active')) { musicFilterSheet.classList.remove('active'); resetFilterTag(); }
       updateSheetBackdrop();
@@ -2277,7 +2281,10 @@
       const audioCtx = ensureMusicAudioContext(); if (!audioCtx) return null;
       if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
       primeMusicAudioContext(audioCtx);
-      if (audioCtx.state !== 'running') { audioCtxPrimed = false; return null; }
+      // FIX: ne pas bloquer sur 'running' — sur iOS le contexte peut être
+      // en 'interrupted' ou 'suspended' même après un geste utilisateur.
+      // On retourne le contexte dans tous les cas sauf 'closed'.
+      if (audioCtx.state === 'closed') return null;
       return audioCtx;
     }
     function playBeep(freq = 800, type = 'short') {
