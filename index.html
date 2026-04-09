@@ -52,19 +52,16 @@
     video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
     video::-webkit-media-controls { display: none !important; }
 
-    /* --- FILTER CANVAS (par-dessus la caméra) --- */
+    /* --- FILTER CANVAS (utilisé uniquement pour l'enregistrement, invisible) --- */
     #filter-canvas {
       position: absolute;
       inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-      pointer-events: none;
+      width: 1px;
+      height: 1px;
       opacity: 0;
-      transition: none;
-      will-change: opacity, transform;
-      z-index: 2;
+      pointer-events: none;
+      z-index: -1;
+      visibility: hidden;
     }
 
     /* --- BARRE DE FILTRES --- */
@@ -734,207 +731,89 @@
        FILTRES CAMÉRA
        ===================================================== */
     const FILTERS = [
-      {
-        id: 'naturel',
-        name: 'Naturel',
-        css: 'none',
-        icon: null,
-        privacy: false
-      },
-      {
-        id: 'soleil',
-        name: 'Soleil',
-        css: 'brightness(1.12) contrast(1.05) saturate(1.08) sepia(0.05)',
-        icon: null,
-        privacy: false
-      },
-      {
-        id: 'doux',
-        name: 'Doux',
-        css: 'brightness(1.08) contrast(0.96) saturate(0.92) sepia(0.12)',
-        icon: null,
-        privacy: false
-      },
-      {
-        id: 'rose',
-        name: 'Rose',
-        css: 'brightness(1.06) saturate(1.12) hue-rotate(-8deg) contrast(0.97)',
-        icon: null,
-        privacy: false
-      },
-      {
-        id: 'glamour',
-        name: 'Glamour',
-        css: 'brightness(1.1) contrast(1.08) saturate(1.15)',
-        icon: null,
-        privacy: false
-      },
-      {
-        id: 'dore',
-        name: 'Doré',
-        css: 'brightness(1.08) saturate(1.2) sepia(0.22) contrast(1.04)',
-        icon: null,
-        privacy: false
-      },
-      {
-        id: 'mascara',
-        name: 'Mascara',
-        css: 'brightness(1.04) contrast(1.18) saturate(0.88)',
-        icon: null,
-        privacy: false
-      },
-      {
-        id: 'blush',
-        name: 'Blush',
-        css: 'brightness(1.07) saturate(1.25) hue-rotate(-12deg) contrast(0.96)',
-        icon: null,
-        privacy: false
-      },
-      {
-        id: 'mystere',
-        name: 'Mystère',
-        css: 'none',
-        icon: '🕶️',
-        privacy: true,
-        privacyType: 'bar'
-      },
-      {
-        id: 'flou',
-        name: 'Flou',
-        css: 'none',
-        icon: '👤',
-        privacy: true,
-        privacyType: 'blur'
-      }
+      { id: 'naturel', name: 'Naturel', css: 'none',                                                               dot: null,                                        privacy: false },
+      { id: 'soleil',  name: 'Soleil',  css: 'brightness(1.35) contrast(1.08) saturate(1.45) sepia(0.08)',         dot: 'linear-gradient(135deg,#f9e04b,#f5a623)',   privacy: false },
+      { id: 'doux',    name: 'Doux',    css: 'brightness(1.22) contrast(0.88) saturate(0.72) sepia(0.3)',           dot: 'linear-gradient(135deg,#f5d9c0,#e8a870)',   privacy: false },
+      { id: 'rose',    name: 'Rose',    css: 'brightness(1.18) saturate(1.9) hue-rotate(-18deg) contrast(0.92)',    dot: 'linear-gradient(135deg,#ffb6c8,#f06090)',   privacy: false },
+      { id: 'glamour', name: 'Glamour', css: 'brightness(1.28) contrast(1.2) saturate(1.55)',                       dot: 'linear-gradient(135deg,#e8c8f0,#b060d0)',   privacy: false },
+      { id: 'dore',    name: 'Doré',    css: 'brightness(1.2) saturate(1.65) sepia(0.45) contrast(1.1)',           dot: 'linear-gradient(135deg,#ffd580,#c87820)',   privacy: false },
+      { id: 'mascara', name: 'Mascara', css: 'brightness(1.04) contrast(1.6) saturate(0.55) grayscale(0.3)',        dot: 'linear-gradient(135deg,#777,#111)',         privacy: false },
+      { id: 'blush',   name: 'Blush',   css: 'brightness(1.15) saturate(2.1) hue-rotate(-22deg) contrast(0.9)',    dot: 'linear-gradient(135deg,#ffb0b0,#e04060)',   privacy: false },
+      { id: 'mystere', name: 'Mystère', css: 'none',                                                               dot: 'linear-gradient(135deg,#333,#000)',         privacy: true, privacyType: 'bar'  },
+      { id: 'flou',    name: 'Flou',    css: 'blur(10px)',                                                          dot: 'linear-gradient(135deg,#999,#333)',         privacy: true, privacyType: 'blur' },
     ];
 
     let activeFilterId = 'naturel';
-    let filterRafId = null;
-    let filterCanvas = null;
-    let filterCtx = null;
-    let filterCanvasReady = false;
 
     function getActiveFilter() {
       return FILTERS.find(f => f.id === activeFilterId) || FILTERS[0];
     }
 
-    function initFilterCanvas() {
-      filterCanvas = document.getElementById('filter-canvas');
-      filterCtx = filterCanvas.getContext('2d', { alpha: false, willReadFrequently: false });
-    }
-
-    function resizeFilterCanvas() {
-      if (!filterCanvas) return;
-      const w = window.innerWidth || document.documentElement.clientWidth;
-      const h = window.innerHeight || document.documentElement.clientHeight;
-      if (filterCanvas.width !== w || filterCanvas.height !== h) {
-        filterCanvas.width = w;
-        filterCanvas.height = h;
-      }
-    }
-
-    function drawFilterFrame() {
-      const video = document.getElementById('camera-preview');
-      if (!filterCanvas || !filterCtx || !video || video.readyState < 2) {
-        filterRafId = requestAnimationFrame(drawFilterFrame);
-        return;
-      }
-
-      resizeFilterCanvas();
+    // Applique le filtre CSS directement sur la vidéo (zéro lag)
+    function applyCSSFilterToVideo() {
       const f = getActiveFilter();
-      const W = filterCanvas.width;
-      const H = filterCanvas.height;
-      const vw = video.videoWidth;
-      const vh = video.videoHeight;
-
-      if (!vw || !vh) {
-        filterRafId = requestAnimationFrame(drawFilterFrame);
-        return;
-      }
-
-      filterCtx.save();
-
-      // Miroir si caméra frontale
-      if (facingMode === 'user') {
-        filterCtx.translate(W, 0);
-        filterCtx.scale(-1, 1);
-      }
-
-      // Cover fit
-      const videoRatio = vw / vh;
-      const canvasRatio = W / H;
-      let sx = 0, sy = 0, sw = vw, sh = vh;
-      if (videoRatio > canvasRatio) { sw = vh * canvasRatio; sx = (vw - sw) / 2; }
-      else { sh = vw / canvasRatio; sy = (vh - sh) / 2; }
+      const video = document.getElementById('camera-preview');
+      if (!video) return;
 
       if (f.privacy && f.privacyType === 'blur') {
-        // Flou : on dessine la vidéo plusieurs fois décalée pour simuler le flou
-        filterCtx.globalAlpha = 0.25;
-        const offsets = [-6,-4,-2,0,2,4,6];
-        offsets.forEach(ox => offsets.forEach(oy => {
-          filterCtx.drawImage(video, sx, sy, sw, sh, ox, oy, W, H);
-        }));
-        filterCtx.globalAlpha = 1;
-        filterCtx.drawImage(video, sx, sy, sw, sh, 0, 0, W, H);
-        // Re-flou supplémentaire
-        filterCtx.globalAlpha = 0.35;
-        [[-8,0],[8,0],[0,-8],[0,8],[-6,-6],[6,6],[-6,6],[6,-6]].forEach(([ox,oy]) => {
-          filterCtx.drawImage(video, sx, sy, sw, sh, ox, oy, W, H);
-        });
-        filterCtx.globalAlpha = 1;
+        video.style.filter = 'blur(8px)';
+        removeMysteryBar();
+      } else if (f.privacy && f.privacyType === 'bar') {
+        video.style.filter = 'none';
+        showMysteryBar();
       } else {
-        // Filtre CSS appliqué via canvas filter
-        if (f.css !== 'none') {
-          filterCtx.filter = f.css;
-        } else {
-          filterCtx.filter = 'none';
-        }
-        filterCtx.drawImage(video, sx, sy, sw, sh, 0, 0, W, H);
-        filterCtx.filter = 'none';
+        video.style.filter = f.css === 'none' ? 'none' : f.css;
+        removeMysteryBar();
       }
-
-      // Barre Mystère (barre noire sur les yeux)
-      if (f.privacy && f.privacyType === 'bar') {
-        filterCtx.restore();
-        filterCtx.save();
-        const barY = H * 0.32;
-        const barH = H * 0.12;
-        filterCtx.fillStyle = 'rgba(0, 0, 0, 0.88)';
-        filterCtx.fillRect(0, barY, W, barH);
-        // Bords légèrement arrondis via gradient
-        const gradTop = filterCtx.createLinearGradient(0, barY - 6, 0, barY);
-        gradTop.addColorStop(0, 'rgba(0,0,0,0)');
-        gradTop.addColorStop(1, 'rgba(0,0,0,0.88)');
-        filterCtx.fillStyle = gradTop;
-        filterCtx.fillRect(0, barY - 6, W, 6);
-        const gradBot = filterCtx.createLinearGradient(0, barY + barH, 0, barY + barH + 6);
-        gradBot.addColorStop(0, 'rgba(0,0,0,0.88)');
-        gradBot.addColorStop(1, 'rgba(0,0,0,0)');
-        filterCtx.fillStyle = gradBot;
-        filterCtx.fillRect(0, barY + barH, W, 6);
-      }
-
-      filterCtx.restore();
-      filterRafId = requestAnimationFrame(drawFilterFrame);
     }
 
-    function startFilterLoop() {
-      if (filterRafId) cancelAnimationFrame(filterRafId);
-      filterCanvas.style.opacity = '1';
-      filterRafId = requestAnimationFrame(drawFilterFrame);
+    // Barre Mystère élégante — style "lunettes" centré, pas pleine largeur
+    let mysteryBarEl = null;
+    function showMysteryBar() {
+      if (mysteryBarEl) return;
+      mysteryBarEl = document.createElement('div');
+      mysteryBarEl.id = 'mystery-bar';
+      mysteryBarEl.style.cssText = [
+        'position:absolute',
+        'top:28%',
+        'left:8%',
+        'right:8%',
+        'height:12%',
+        'border-radius:120px',
+        'background:linear-gradient(135deg,rgba(0,0,0,0.92) 0%,rgba(20,20,20,0.88) 100%)',
+        'z-index:3',
+        'pointer-events:none',
+        'backdrop-filter:blur(2px)',
+        '-webkit-backdrop-filter:blur(2px)',
+        'box-shadow:0 8px 32px rgba(0,0,0,0.7),0 2px 8px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.08)',
+        'border:1px solid rgba(255,255,255,0.06)',
+      ].join(';');
+      // Reflet subtil sur le haut de la barre
+      const shine = document.createElement('div');
+      shine.style.cssText = [
+        'position:absolute',
+        'top:0',
+        'left:0',
+        'right:0',
+        'height:40%',
+        'border-radius:120px 120px 0 0',
+        'background:linear-gradient(180deg,rgba(255,255,255,0.08),transparent)',
+        'pointer-events:none',
+      ].join(';');
+      mysteryBarEl.appendChild(shine);
+      document.getElementById('camera-container').appendChild(mysteryBarEl);
     }
-
-    function stopFilterLoop() {
-      if (filterRafId) { cancelAnimationFrame(filterRafId); filterRafId = null; }
-      if (filterCanvas) filterCanvas.style.opacity = '0';
+    function removeMysteryBar() {
+      if (mysteryBarEl) { mysteryBarEl.remove(); mysteryBarEl = null; }
     }
 
     function applyFilter(filterId) {
       activeFilterId = filterId;
+      applyCSSFilterToVideo();
       document.querySelectorAll('.filter-chip').forEach(chip => {
-        const isSelected = chip.dataset.filterId === filterId;
-        chip.querySelector('.filter-thumb')?.classList.toggle('selected', isSelected);
-        chip.querySelector('.filter-label')?.classList.toggle('selected', isSelected);
+        const sel = chip.dataset.filterId === filterId;
+        chip.querySelector('.filter-thumb')?.classList.toggle('selected', sel);
+        chip.querySelector('.filter-label')?.classList.toggle('selected', sel);
       });
     }
 
@@ -949,33 +828,22 @@
         const thumb = document.createElement('div');
         thumb.className = 'filter-thumb' + (f.id === activeFilterId ? ' selected' : '');
 
-        if (f.icon) {
-          // Filtre privacy : icône texte
-          const iconEl = document.createElement('div');
-          iconEl.className = 'filter-thumb-icon';
-          iconEl.textContent = f.icon;
-          thumb.appendChild(iconEl);
-          thumb.style.background = f.privacyType === 'bar' ? '#111' : '#333';
+        if (f.id === 'naturel') {
+          // Naturel : rond vide transparent avec juste le bord
+          thumb.style.background = 'transparent';
         } else {
-          // Canvas miniature avec aperçu du filtre
-          const thumbCanvas = document.createElement('canvas');
-          thumbCanvas.className = 'filter-thumb-canvas';
-          thumbCanvas.width = 54;
-          thumbCanvas.height = 54;
-          const tCtx = thumbCanvas.getContext('2d');
-          // Fond dégradé de peau pour simuler l'aperçu
-          const grad = tCtx.createLinearGradient(0, 0, 54, 54);
-          grad.addColorStop(0, '#d4a574');
-          grad.addColorStop(1, '#c08050');
-          tCtx.fillStyle = grad;
-          tCtx.fillRect(0, 0, 54, 54);
-          if (f.css !== 'none') {
-            const tCtx2 = thumbCanvas.getContext('2d');
-            tCtx2.filter = f.css;
-            tCtx2.fillStyle = grad;
-            tCtx2.fillRect(0, 0, 54, 54);
-          }
-          thumb.appendChild(thumbCanvas);
+          // Tous les autres : rond coloré avec gradient representatif
+          const dot = document.createElement('div');
+          dot.style.cssText = [
+            'width:100%',
+            'height:100%',
+            'border-radius:50%',
+            'background:' + f.dot,
+            'display:flex',
+            'align-items:center',
+            'justify-content:center',
+          ].join(';');
+          thumb.appendChild(dot);
         }
 
         const label = document.createElement('div');
@@ -994,27 +862,102 @@
       if (!container) return;
       const bottomBar = document.querySelector('.bottom-bar');
       if (!bottomBar) return;
-      const bbHeight = bottomBar.offsetHeight || 130;
-      container.style.bottom = bbHeight + 'px';
+      container.style.bottom = (bottomBar.offsetHeight || 130) + 'px';
     }
 
     /* =====================================================
-       Capture depuis le canvas filtré pour l'enregistrement
+       Capture depuis canvas filtré pour l'enregistrement
+       — uniquement au moment du record, pas en live
        ===================================================== */
-    function getRecordingStream() {
-      if (!filterCanvas) return mediaStream;
+    let filterCanvas = null;
+    let filterCtx = null;
+    let filterRafId = null;
+
+    function initFilterCanvas() {
+      filterCanvas = document.getElementById('filter-canvas');
+      filterCtx = filterCanvas.getContext('2d', { alpha: false, willReadFrequently: false });
+    }
+
+    function startCanvasCapture() {
+      // Redimensionner le canvas à la taille de l'écran
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      filterCanvas.width = W;
+      filterCanvas.height = H;
+      filterCanvas.style.visibility = 'hidden';
+      filterCanvas.style.position = 'absolute';
+
+      const video = document.getElementById('camera-preview');
       const f = getActiveFilter();
-      // Si filtre naturel, on enregistre directement le stream caméra (moins de CPU)
-      if (f.id === 'naturel') return mediaStream;
+
+      function drawFrame() {
+        if (!isRecording) { stopCanvasCapture(); return; }
+        if (!video || video.readyState < 2) { filterRafId = requestAnimationFrame(drawFrame); return; }
+
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        if (!vw || !vh) { filterRafId = requestAnimationFrame(drawFrame); return; }
+
+        filterCtx.save();
+
+        // Miroir caméra frontale
+        if (facingMode === 'user') { filterCtx.translate(W, 0); filterCtx.scale(-1, 1); }
+
+        // Cover fit
+        const vRatio = vw / vh, cRatio = W / H;
+        let sx = 0, sy = 0, sw = vw, sh = vh;
+        if (vRatio > cRatio) { sw = vh * cRatio; sx = (vw - sw) / 2; }
+        else { sh = vw / cRatio; sy = (vh - sh) / 2; }
+
+        // Appliquer filtre CSS sur le canvas
+        if (f.css !== 'none' && !f.privacy) {
+          filterCtx.filter = f.css;
+        }
+
+        filterCtx.drawImage(video, sx, sy, sw, sh, 0, 0, W, H);
+        filterCtx.filter = 'none';
+
+        // Barre Mystère gravée dans la vidéo
+        if (f.privacy && f.privacyType === 'bar') {
+          filterCtx.restore();
+          filterCtx.save();
+          filterCtx.fillStyle = 'rgba(0,0,0,0.92)';
+          filterCtx.fillRect(0, H * 0.30, W, H * 0.14);
+        }
+
+        filterCtx.restore();
+        filterRafId = requestAnimationFrame(drawFrame);
+      }
+
+      filterRafId = requestAnimationFrame(drawFrame);
+    }
+
+    function stopCanvasCapture() {
+      if (filterRafId) { cancelAnimationFrame(filterRafId); filterRafId = null; }
+    }
+
+    // Stream à enregistrer : canvas filtré si filtre actif, sinon stream brut
+    function getRecordingStream() {
+      const f = getActiveFilter();
+      if (f.id === 'naturel') return mediaStream; // Fast path : zéro overhead
+      if (!filterCanvas || !mediaStream) return mediaStream;
       try {
+        startCanvasCapture();
         const canvasStream = filterCanvas.captureStream(30);
-        // On ajoute la piste audio du stream caméra
-        const audioTracks = mediaStream ? mediaStream.getAudioTracks() : [];
-        audioTracks.forEach(track => canvasStream.addTrack(track));
+        mediaStream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
         return canvasStream;
       } catch(e) {
+        stopCanvasCapture();
         return mediaStream;
       }
+    }
+
+    function startFilterLoop() { applyCSSFilterToVideo(); }
+    function stopFilterLoop() {
+      stopCanvasCapture();
+      const video = document.getElementById('camera-preview');
+      if (video) video.style.filter = 'none';
+      removeMysteryBar();
     }
 
     /* =====================================================
@@ -1115,8 +1058,8 @@
         pendingRecordUI = false;
       }
       scheduleSafeMusicPreload();
-      // Démarrer le canvas filtré
-      startFilterLoop();
+      // Appliquer le filtre CSS sur la vidéo (zéro overhead)
+      applyCSSFilterToVideo();
     };
     cameraPreview.addEventListener('loadeddata', markCameraReady);
 
@@ -2159,7 +2102,7 @@
         if (!isRecording && !isCountingDown) { if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; } }
       } else {
         if (!mediaStream && !isRecording && !isCountingDown && !previewOverlay.classList.contains('active') && !uploadCompleted) startCamera();
-        else if (mediaStream && cameraReady && !isPreviewOpen()) startFilterLoop();
+        else if (mediaStream && cameraReady && !isPreviewOpen()) applyCSSFilterToVideo();
       }
     });
 
@@ -2511,8 +2454,11 @@
     }
 
     function showPreview(blob) {
-      // Arrêter le canvas filtré quand on passe en preview
-      stopFilterLoop();
+      // Nettoyer filtre caméra quand on passe en preview
+      stopCanvasCapture();
+      const video = document.getElementById('camera-preview');
+      if (video) video.style.filter = 'none';
+      removeMysteryBar();
       if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
       previewObjectURL = URL.createObjectURL(blob);
       lockPreviewViewport();
@@ -2551,12 +2497,12 @@
       if (tapToPlay) tapToPlay.classList.remove('active');
       resetPreviewState();
       if (!uploadCompleted && (!mediaStream || !mediaStream.active)) startCamera();
-      else if (mediaStream && cameraReady) startFilterLoop();
+      else if (mediaStream && cameraReady) applyCSSFilterToVideo();
     }
 
     syncAppViewportVars();
     let viewportSyncRaf = null;
-    function scheduleViewportSync() { if (viewportSyncRaf) return; viewportSyncRaf = requestAnimationFrame(() => { viewportSyncRaf = null; syncAppViewportVars(); positionPreviewOverlays(); resizeFilterCanvas(); }); }
+    function scheduleViewportSync() { if (viewportSyncRaf) return; viewportSyncRaf = requestAnimationFrame(() => { viewportSyncRaf = null; syncAppViewportVars(); positionPreviewOverlays(); positionFilterBar(); }); }
     window.addEventListener('resize', scheduleViewportSync, { passive: true });
     window.addEventListener('orientationchange', scheduleViewportSync, { passive: true });
     if (window.visualViewport) {
@@ -2596,7 +2542,9 @@
     flashBtn.onclick = toggleFlash;
     switchBtn.onclick = () => {
       if (isRecording || isCountingDown || isSwitching) return; isSwitching = true;
-      stopFilterLoop();
+      const video = document.getElementById('camera-preview');
+      if (video) video.style.filter = 'none';
+      removeMysteryBar();
       switchBtn.style.transform = "rotate(180deg)";
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
       facingMode = (facingMode === 'environment') ? 'user' : 'environment';
