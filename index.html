@@ -764,7 +764,7 @@
     let lastFaceLandmarks = null, mpRafId = null;
     let overlayCanvas = null, overlayCtx = null;
     let mysteryBarEl = null;
-    let eyeBlurCanvas = null, eyeBlurCtx = null, eyeBlurRaf = null, eyeBlurMpRaf = null;
+    let eyeBlurCanvas = null, eyeBlurCtx = null, eyeBlurRaf = null, eyeBlurMpRaf = null, eyeBlurActive = false;
     let glassesEl = null, glassesRaf = null;
 
     // ---- Vertex shader : cover-fit correct ----
@@ -1274,7 +1274,6 @@
       if (eyeBlurCanvas) { eyeBlurCanvas.remove(); eyeBlurCanvas = null; eyeBlurCtx = null; }
     }
 
-    let eyeBlurMpRaf = null, eyeBlurActive = false;
     function startMPLoopEyeBlur() {
       if (!mpReady || eyeBlurActive) return;
       eyeBlurActive = true;
