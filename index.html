@@ -742,7 +742,7 @@
       { id:'dore',    name:'Doré',    css:'brightness(1.03) saturate(1.06)',       dot:'linear-gradient(135deg,#ffd580,#c87820)', privacy:false, faceEffect:'dore'     },
       { id:'mascara', name:'Mascara', css:'brightness(1.02) contrast(1.04)',       dot:'linear-gradient(135deg,#777,#111)',       privacy:false, faceEffect:'mascara'  },
       { id:'blush',   name:'Blush',   css:'brightness(1.03) saturate(1.05)',       dot:'linear-gradient(135deg,#ffb0b0,#e04060)', privacy:false, faceEffect:'blush'    },
-      { id:'halo',    name:'Halo',    css:'brightness(1.05)',                      dot:'linear-gradient(135deg,#fffde0,#ffe066)', privacy:false, faceEffect:'halo'     },
+
       { id:'mystere', name:'Mystère', css:'none',                                 dot:'linear-gradient(135deg,#333,#000)',       privacy:true,  privacyType:'bar',  faceEffect:null },
       { id:'flou',    name:'Flou',    css:'none',                                 dot:'linear-gradient(135deg,#999,#333)',       privacy:true,  privacyType:'blur', faceEffect:null },
     ];
@@ -936,7 +936,6 @@
       dore:     { smooth:1.0,  bright:0.90, warmth:1.0,  glow:1.0  },
       mascara:  { smooth:1.0,  bright:0.50, warmth:0.40, glow:0.60 },
       blush:    { smooth:1.0,  bright:0.85, warmth:0.80, glow:0.90 },
-      halo:     { smooth:1.0,  bright:0.85, warmth:0.65, glow:0.85 },
     };
 
     function renderGLFrame() {
@@ -1123,7 +1122,6 @@
       if (f.faceEffect==='blush')   { drawCheekBlush(lm,W,H,flip,220,100,120,0.24); }
       if (f.faceEffect==='mascara') { drawEyeShadow(lm,W,H,flip); }
       if (f.faceEffect==='dore')    { drawWarmGlow(lm,W,H,flip); }
-      if (f.faceEffect==='halo')    { drawHaloEffect(lm,W,H,flip); }
       // Lunettes pour Mystère (géré séparément via overlay)
     }
 
@@ -1179,79 +1177,38 @@
     }
 
     // ---- Halo lumineux autour de la tête (ring light effect) ----
-    function drawHaloEffect(lm, W, H, flip) {
-      if (!overlayCtx) return;
-      const ctx = overlayCtx;
-      const pts = MP_FACE_OVAL.map(i => pt(lm,i,W,H,flip)).filter(Boolean);
-      if (pts.length < 6) return;
-      const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
-      const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
-      const maxR = Math.max(...pts.map(p=>Math.sqrt((p.x-cx)**2+(p.y-cy)**2)));
 
-      // Anneau uniforme tout autour — points dilatés régulièrement
-      const outerPts = pts.map(p => {
-        const dx=p.x-cx, dy=p.y-cy;
-        const d = Math.sqrt(dx*dx+dy*dy)||1;
-        return { x: cx+dx/d*(maxR*1.42), y: cy+dy/d*(maxR*1.42) };
-      });
-      const innerPts = pts.map(p => {
-        const dx=p.x-cx, dy=p.y-cy;
-        const d = Math.sqrt(dx*dx+dy*dy)||1;
-        return { x: cx+dx/d*(maxR*1.02), y: cy+dy/d*(maxR*1.02) };
-      });
-
-      ctx.save();
-      // Passe 1 : anneau flou (glow extérieur)
-      ctx.filter = 'blur(10px)';
-      ctx.beginPath();
-      ctx.moveTo(outerPts[0].x, outerPts[0].y);
-      for(let i=1;i<outerPts.length;i++) ctx.lineTo(outerPts[i].x,outerPts[i].y);
-      ctx.closePath();
-      ctx.moveTo(innerPts[innerPts.length-1].x, innerPts[innerPts.length-1].y);
-      for(let i=innerPts.length-2;i>=0;i--) ctx.lineTo(innerPts[i].x,innerPts[i].y);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(255,255,230,0.70)';
-      ctx.fill('evenodd');
-
-      // Passe 2 : anneau net + intense au centre
-      ctx.filter = 'blur(3px)';
-      const midPts = pts.map(p => {
-        const dx=p.x-cx, dy=p.y-cy;
-        const d = Math.sqrt(dx*dx+dy*dy)||1;
-        return { x: cx+dx/d*(maxR*1.20), y: cy+dy/d*(maxR*1.20) };
-      });
-      ctx.beginPath();
-      ctx.moveTo(midPts[0].x, midPts[0].y);
-      for(let i=1;i<midPts.length;i++) ctx.lineTo(midPts[i].x,midPts[i].y);
-      ctx.closePath();
-      ctx.moveTo(innerPts[innerPts.length-1].x, innerPts[innerPts.length-1].y);
-      for(let i=innerPts.length-2;i>=0;i--) ctx.lineTo(innerPts[i].x,innerPts[i].y);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(255,255,245,0.92)';
-      ctx.fill('evenodd');
-
-      ctx.restore();
-    }
-
-    // ---- Mystère : 2 ronds noirs sur les yeux ----
+    // ---- Mystère : 2 grosses ellipses noires qui se touchent ----
     function showGlasses(lm, W, H, flip) {
-      const lOuter=pt(lm,33,W,H,flip), lInner=pt(lm,133,W,H,flip);
-      const rInner=pt(lm,362,W,H,flip), rOuter=pt(lm,263,W,H,flip);
+      const lOuter = pt(lm, 33,  W, H, flip);
+      const lInner = pt(lm, 133, W, H, flip);
+      const rInner = pt(lm, 362, W, H, flip);
+      const rOuter = pt(lm, 263, W, H, flip);
       if (!lOuter||!lInner||!rInner||!rOuter) return;
-      const lCX=(lOuter.x+lInner.x)/2, lCY=(lOuter.y+lInner.y)/2;
-      const rCX=(rInner.x+rOuter.x)/2, rCY=(rInner.y+rOuter.y)/2;
-      const totalW=Math.abs(rOuter.x-lOuter.x);
-      const rx=totalW*0.22, ry=rx*0.65;
-      const angle=Math.atan2(rOuter.y-lOuter.y,rOuter.x-lOuter.x);
-      const deg=angle*180/Math.PI;
-      const pivotX=(lCX+rCX)/2, pivotY=(lCY+rCY)/2;
+
+      // Centre de chaque oeil
+      const lCX = (lOuter.x + lInner.x) / 2;
+      const lCY = (lOuter.y + lInner.y) / 2;
+      const rCX = (rInner.x + rOuter.x) / 2;
+      const rCY = (rInner.y + rOuter.y) / 2;
+
+      // Taille : les deux ellipses doivent se toucher au centre
+      // Distance entre les deux centres / 2 = rayon horizontal
+      const dist = Math.abs(rCX - lCX);
+      const rx = dist / 2 * 1.05; // légèrement plus grand pour qu'elles se chevauchent
+      const ry = rx * 0.72;
+
+      const angle = Math.atan2(rOuter.y - lOuter.y, rOuter.x - lOuter.x);
+      const deg = angle * 180 / Math.PI;
+      const pivotX = (lCX + rCX) / 2, pivotY = (lCY + rCY) / 2;
+
       if (!glassesEl) {
-        glassesEl=document.createElementNS('http://www.w3.org/2000/svg','svg');
-        glassesEl.style.cssText='position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none;overflow:visible;';
+        glassesEl = document.createElementNS('http://www.w3.org/2000/svg','svg');
+        glassesEl.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none;overflow:visible;';
         document.getElementById('camera-container').appendChild(glassesEl);
       }
-      glassesEl.setAttribute('viewBox',`0 0 ${W} ${H}`);
-      glassesEl.innerHTML=`
+      glassesEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      glassesEl.innerHTML = `
         <g transform="rotate(${deg},${pivotX},${pivotY})">
           <ellipse cx="${lCX}" cy="${lCY}" rx="${rx}" ry="${ry}" fill="rgba(0,0,0,0.92)"/>
           <ellipse cx="${rCX}" cy="${rCY}" rx="${rx}" ry="${ry}" fill="rgba(0,0,0,0.92)"/>
@@ -1300,59 +1257,74 @@
 
     function drawEyeBlurOverlay() {
       if (!eyeBlurCtx||!eyeBlurCanvas) return;
-      const W=window.innerWidth, H=window.innerHeight;
-      if(eyeBlurCanvas.width!==W||eyeBlurCanvas.height!==H){
+      const W = window.innerWidth, H = window.innerHeight;
+      if (eyeBlurCanvas.width!==W||eyeBlurCanvas.height!==H) {
         eyeBlurCanvas.width=W; eyeBlurCanvas.height=H;
       }
       eyeBlurCtx.clearRect(0,0,W,H);
       if (!lastFaceLandmarks||!lastFaceLandmarks.length) return;
-      const lm=lastFaceLandmarks, flip=facingMode==='user';
-      const video=document.getElementById('camera-preview');
+      const lm = lastFaceLandmarks, flip = facingMode==='user';
+      const video = document.getElementById('camera-preview');
       if (!video||video.readyState<2) return;
 
-      // Cover-fit de la vidéo
+      // Points des yeux
+      const lOuter = pt(lm,33,W,H,flip), lInner = pt(lm,133,W,H,flip);
+      const rInner = pt(lm,362,W,H,flip), rOuter = pt(lm,263,W,H,flip);
+      if (!lOuter||!lInner||!rInner||!rOuter) return;
+
+      const lCX=(lOuter.x+lInner.x)/2, lCY=(lOuter.y+lInner.y)/2;
+      const rCX=(rInner.x+rOuter.x)/2, rCY=(rInner.y+rOuter.y)/2;
+      const dist=Math.abs(rCX-lCX);
+      const rx=dist/2*1.05, ry=rx*0.72;
+      const angle=Math.atan2(rOuter.y-lOuter.y,rOuter.x-lOuter.x);
+
+      // Cover-fit vidéo
       const vW=video.videoWidth||W, vH=video.videoHeight||H;
       const vr=vW/vH, cr=W/H;
       let sx=0,sy=0,sw=vW,sh=vH;
       if(vr>cr){sw=vH*cr;sx=(vW-sw)/2;}else{sh=vW/cr;sy=(vH-sh)/2;}
 
-      [MP_LEFT_EYE_INNER, MP_RIGHT_EYE_INNER].forEach(eyePts => {
-        const pts=eyePts.map(i=>pt(lm,i,W,H,flip)).filter(Boolean);
-        if(pts.length<4) return;
-        const cx=pts.reduce((s,p)=>s+p.x,0)/pts.length;
-        const cy=pts.reduce((s,p)=>s+p.y,0)/pts.length;
-        const rad=Math.max(...pts.map(p=>Math.sqrt((p.x-cx)**2+(p.y-cy)**2)))*3.2;
+      // Canvas vidéo très floutée
+      const tmp = document.createElement('canvas');
+      tmp.width=W; tmp.height=H;
+      const tCtx = tmp.getContext('2d');
+      tCtx.save();
+      if(flip){tCtx.translate(W,0);tCtx.scale(-1,1);}
+      tCtx.filter = 'blur(20px)';
+      tCtx.drawImage(video,sx,sy,sw,sh,0,0,W,H);
+      tCtx.restore();
+      tCtx.filter = 'none';
 
-        // Créer un canvas temporaire avec la vidéo très floutée
-        const tmp=document.createElement('canvas');
-        tmp.width=W; tmp.height=H;
-        const tCtx=tmp.getContext('2d');
-        tCtx.save();
-        if(flip){tCtx.translate(W,0);tCtx.scale(-1,1);}
-        tCtx.filter='blur(18px)';
-        tCtx.drawImage(video,sx,sy,sw,sh,0,0,W,H);
-        tCtx.restore();
-        tCtx.filter='none';
+      // Dessiner les 2 ellipses floutées avec rotation
+      const ctx = eyeBlurCtx;
+      ctx.save();
+      ctx.translate(pivotX, pivotY(lCX,rCX,lCY,rCY));
+      ctx.rotate(angle);
+      ctx.translate(-pivotX, -pivotY(lCX,rCX,lCY,rCY));
 
-        // Appliquer la zone floutée en forme de rond avec fondu sur les bords
-        eyeBlurCtx.save();
-        eyeBlurCtx.beginPath();
-        eyeBlurCtx.arc(cx,cy,rad,0,Math.PI*2);
-        eyeBlurCtx.clip();
-        eyeBlurCtx.drawImage(tmp,0,0);
-        // Fondu progressif sur les bords pour un rendu naturel
-        const fade=eyeBlurCtx.createRadialGradient(cx,cy,rad*0.45,cx,cy,rad);
+      [{ cx:lCX, cy:lCY }, { cx:rCX, cy:rCY }].forEach(eye => {
+        ctx.save();
+        // Clip ellipse
+        ctx.beginPath();
+        ctx.ellipse(eye.cx, eye.cy, rx, ry, 0, 0, Math.PI*2);
+        ctx.clip();
+        ctx.drawImage(tmp, 0, 0);
+        // Fondu sur les bords
+        const fade = ctx.createRadialGradient(eye.cx,eye.cy,Math.min(rx,ry)*0.4,eye.cx,eye.cy,Math.max(rx,ry));
         fade.addColorStop(0,'rgba(0,0,0,0)');
         fade.addColorStop(1,'rgba(0,0,0,1)');
-        eyeBlurCtx.globalCompositeOperation='destination-out';
-        eyeBlurCtx.fillStyle=fade;
-        eyeBlurCtx.beginPath();
-        eyeBlurCtx.arc(cx,cy,rad,0,Math.PI*2);
-        eyeBlurCtx.fill();
-        eyeBlurCtx.globalCompositeOperation='source-over';
-        eyeBlurCtx.restore();
+        ctx.globalCompositeOperation='destination-out';
+        ctx.fillStyle=fade;
+        ctx.beginPath();
+        ctx.ellipse(eye.cx, eye.cy, rx, ry, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalCompositeOperation='source-over';
+        ctx.restore();
       });
+      ctx.restore();
     }
+    function pivotY(lCX,rCX,lCY,rCY){ return (lCY+rCY)/2; }
+    function pivotX(lCX,rCX){ return (lCX+rCX)/2; }
 
     function startGlassesLoop() {
       if (glassesActive) return;
