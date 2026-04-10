@@ -808,20 +808,36 @@
         if (mask < 0.01) return texture2D(u_video, uv).rgb;
         vec3 col = vec3(0.0);
         float total = 0.0;
-        for (int dx = -2; dx <= 2; dx++) {
-          for (int dy = -2; dy <= 2; dy++) {
-            float w = exp(-float(dx*dx + dy*dy) * 0.45);
-            vec2 off = vec2(float(dx), float(dy)) * u_px * 2.2;
+        // Kernel 7x7 avec rayon plus large pour lissage visible
+        for (int dx = -3; dx <= 3; dx++) {
+          for (int dy = -3; dy <= 3; dy++) {
+            float w = exp(-float(dx*dx + dy*dy) * 0.28);
+            vec2 off = vec2(float(dx), float(dy)) * u_px * 3.5;
             vec3 s = texture2D(u_video, uv + off).rgb;
             float ns = isSkin(s);
-            w *= (0.35 + 0.65 * ns);
+            w *= (0.2 + 0.8 * ns);
             col += s * w;
             total += w;
           }
         }
         col /= total;
+        // Double passe pour renforcer l'effet
+        vec3 col2 = vec3(0.0);
+        float total2 = 0.0;
+        for (int dx = -2; dx <= 2; dx++) {
+          for (int dy = -2; dy <= 2; dy++) {
+            float w = exp(-float(dx*dx + dy*dy) * 0.5);
+            vec2 off = vec2(float(dx), float(dy)) * u_px * 2.0;
+            vec3 s = texture2D(u_video, uv + off).rgb;
+            w *= (0.3 + 0.7 * isSkin(s));
+            col2 += s * w;
+            total2 += w;
+          }
+        }
+        col2 /= total2;
+        vec3 smoothed = mix(col, col2, 0.5);
         vec3 orig = texture2D(u_video, uv).rgb;
-        return mix(orig, col, mask * u_smooth);
+        return mix(orig, smoothed, mask * u_smooth);
       }
 
       void main() {
@@ -924,9 +940,9 @@
 
     const FILTER_PARAMS = {
       naturel:  { smooth:0.0,  bright:0.0,  warmth:0.0,  glow:0.0  },
-      doux:     { smooth:1.0,  bright:0.80, warmth:0.70, glow:0.80 },
-      glamour:  { smooth:1.0,  bright:1.0,  warmth:0.90, glow:1.0  },
-      blush:    { smooth:1.0,  bright:0.85, warmth:0.80, glow:0.90 },
+      doux:     { smooth:1.0,  bright:0.20, warmth:0.15, glow:0.10 },
+      glamour:  { smooth:1.0,  bright:1.0,  warmth:1.0,  glow:1.0  },
+      blush:    { smooth:1.0,  bright:0.50, warmth:0.45, glow:0.55 },
     };
 
     function renderGLFrame() {
@@ -1186,8 +1202,8 @@
       // Taille : les deux ellipses doivent se toucher au centre
       // Distance entre les deux centres / 2 = rayon horizontal
       const dist = Math.abs(rCX - lCX);
-      const rx = dist / 2 * 1.05; // légèrement plus grand pour qu'elles se chevauchent
-      const ry = rx * 0.72;
+      const rx = dist * 0.60; // bien plus grosses, se chevauchent vraiment
+      const ry = rx * 0.75;
 
       const angle = Math.atan2(rOuter.y - lOuter.y, rOuter.x - lOuter.x);
       const deg = angle * 180 / Math.PI;
@@ -1199,11 +1215,24 @@
         document.getElementById('camera-container').appendChild(glassesEl);
       }
       glassesEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
-      glassesEl.innerHTML = `
-        <g transform="rotate(${deg},${pivotX},${pivotY})">
-          <ellipse cx="${lCX}" cy="${lCY}" rx="${rx}" ry="${ry}" fill="rgba(0,0,0,0.92)"/>
-          <ellipse cx="${rCX}" cy="${rCY}" rx="${rx}" ry="${ry}" fill="rgba(0,0,0,0.92)"/>
-        </g>`;
+      // Mettre à jour sans recréer le DOM — évite le clignotement
+      let grp = glassesEl.querySelector('g');
+      if (!grp) {
+        grp = document.createElementNS('http://www.w3.org/2000/svg','g');
+        const el = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+        el.setAttribute('fill','rgba(0,0,0,0.92)'); el.classList.add('eye-l');
+        const er = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+        er.setAttribute('fill','rgba(0,0,0,0.92)'); er.classList.add('eye-r');
+        grp.appendChild(el); grp.appendChild(er);
+        glassesEl.appendChild(grp);
+      }
+      grp.setAttribute('transform', `rotate(${deg},${pivotX},${pivotY})`);
+      const eL = grp.querySelector('.eye-l');
+      const eR = grp.querySelector('.eye-r');
+      eL.setAttribute('cx', lCX); eL.setAttribute('cy', lCY);
+      eL.setAttribute('rx', rx); eL.setAttribute('ry', ry);
+      eR.setAttribute('cx', rCX); eR.setAttribute('cy', rCY);
+      eR.setAttribute('rx', rx); eR.setAttribute('ry', ry);
     }
     function removeGlasses() {
       if (glassesEl) { glassesEl.remove(); glassesEl = null; }
@@ -3012,7 +3041,10 @@
         recordedBlob = blob; isRecording = false; isStoppingRecording = false;
         finalizeRecording(); disconnectVideoFromAudioGraph();
         if (previewTimeout) clearTimeout(previewTimeout);
-        previewTimeout = setTimeout(() => { previewTimeout = null; showPreview(blob); }, 32);
+        previewTimeout = setTimeout(() => {
+          previewTimeout = null;
+          showPreview(blob);
+        }, 0);
       };
       mediaRecorder.start(RECORDER_TIMESLICE_MS); isRecording = true;
       if (cameraReady) document.body.classList.add('recording'); else pendingRecordUI = true;
