@@ -80,6 +80,10 @@
       overflow-x: auto;
       scrollbar-width: none;
       -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x mandatory;
+    }
+    .filter-chip {
+      scroll-snap-align: center;
     }
     #filter-bar::-webkit-scrollbar { display: none; }
 
@@ -1480,15 +1484,33 @@
         bar.appendChild(chip);
       });
 
-      // Scroll pour centrer le filtre Naturel
+      // Padding dynamique pour centrer Naturel avec le bouton record
       requestAnimationFrame(() => {
         const naturalChip = bar.querySelector('[data-filter-id="naturel"]');
-        if (naturalChip && bar.parentElement) {
-          const barW = bar.parentElement.offsetWidth;
-          const chipLeft = naturalChip.offsetLeft;
-          const chipW = naturalChip.offsetWidth;
-          bar.parentElement.scrollLeft = chipLeft - barW/2 + chipW/2;
-        }
+        const container = bar.parentElement;
+        if (!naturalChip || !container) return;
+        const containerW = container.offsetWidth;
+        const leftFiltersW = Array.from(bar.children)
+          .filter(c => {
+            const fid = c.dataset.filterId;
+            const f = FILTERS.find(f => f.id === fid);
+            return f && f.side === 'left';
+          })
+          .reduce((sum, c) => sum + c.offsetWidth + 12, 0);
+        // Padding gauche = moitié écran - largeur filtres gauche - moitié chip naturel
+        const paddingLeft = Math.max(16, containerW/2 - leftFiltersW - naturalChip.offsetWidth/2);
+        const rightFiltersW = Array.from(bar.children)
+          .filter(c => {
+            const fid = c.dataset.filterId;
+            const f = FILTERS.find(f => f.id === fid);
+            return f && f.side === 'right';
+          })
+          .reduce((sum, c) => sum + c.offsetWidth + 12, 0);
+        const paddingRight = Math.max(16, containerW/2 - rightFiltersW - naturalChip.offsetWidth/2);
+        bar.style.paddingLeft = paddingLeft + 'px';
+        bar.style.paddingRight = paddingRight + 'px';
+        // Scroll pour que Naturel soit centré
+        container.scrollLeft = naturalChip.offsetLeft - containerW/2 + naturalChip.offsetWidth/2;
       });
     }
 
@@ -3134,6 +3156,13 @@
     function showPreview(blob) {
       // Stopper TOUS les effets filtre caméra avant la preview
       stopFilterLoop();
+      // Appliquer le filtre CSS actif sur la preview vidéo
+      const f = getActiveFilter();
+      if (f && f.css && f.css !== 'none') {
+        previewVideo.style.filter = f.css;
+      } else {
+        previewVideo.style.filter = 'none';
+      }
       if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
       previewObjectURL = URL.createObjectURL(blob);
       lockPreviewViewport();
@@ -3141,7 +3170,8 @@
       previewVideo.volume = originalVolume;
       previewVideo.loop = true;
       previewVideo.preload = 'auto';
-      previewVideo.style.transform = recordedFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+      // Ne pas inverser — la vidéo WebGL est déjà dans le bon sens
+      previewVideo.style.transform = 'scaleX(1)';
       previewVideo.load();
       applyPreviewSourceMode();
       previewOverlay.classList.add('active');
