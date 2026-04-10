@@ -764,6 +764,8 @@
     let lastFaceLandmarks = null, mpRafId = null;
     let overlayCanvas = null, overlayCtx = null;
     let mysteryBarEl = null;
+    let eyeBlurCanvas = null, eyeBlurCtx = null, eyeBlurRaf = null, eyeBlurMpRaf = null;
+    let glassesEl = null, glassesRaf = null;
 
     // ---- Vertex shader : cover-fit correct ----
     // On calcule le crop dans le vertex shader pour que
@@ -1022,17 +1024,21 @@
       }
     }
 
-    let mpLastSend = 0;
+    let mpLastSend = 0, mpLoopActive = false;
     function startMPLoop() {
-      if (!mpReady || mpRafId) return;
+      if (!mpReady || mpLoopActive) return;
+      mpLoopActive = true;
       const tick = async () => {
-        if (!mpReady || !isFilterWithFaceEffect()) { mpRafId = null; return; }
+        if (!mpLoopActive || !mpReady || !isFilterWithFaceEffect()) {
+          mpRafId = null; mpLoopActive = false; return;
+        }
         const now = performance.now();
         const video = document.getElementById('camera-preview');
         if (video && video.readyState >= 2 && now - mpLastSend > 80) {
           mpLastSend = now;
           try { await mpFaceMesh.send({ image: video }); } catch(e) {}
         }
+        if (!mpLoopActive) { mpRafId = null; return; }
         resizeOverlayCanvas();
         drawFaceEffects();
         mpRafId = requestAnimationFrame(tick);
@@ -1040,6 +1046,7 @@
       mpRafId = requestAnimationFrame(tick);
     }
     function stopMPLoop() {
+      mpLoopActive = false;
       if (mpRafId) { cancelAnimationFrame(mpRafId); mpRafId = null; }
       lastFaceLandmarks = null;
       if (overlayCtx && overlayCanvas)
@@ -1203,7 +1210,6 @@
     }
 
     // ---- Vraies lunettes de soleil SVG (monture rectangulaire) ----
-    let glassesEl = null;
     function showGlasses(lm, W, H, flip) {
       const lOuter=pt(lm,33,W,H,flip), lInner=pt(lm,133,W,H,flip);
       const rInner=pt(lm,362,W,H,flip), rOuter=pt(lm,263,W,H,flip);
@@ -1262,33 +1268,32 @@
     }
 
     // ---- Flou uniquement sur les yeux ----
-    let eyeBlurCanvas = null, eyeBlurCtx = null, eyeBlurRaf = null;
-    function startEyeBlur() {
-      if (!mpReady && !mpLoadFailed) { loadMediaPipe(); }
-      else if (mpReady) startMPLoopEyeBlur();
-    }
+
     function stopEyeBlur() {
       if (eyeBlurRaf) { cancelAnimationFrame(eyeBlurRaf); eyeBlurRaf = null; }
       if (eyeBlurCanvas) { eyeBlurCanvas.remove(); eyeBlurCanvas = null; eyeBlurCtx = null; }
     }
 
-    let eyeBlurMpRaf = null;
+    let eyeBlurMpRaf = null, eyeBlurActive = false;
     function startMPLoopEyeBlur() {
-      if (!mpReady || eyeBlurMpRaf) return;
+      if (!mpReady || eyeBlurActive) return;
+      eyeBlurActive = true;
       const tick = async () => {
-        if (!eyeBlurCanvas) { eyeBlurMpRaf = null; return; }
+        if (!eyeBlurActive || !eyeBlurCanvas) { eyeBlurMpRaf = null; eyeBlurActive = false; return; }
         const now = performance.now();
         const video = document.getElementById('camera-preview');
         if (video && video.readyState >= 2 && now - mpLastSend > 80) {
           mpLastSend = now;
           try { await mpFaceMesh.send({ image: video }); } catch(e) {}
         }
+        if (!eyeBlurActive) { eyeBlurMpRaf = null; return; }
         drawEyeBlurOverlay();
         eyeBlurMpRaf = requestAnimationFrame(tick);
       };
       eyeBlurMpRaf = requestAnimationFrame(tick);
     }
     function stopMPLoopEyeBlur() {
+      eyeBlurActive = false;
       if (eyeBlurMpRaf) { cancelAnimationFrame(eyeBlurMpRaf); eyeBlurMpRaf = null; }
     }
 
@@ -1345,16 +1350,19 @@
       });
     }
 
+    let glassesActive = false;
     function startGlassesLoop() {
-      if (glassesRaf) return;
+      if (glassesActive) return;
+      glassesActive = true;
       const tick = async () => {
-        if (!glassesEl && !mysteryBarEl) { glassesRaf = null; return; }
+        if (!glassesActive) { glassesRaf = null; return; }
         const now = performance.now();
         const video = document.getElementById('camera-preview');
         if (mpReady && video && video.readyState >= 2 && now - mpLastSend > 80) {
           mpLastSend = now;
           try { await mpFaceMesh.send({ image: video }); } catch(e) {}
         }
+        if (!glassesActive) { glassesRaf = null; return; }
         if (lastFaceLandmarks && mpReady) {
           const W=window.innerWidth, H=window.innerHeight;
           showGlasses(lastFaceLandmarks, W, H, facingMode==='user');
@@ -1365,6 +1373,7 @@
       glassesRaf = requestAnimationFrame(tick);
     }
     function stopGlassesLoop() {
+      glassesActive = false;
       if (glassesRaf) { cancelAnimationFrame(glassesRaf); glassesRaf = null; }
       removeGlasses();
     }
