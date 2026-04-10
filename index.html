@@ -1035,7 +1035,7 @@
       if (!mpReady || mpLoopActive) return;
       mpLoopActive = true;
       const tick = async () => {
-        if (!mpLoopActive || !mpReady || !isFilterWithFaceEffect()) {
+        if (!mpLoopActive || !mpReady || !isFilterWithFaceEffect() || isPreviewOpen()) {
           mpRafId = null; mpLoopActive = false; return;
         }
         const now = performance.now();
@@ -1249,7 +1249,7 @@
       if (!mpReady || eyeBlurActive) return;
       eyeBlurActive = true;
       const tick = async () => {
-        if (!eyeBlurActive || !eyeBlurCanvas) { eyeBlurMpRaf = null; eyeBlurActive = false; return; }
+        if (!eyeBlurActive || !eyeBlurCanvas || isPreviewOpen()) { eyeBlurMpRaf = null; eyeBlurActive = false; return; }
         const now = performance.now();
         const video = document.getElementById('camera-preview');
         if (video && video.readyState >= 2 && now - mpLastSend > 80) {
@@ -1351,7 +1351,7 @@
       glassesActive = true;
       let lastDraw = 0;
       const tick = async () => {
-        if (!glassesActive) { glassesRaf = null; return; }
+        if (!glassesActive || isPreviewOpen()) { glassesRaf = null; glassesActive = false; removeGlasses(); return; }
         const now = performance.now();
         const video = document.getElementById('camera-preview');
         // MediaPipe à 15fps
@@ -1359,7 +1359,7 @@
           mpLastSend = now;
           try { await mpFaceMesh.send({ image: video }); } catch(e) {}
         }
-        if (!glassesActive) { glassesRaf = null; return; }
+        if (!glassesActive || isPreviewOpen()) { glassesRaf = null; glassesActive = false; removeGlasses(); return; }
         // Redessiner SVG à 20fps max — évite le flickering
         if (lastFaceLandmarks && mpReady && now - lastDraw > 50) {
           lastDraw = now;
