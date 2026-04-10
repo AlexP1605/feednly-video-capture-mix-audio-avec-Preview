@@ -734,16 +734,17 @@
        ===================================================== */
 
     const FILTERS = [
-      { id: 'naturel',  name: 'Naturel',  css: 'none',                                              dot: null,                                        privacy: false, faceEffect: null       },
-      { id: 'soleil',   name: 'Soleil',   css: 'brightness(1.05) saturate(1.06)',                    dot: 'linear-gradient(135deg,#f9e04b,#f5a623)',   privacy: false, faceEffect: 'soleil'   },
-      { id: 'doux',     name: 'Doux',     css: 'brightness(1.04) saturate(0.95) sepia(0.06)',         dot: 'linear-gradient(135deg,#f5d9c0,#e8a870)',   privacy: false, faceEffect: 'soft'     },
-      { id: 'rose',     name: 'Rose',     css: 'brightness(1.03) saturate(1.05)',                     dot: 'linear-gradient(135deg,#ffb6c8,#f06090)',   privacy: false, faceEffect: 'rose'     },
-      { id: 'glamour',  name: 'Glamour',  css: 'brightness(1.05) contrast(1.04) saturate(1.08)',      dot: 'linear-gradient(135deg,#e8c8f0,#b060d0)',   privacy: false, faceEffect: 'glamour'  },
-      { id: 'dore',     name: 'Doré',     css: 'brightness(1.04) saturate(1.08) sepia(0.08)',          dot: 'linear-gradient(135deg,#ffd580,#c87820)',   privacy: false, faceEffect: 'dore'     },
-      { id: 'mascara',  name: 'Mascara',  css: 'brightness(1.02) contrast(1.05) saturate(0.92)',      dot: 'linear-gradient(135deg,#777,#111)',          privacy: false, faceEffect: 'mascara'  },
-      { id: 'blush',    name: 'Blush',    css: 'brightness(1.03) saturate(1.06)',                     dot: 'linear-gradient(135deg,#ffb0b0,#e04060)',   privacy: false, faceEffect: 'blush'    },
-      { id: 'mystere',  name: 'Mystère',  css: 'none',                                               dot: 'linear-gradient(135deg,#333,#000)',          privacy: true,  privacyType: 'bar',  faceEffect: null },
-      { id: 'flou',     name: 'Flou',     css: 'blur(10px)',                                          dot: 'linear-gradient(135deg,#999,#333)',          privacy: true,  privacyType: 'blur', faceEffect: null },
+      { id:'naturel', name:'Naturel', css:'none',                                dot:null,                                       privacy:false, faceEffect:null       },
+      { id:'soleil',  name:'Soleil',  css:'brightness(1.04) saturate(1.05)',      dot:'linear-gradient(135deg,#f9e04b,#f5a623)', privacy:false, faceEffect:'soleil'   },
+      { id:'doux',    name:'Doux',    css:'brightness(1.03) saturate(0.96)',       dot:'linear-gradient(135deg,#f5d9c0,#e8a870)', privacy:false, faceEffect:'soft'     },
+      { id:'rose',    name:'Rose',    css:'brightness(1.03) saturate(1.04)',       dot:'linear-gradient(135deg,#ffb6c8,#f06090)', privacy:false, faceEffect:'rose'     },
+      { id:'glamour', name:'Glamour', css:'brightness(1.04) contrast(1.03)',       dot:'linear-gradient(135deg,#e8c8f0,#b060d0)', privacy:false, faceEffect:'glamour'  },
+      { id:'dore',    name:'Doré',    css:'brightness(1.03) saturate(1.06)',       dot:'linear-gradient(135deg,#ffd580,#c87820)', privacy:false, faceEffect:'dore'     },
+      { id:'mascara', name:'Mascara', css:'brightness(1.02) contrast(1.04)',       dot:'linear-gradient(135deg,#777,#111)',       privacy:false, faceEffect:'mascara'  },
+      { id:'blush',   name:'Blush',   css:'brightness(1.03) saturate(1.05)',       dot:'linear-gradient(135deg,#ffb0b0,#e04060)', privacy:false, faceEffect:'blush'    },
+      { id:'halo',    name:'Halo',    css:'brightness(1.05)',                      dot:'linear-gradient(135deg,#fffde0,#ffe066)', privacy:false, faceEffect:'halo'     },
+      { id:'mystere', name:'Mystère', css:'none',                                 dot:'linear-gradient(135deg,#333,#000)',       privacy:true,  privacyType:'bar',  faceEffect:null },
+      { id:'flou',    name:'Flou',    css:'none',                                 dot:'linear-gradient(135deg,#999,#333)',       privacy:true,  privacyType:'blur', faceEffect:null },
     ];
     let activeFilterId = 'naturel';
 
@@ -752,110 +753,95 @@
     }
 
     /* =====================================================
-       MOTEUR BEAUTY — WebGL skin smoothing + MediaPipe visage
+       MOTEUR BEAUTY v3 — WebGL cover-fit + MediaPipe
        ===================================================== */
 
-    // --- WebGL état
     let gl = null, glCanvas = null, glRaf = null;
-    let glProgram = null, glVideoTex = null, glMaskTex = null;
-    let glMaskCanvas = null, glMaskCtx = null;
+    let glProgram = null, glVideoTex = null;
     let glRunning = false;
 
-    // --- MediaPipe état
     let mpFaceMesh = null, mpReady = false, mpLoading = false, mpLoadFailed = false;
     let lastFaceLandmarks = null, mpRafId = null;
     let overlayCanvas = null, overlayCtx = null;
-
-    // --- Mystery bar
     let mysteryBarEl = null;
 
-    // =====================================================
-    // SHADERS WebGL — skin smoothing
-    // =====================================================
+    // ---- Vertex shader : cover-fit correct ----
+    // On calcule le crop dans le vertex shader pour que
+    // la vidéo remplisse le canvas sans déformation
     const VS_SRC = `
       attribute vec2 a_pos;
       varying vec2 v_uv;
+      uniform vec2 u_scale;   // facteur de crop pour cover-fit
+      uniform vec2 u_offset;  // offset de centrage
       uniform bool u_flip;
       void main() {
-        float x = u_flip ? -a_pos.x : a_pos.x;
-        v_uv = vec2(x * 0.5 + 0.5, 0.5 - a_pos.y * 0.5);
+        // UV couvrant tout le canvas (0..1)
+        vec2 uv = vec2(a_pos.x * 0.5 + 0.5, 0.5 - a_pos.y * 0.5);
+        // Appliquer le cover-fit : crop + centrer
+        uv = uv * u_scale + u_offset;
+        // Miroir caméra frontale
+        if (u_flip) uv.x = 1.0 - uv.x;
+        v_uv = uv;
         gl_Position = vec4(a_pos, 0.0, 1.0);
       }
     `;
 
-    // Fragment shader : skin detection + bilateral-like smooth + glow
+    // ---- Fragment shader : skin detection + lissage ----
     const FS_SRC = `
       precision mediump float;
       uniform sampler2D u_video;
-      uniform sampler2D u_mask;
-      uniform vec2 u_px;        // taille d'un pixel en UV
-      uniform float u_smooth;   // intensité lissage 0..1
-      uniform float u_bright;   // luminosité 0..1
-      uniform float u_warmth;   // chaleur 0..1
-      uniform float u_glow;     // glow 0..1
+      uniform vec2 u_px;
+      uniform float u_smooth;
+      uniform float u_bright;
+      uniform float u_warmth;
+      uniform float u_glow;
       varying vec2 v_uv;
 
-      // Détecter si un pixel est un ton chair
       float isSkin(vec3 c) {
-        // Espace YCbCr approximé
         float y  =  0.299*c.r + 0.587*c.g + 0.114*c.b;
         float cb = -0.169*c.r - 0.331*c.g + 0.500*c.b + 0.5;
         float cr =  0.500*c.r - 0.419*c.g - 0.081*c.b + 0.5;
-        // Plage ton chair standard
-        float inCb = step(0.77, cb) * (1.0 - step(0.88, cb));
-        // Élargir pour inclure plus de teintes
-        float inCbWide = step(0.74, cb) * (1.0 - step(0.91, cb));
-        float inCr = step(0.80, cr) * (1.0 - step(0.92, cr));
-        float inY  = step(0.15, y)  * (1.0 - step(0.98, y));
-        // Skin = dans les plages YCbCr + luminance correcte
-        float skin = inCbWide * inCr * inY;
-        return clamp(skin, 0.0, 1.0);
+        float inCb = step(0.73, cb) * (1.0 - step(0.92, cb));
+        float inCr = step(0.78, cr) * (1.0 - step(0.94, cr));
+        float inY  = step(0.12, y)  * (1.0 - step(0.98, y));
+        return clamp(inCb * inCr * inY, 0.0, 1.0);
       }
 
-      // Flou gaussien 7x7 léger — seulement sur les tons chair
       vec3 smoothSkin(vec2 uv, float mask) {
         if (mask < 0.01) return texture2D(u_video, uv).rgb;
         vec3 col = vec3(0.0);
         float total = 0.0;
-        // Kernel gaussien 5x5
         for (int dx = -2; dx <= 2; dx++) {
           for (int dy = -2; dy <= 2; dy++) {
-            float w = exp(-float(dx*dx + dy*dy) * 0.5);
-            vec2 off = vec2(float(dx), float(dy)) * u_px * 1.8;
+            float w = exp(-float(dx*dx + dy*dy) * 0.45);
+            vec2 off = vec2(float(dx), float(dy)) * u_px * 2.2;
             vec3 s = texture2D(u_video, uv + off).rgb;
-            // Poids réduit si le voisin n'est pas peau (préserve les bords)
-            float neighborSkin = isSkin(s);
-            w *= (0.4 + 0.6 * neighborSkin);
+            float ns = isSkin(s);
+            w *= (0.35 + 0.65 * ns);
             col += s * w;
             total += w;
           }
         }
         col /= total;
-        // Mélanger avec l'original selon l'intensité
         vec3 orig = texture2D(u_video, uv).rgb;
         return mix(orig, col, mask * u_smooth);
       }
 
       void main() {
+        if (v_uv.x < 0.0 || v_uv.x > 1.0 || v_uv.y < 0.0 || v_uv.y > 1.0) {
+          gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+          return;
+        }
         vec3 orig = texture2D(u_video, v_uv).rgb;
         float skinVal = isSkin(orig);
-
-        // Lissage peau
         vec3 col = smoothSkin(v_uv, skinVal);
-
-        // Glow doux sur les tons clairs de la peau
         float lum = dot(col, vec3(0.299, 0.587, 0.114));
-        float hilight = smoothstep(0.55, 0.85, lum) * skinVal;
-        col += hilight * u_glow * vec3(0.12, 0.10, 0.08);
-
-        // Chaleur subtile
-        col.r = col.r + skinVal * u_warmth * 0.04;
-        col.g = col.g + skinVal * u_warmth * 0.015;
-        col.b = col.b - skinVal * u_warmth * 0.02;
-
-        // Luminosité globale légère
-        col = col * (1.0 + u_bright * 0.12);
-
+        float hilight = smoothstep(0.52, 0.82, lum) * skinVal;
+        col += hilight * u_glow * vec3(0.10, 0.08, 0.06);
+        col.r += skinVal * u_warmth * 0.035;
+        col.g += skinVal * u_warmth * 0.012;
+        col.b -= skinVal * u_warmth * 0.018;
+        col *= (1.0 + u_bright * 0.10);
         gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
       }
     `;
@@ -863,47 +849,41 @@
     function initWebGL() {
       glCanvas = document.getElementById('filter-canvas');
       if (!glCanvas) return false;
-      gl = glCanvas.getContext('webgl', { antialias: false, alpha: false, preserveDrawingBuffer: true });
+      gl = glCanvas.getContext('webgl', {
+        antialias: false, alpha: false, preserveDrawingBuffer: true
+      });
       if (!gl) return false;
-
       const vs = compileShader(gl.VERTEX_SHADER, VS_SRC);
       const fs = compileShader(gl.FRAGMENT_SHADER, FS_SRC);
-      if (!vs || !fs) return false;
-
+      if (!vs || !fs) { gl = null; return false; }
       glProgram = gl.createProgram();
       gl.attachShader(glProgram, vs);
       gl.attachShader(glProgram, fs);
       gl.linkProgram(glProgram);
       if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS)) {
-        console.warn('GL link error:', gl.getProgramInfoLog(glProgram));
-        return false;
+        console.warn('GL link:', gl.getProgramInfoLog(glProgram));
+        gl = null; return false;
       }
       gl.useProgram(glProgram);
-
-      // Quad plein écran
       const buf = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+      gl.bufferData(gl.ARRAY_BUFFER,
+        new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
       const loc = gl.getAttribLocation(glProgram, 'a_pos');
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-
-      // Texture vidéo
       glVideoTex = createTex();
       return true;
     }
 
     function compileShader(type, src) {
       const s = gl.createShader(type);
-      gl.shaderSource(s, src);
-      gl.compileShader(s);
+      gl.shaderSource(s, src); gl.compileShader(s);
       if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-        console.warn('Shader error:', gl.getShaderInfoLog(s));
-        return null;
+        console.warn('Shader:', gl.getShaderInfoLog(s)); return null;
       }
       return s;
     }
-
     function createTex() {
       const t = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, t);
@@ -912,6 +892,28 @@
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       return t;
+    }
+
+    // Calculer le cover-fit : scale + offset pour que la vidéo
+    // remplisse le canvas sans déformation (comme object-fit:cover)
+    function computeCoverFit(videoW, videoH, canvasW, canvasH) {
+      const videoRatio = videoW / videoH;
+      const canvasRatio = canvasW / canvasH;
+      let scaleX, scaleY, offsetX, offsetY;
+      if (videoRatio > canvasRatio) {
+        // Vidéo plus large → crop horizontal
+        scaleY = 1.0;
+        scaleX = canvasRatio / videoRatio;
+        offsetX = (1.0 - scaleX) / 2.0;
+        offsetY = 0.0;
+      } else {
+        // Vidéo plus haute → crop vertical
+        scaleX = 1.0;
+        scaleY = videoRatio / canvasRatio;
+        offsetX = 0.0;
+        offsetY = (1.0 - scaleY) / 2.0;
+      }
+      return { scaleX, scaleY, offsetX, offsetY };
     }
 
     function resizeGL() {
@@ -923,16 +925,16 @@
       }
     }
 
-    // Paramètres par filtre
     const FILTER_PARAMS = {
-      naturel:  { smooth: 0.0, bright: 0.0, warmth: 0.0, glow: 0.0 },
-      soleil:   { smooth: 0.55, bright: 0.5, warmth: 0.6, glow: 0.7 },
-      doux:     { smooth: 0.80, bright: 0.3, warmth: 0.3, glow: 0.4 },
-      rose:     { smooth: 0.65, bright: 0.4, warmth: 0.4, glow: 0.5 },
-      glamour:  { smooth: 0.70, bright: 0.6, warmth: 0.5, glow: 0.8 },
-      dore:     { smooth: 0.60, bright: 0.5, warmth: 0.9, glow: 0.6 },
-      mascara:  { smooth: 0.50, bright: 0.1, warmth: 0.2, glow: 0.3 },
-      blush:    { smooth: 0.65, bright: 0.4, warmth: 0.5, glow: 0.5 },
+      naturel:  { smooth:0.0,  bright:0.0,  warmth:0.0,  glow:0.0  },
+      soleil:   { smooth:0.65, bright:0.6,  warmth:0.7,  glow:0.8  },
+      doux:     { smooth:0.90, bright:0.35, warmth:0.35, glow:0.45 },
+      rose:     { smooth:0.75, bright:0.45, warmth:0.4,  glow:0.55 },
+      glamour:  { smooth:0.80, bright:0.65, warmth:0.55, glow:0.90 },
+      dore:     { smooth:0.70, bright:0.55, warmth:1.0,  glow:0.65 },
+      mascara:  { smooth:0.60, bright:0.15, warmth:0.2,  glow:0.3  },
+      blush:    { smooth:0.75, bright:0.45, warmth:0.5,  glow:0.55 },
+      halo:     { smooth:0.55, bright:0.4,  warmth:0.3,  glow:0.5  },
     };
 
     function renderGLFrame() {
@@ -943,23 +945,27 @@
       }
       resizeGL();
       const W = glCanvas.width, H = glCanvas.height;
+      const vW = video.videoWidth || W;
+      const vH = video.videoHeight || H;
       const f = getActiveFilter();
-      const params = FILTER_PARAMS[f.id] || FILTER_PARAMS.naturel;
+      const p = FILTER_PARAMS[f.id] || FILTER_PARAMS.naturel;
+      const { scaleX, scaleY, offsetX, offsetY } = computeCoverFit(vW, vH, W, H);
 
-      // Upload frame vidéo
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, glVideoTex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
+      try { gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,video); } catch(e) {
+        glRaf = requestAnimationFrame(renderGLFrame); return;
+      }
 
-      // Uniforms
-      gl.uniform1i(gl.getUniformLocation(glProgram, 'u_video'), 0);
-      gl.uniform2f(gl.getUniformLocation(glProgram, 'u_px'), 1/W, 1/H);
-      gl.uniform1f(gl.getUniformLocation(glProgram, 'u_smooth'), params.smooth);
-      gl.uniform1f(gl.getUniformLocation(glProgram, 'u_bright'), params.bright);
-      gl.uniform1f(gl.getUniformLocation(glProgram, 'u_warmth'), params.warmth);
-      gl.uniform1f(gl.getUniformLocation(glProgram, 'u_glow'),   params.glow);
-      gl.uniform1i(gl.getUniformLocation(glProgram, 'u_flip'), facingMode === 'user' ? 1 : 0);
-
+      gl.uniform1i(gl.getUniformLocation(glProgram,'u_video'), 0);
+      gl.uniform2f(gl.getUniformLocation(glProgram,'u_px'), 1/vW, 1/vH);
+      gl.uniform2f(gl.getUniformLocation(glProgram,'u_scale'), scaleX, scaleY);
+      gl.uniform2f(gl.getUniformLocation(glProgram,'u_offset'), offsetX, offsetY);
+      gl.uniform1i(gl.getUniformLocation(glProgram,'u_flip'), facingMode==='user'?1:0);
+      gl.uniform1f(gl.getUniformLocation(glProgram,'u_smooth'), p.smooth);
+      gl.uniform1f(gl.getUniformLocation(glProgram,'u_bright'), p.bright);
+      gl.uniform1f(gl.getUniformLocation(glProgram,'u_warmth'), p.warmth);
+      gl.uniform1f(gl.getUniformLocation(glProgram,'u_glow'),   p.glow);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       glRaf = requestAnimationFrame(renderGLFrame);
     }
@@ -967,44 +973,46 @@
     function startGLLoop() {
       if (!gl) return;
       resizeGL();
-      glCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;opacity:1;visibility:visible;';
+      glCanvas.style.cssText = [
+        'position:absolute','inset:0','width:100%','height:100%',
+        'z-index:2','pointer-events:none','opacity:1','visibility:visible'
+      ].join(';');
       glRunning = true;
       if (glRaf) cancelAnimationFrame(glRaf);
       glRaf = requestAnimationFrame(renderGLFrame);
     }
-
     function stopGLLoop() {
       glRunning = false;
       if (glRaf) { cancelAnimationFrame(glRaf); glRaf = null; }
-      if (glCanvas) {
-        glCanvas.style.opacity = '0';
-        glCanvas.style.visibility = 'hidden';
-      }
+      if (glCanvas) { glCanvas.style.opacity='0'; glCanvas.style.visibility='hidden'; }
     }
 
-    // =====================================================
-    // MEDIAPIPE — effets visage par-dessus le GL
-    // =====================================================
+    // ---- MediaPipe ----
     function loadScript(src) {
-      return new Promise((resolve, reject) => {
-        if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+      return new Promise((res, rej) => {
+        if (document.querySelector(`script[src="${src}"]`)) { res(); return; }
         const s = document.createElement('script');
         s.src = src; s.crossOrigin = 'anonymous';
-        s.onload = resolve; s.onerror = reject;
+        s.onload = res; s.onerror = rej;
         document.head.appendChild(s);
       });
     }
 
     async function loadMediaPipe() {
-      if (mpLoading || mpReady || mpLoadFailed) return;
+      if (mpLoading||mpReady||mpLoadFailed) return;
       mpLoading = true;
       try {
         await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js');
         mpFaceMesh = new window.FaceMesh({
-          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`
+          locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${f}`
         });
-        mpFaceMesh.setOptions({ maxNumFaces:1, refineLandmarks:false, minDetectionConfidence:0.55, minTrackingConfidence:0.5 });
-        mpFaceMesh.onResults((r) => { lastFaceLandmarks = r.multiFaceLandmarks?.[0] || null; });
+        mpFaceMesh.setOptions({
+          maxNumFaces:1, refineLandmarks:true,
+          minDetectionConfidence:0.55, minTrackingConfidence:0.5
+        });
+        mpFaceMesh.onResults(r => {
+          lastFaceLandmarks = r.multiFaceLandmarks?.[0] || null;
+        });
         await mpFaceMesh.initialize();
         mpReady = true; mpLoading = false;
         startMPLoop();
@@ -1031,13 +1039,12 @@
       };
       mpRafId = requestAnimationFrame(tick);
     }
-
     function stopMPLoop() {
       if (mpRafId) { cancelAnimationFrame(mpRafId); mpRafId = null; }
       lastFaceLandmarks = null;
-      if (overlayCtx && overlayCanvas) overlayCtx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);
+      if (overlayCtx && overlayCanvas)
+        overlayCtx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);
     }
-
     function isFilterWithFaceEffect() {
       const f = getActiveFilter();
       return !!(f.faceEffect && !f.privacy);
@@ -1056,24 +1063,28 @@
     function resizeOverlayCanvas() {
       if (!overlayCanvas) return;
       const W = window.innerWidth, H = window.innerHeight;
-      if (overlayCanvas.width !== W || overlayCanvas.height !== H) {
-        overlayCanvas.width = W; overlayCanvas.height = H;
+      if (overlayCanvas.width!==W || overlayCanvas.height!==H) {
+        overlayCanvas.width=W; overlayCanvas.height=H;
       }
     }
 
-    // Points de repère MediaPipe
+    // ---- Points MediaPipe ----
     const MP_FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
     const MP_LEFT_CHEEK = [116,123,147,213,192,214,212,216,206,203,36,101,119];
     const MP_RIGHT_CHEEK = [345,352,376,433,411,434,432,436,426,423,266,330,348];
-    const MP_LEFT_EYE  = [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246];
-    const MP_RIGHT_EYE = [362,382,381,380,374,373,390,249,263,466,388,387,386,385,384,398];
+    // Yeux avec landmarks raffinés
+    const MP_LEFT_EYE_INNER  = [133,173,157,158,159,160,161,246,33,7,163,144,145,153,154,155];
+    const MP_RIGHT_EYE_INNER = [362,382,381,380,374,373,390,249,263,466,388,387,386,385,384,398];
+    // Coins externes des yeux pour positionner les lunettes
+    const MP_LEFT_EYE_OUTER  = [33, 130, 226, 247, 30, 29, 27, 28, 56, 190];
+    const MP_RIGHT_EYE_OUTER = [263, 359, 446, 467, 260, 259, 257, 258, 286, 414];
 
     function pt(lm, idx, W, H, flip) {
       const p = lm[idx]; if (!p) return null;
-      return { x: flip ? W - p.x*W : p.x*W, y: p.y*H };
+      return { x: flip ? W-p.x*W : p.x*W, y: p.y*H };
     }
     function getFaceCenter(lm, W, H, flip) {
-      const pts = MP_FACE_OVAL.map(i => pt(lm,i,W,H,flip)).filter(Boolean);
+      const pts = MP_FACE_OVAL.map(i=>pt(lm,i,W,H,flip)).filter(Boolean);
       if (!pts.length) return null;
       const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
       const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
@@ -1082,96 +1093,310 @@
       return { cx, cy, rx, ry };
     }
     function getFaceOvalPath(ctx, lm, W, H, flip) {
-      const pts = MP_FACE_OVAL.map(i => pt(lm,i,W,H,flip)).filter(Boolean);
-      if (pts.length < 3) return false;
+      const pts = MP_FACE_OVAL.map(i=>pt(lm,i,W,H,flip)).filter(Boolean);
+      if (pts.length<3) return false;
       ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i=1; i<pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.moveTo(pts[0].x,pts[0].y);
+      for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
       ctx.closePath(); return true;
     }
 
+    // ---- Effets visage ----
     function drawFaceEffects() {
-      if (!overlayCtx || !overlayCanvas) return;
-      const W = overlayCanvas.width, H = overlayCanvas.height;
+      if (!overlayCtx||!overlayCanvas) return;
+      const W=overlayCanvas.width, H=overlayCanvas.height;
       overlayCtx.clearRect(0,0,W,H);
-      if (!lastFaceLandmarks || !lastFaceLandmarks.length) return;
+      if (!lastFaceLandmarks||!lastFaceLandmarks.length) return;
       const f = getActiveFilter();
       const lm = lastFaceLandmarks;
-      const flip = facingMode === 'user';
+      const flip = facingMode==='user';
 
-      if (f.faceEffect === 'rose')    { drawCheekBlush(lm,W,H,flip,240,130,140,0.20); }
-      if (f.faceEffect === 'glamour') { drawCheekBlush(lm,W,H,flip,255,200,180,0.10); }
-      if (f.faceEffect === 'blush')   { drawCheekBlush(lm,W,H,flip,220,100,120,0.24); }
-      if (f.faceEffect === 'mascara') { drawEyeShadow(lm,W,H,flip); }
-      if (f.faceEffect === 'dore')    { drawWarmGlow(lm,W,H,flip); }
+      if (f.faceEffect==='rose')    { drawCheekBlush(lm,W,H,flip,240,130,140,0.20); }
+      if (f.faceEffect==='glamour') { drawCheekBlush(lm,W,H,flip,255,200,180,0.10); }
+      if (f.faceEffect==='blush')   { drawCheekBlush(lm,W,H,flip,220,100,120,0.24); }
+      if (f.faceEffect==='mascara') { drawEyeShadow(lm,W,H,flip); }
+      if (f.faceEffect==='dore')    { drawWarmGlow(lm,W,H,flip); }
+      if (f.faceEffect==='halo')    { drawHaloEffect(lm,W,H,flip); }
+      // Lunettes pour Mystère (géré séparément via overlay)
     }
 
-    function drawCheekBlush(lm, W, H, flip, r, g, b, alpha) {
-      const ctx = overlayCtx;
-      [MP_LEFT_CHEEK, MP_RIGHT_CHEEK].forEach(cheekPts => {
-        const pts = cheekPts.map(i => pt(lm,i,W,H,flip)).filter(Boolean);
-        if (pts.length < 3) return;
-        const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
-        const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
-        const rad = Math.max(...pts.map(p=>Math.sqrt((p.x-cx)**2+(p.y-cy)**2))) * 1.4;
-        ctx.save();
-        ctx.filter = 'blur(8px)';
-        const grad = ctx.createRadialGradient(cx,cy,0,cx,cy,rad);
-        grad.addColorStop(0, `rgba(${r},${g},${b},${alpha})`);
-        grad.addColorStop(0.5, `rgba(${r},${g},${b},${alpha*0.35})`);
-        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-        ctx.fillStyle = grad;
+    function drawCheekBlush(lm,W,H,flip,r,g,b,alpha) {
+      const ctx=overlayCtx;
+      [MP_LEFT_CHEEK,MP_RIGHT_CHEEK].forEach(pts=>{
+        const points=pts.map(i=>pt(lm,i,W,H,flip)).filter(Boolean);
+        if(points.length<3) return;
+        const cx=points.reduce((s,p)=>s+p.x,0)/points.length;
+        const cy=points.reduce((s,p)=>s+p.y,0)/points.length;
+        const rad=Math.max(...points.map(p=>Math.sqrt((p.x-cx)**2+(p.y-cy)**2)))*1.4;
+        ctx.save(); ctx.filter='blur(8px)';
+        const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,rad);
+        grad.addColorStop(0,`rgba(${r},${g},${b},${alpha})`);
+        grad.addColorStop(0.5,`rgba(${r},${g},${b},${alpha*0.35})`);
+        grad.addColorStop(1,`rgba(${r},${g},${b},0)`);
+        ctx.fillStyle=grad;
         ctx.beginPath(); ctx.arc(cx,cy,rad*1.2,0,Math.PI*2); ctx.fill();
         ctx.restore();
       });
     }
 
-    function drawEyeShadow(lm, W, H, flip) {
-      const ctx = overlayCtx;
-      [MP_LEFT_EYE, MP_RIGHT_EYE].forEach(eyePts => {
-        const pts = eyePts.map(i => pt(lm,i,W,H,flip)).filter(Boolean);
-        if (pts.length < 4) return;
-        const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
-        const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
-        const rad = Math.max(...pts.map(p=>Math.sqrt((p.x-cx)**2+(p.y-cy)**2))) * 2.0;
-        ctx.save();
-        ctx.filter = 'blur(5px)';
-        const grad = ctx.createRadialGradient(cx,cy,0,cx,cy,rad);
-        grad.addColorStop(0, 'rgba(10,5,20,0.12)');
+    function drawEyeShadow(lm,W,H,flip) {
+      const ctx=overlayCtx;
+      [MP_LEFT_EYE_INNER,MP_RIGHT_EYE_INNER].forEach(eyePts=>{
+        const pts=eyePts.map(i=>pt(lm,i,W,H,flip)).filter(Boolean);
+        if(pts.length<4) return;
+        const cx=pts.reduce((s,p)=>s+p.x,0)/pts.length;
+        const cy=pts.reduce((s,p)=>s+p.y,0)/pts.length;
+        const rad=Math.max(...pts.map(p=>Math.sqrt((p.x-cx)**2+(p.y-cy)**2)))*2.0;
+        ctx.save(); ctx.filter='blur(5px)';
+        const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,rad);
+        grad.addColorStop(0,'rgba(10,5,20,0.12)');
         grad.addColorStop(0.5,'rgba(10,5,20,0.05)');
-        grad.addColorStop(1, 'rgba(10,5,20,0)');
-        ctx.fillStyle = grad;
+        grad.addColorStop(1,'rgba(10,5,20,0)');
+        ctx.fillStyle=grad;
         ctx.beginPath(); ctx.arc(cx,cy,rad,0,Math.PI*2); ctx.fill();
         ctx.restore();
       });
     }
 
-    function drawWarmGlow(lm, W, H, flip) {
-      if (!overlayCtx) return;
-      const face = getFaceCenter(lm, W, H, flip);
-      if (!face) return;
-      const { cx, cy, rx, ry } = face;
-      const ctx = overlayCtx;
+    function drawWarmGlow(lm,W,H,flip) {
+      const face=getFaceCenter(lm,W,H,flip); if(!face) return;
+      const {cx,cy,rx,ry}=face; const ctx=overlayCtx;
       ctx.save();
-      if (!getFaceOvalPath(ctx, lm, W, H, flip)) { ctx.restore(); return; }
+      if(!getFaceOvalPath(ctx,lm,W,H,flip)){ctx.restore();return;}
       ctx.clip();
-      const grad = ctx.createRadialGradient(cx,cy-ry*0.1,0,cx,cy,Math.max(rx,ry)*1.05);
-      grad.addColorStop(0,   'rgba(255,210,140,0.13)');
-      grad.addColorStop(0.5, 'rgba(255,200,120,0.06)');
-      grad.addColorStop(1,   'rgba(255,200,120,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0,0,W,H);
+      const grad=ctx.createRadialGradient(cx,cy-ry*0.1,0,cx,cy,Math.max(rx,ry)*1.05);
+      grad.addColorStop(0,'rgba(255,210,140,0.13)');
+      grad.addColorStop(0.5,'rgba(255,200,120,0.06)');
+      grad.addColorStop(1,'rgba(255,200,120,0)');
+      ctx.fillStyle=grad; ctx.fillRect(0,0,W,H); ctx.restore();
+    }
+
+    // ---- Halo lumineux autour de la tête (ring light effect) ----
+    function drawHaloEffect(lm,W,H,flip) {
+      const face=getFaceCenter(lm,W,H,flip); if(!face) return;
+      const {cx,cy,rx,ry}=face; const ctx=overlayCtx;
+      const outerR = Math.max(rx,ry)*1.55;
+      const innerR = Math.max(rx,ry)*1.15;
+      // Anneau lumineux autour de la tête
+      ctx.save();
+      const grad=ctx.createRadialGradient(cx,cy,innerR*0.9,cx,cy,outerR*1.1);
+      grad.addColorStop(0,   'rgba(255,255,255,0)');
+      grad.addColorStop(0.35,'rgba(255,248,220,0.0)');
+      grad.addColorStop(0.55,'rgba(255,252,230,0.32)');
+      grad.addColorStop(0.70,'rgba(255,250,220,0.55)');
+      grad.addColorStop(0.82,'rgba(255,248,210,0.32)');
+      grad.addColorStop(1.0, 'rgba(255,248,210,0)');
+      ctx.fillStyle=grad;
+      ctx.beginPath(); ctx.arc(cx,cy,outerR*1.2,0,Math.PI*2); ctx.fill();
+      // Léger reflet chaud supplémentaire au sommet de la tête
+      const topX=cx, topY=cy-ry*1.1;
+      const glowR=rx*0.6;
+      const glowGrad=ctx.createRadialGradient(topX,topY,0,topX,topY,glowR);
+      glowGrad.addColorStop(0,'rgba(255,255,240,0.28)');
+      glowGrad.addColorStop(0.5,'rgba(255,252,220,0.10)');
+      glowGrad.addColorStop(1,'rgba(255,252,220,0)');
+      ctx.fillStyle=glowGrad;
+      ctx.beginPath(); ctx.arc(topX,topY,glowR*1.3,0,Math.PI*2); ctx.fill();
       ctx.restore();
     }
 
-    // Barre Mystère
+    // ---- Lunettes SVG suivant les yeux (Mystère) ----
+    let glassesEl = null;
+    function showGlasses(lm, W, H, flip) {
+      // Récupérer les coins des yeux pour positionner les lunettes
+      const leftOuter  = pt(lm, 33,  W, H, flip); // coin gauche oeil gauche
+      const leftInner  = pt(lm, 133, W, H, flip); // coin droit oeil gauche
+      const rightInner = pt(lm, 362, W, H, flip); // coin gauche oeil droit
+      const rightOuter = pt(lm, 263, W, H, flip); // coin droit oeil droit
+      if (!leftOuter||!leftInner||!rightInner||!rightOuter) return;
+
+      // Centre et taille de chaque verre
+      const leftCX  = (leftOuter.x  + leftInner.x)  / 2;
+      const leftCY  = (leftOuter.y  + leftInner.y)  / 2;
+      const rightCX = (rightInner.x + rightOuter.x) / 2;
+      const rightCY = (rightInner.y + rightOuter.y) / 2;
+      const eyeW = Math.abs(rightOuter.x - leftOuter.x);
+      const lensW = eyeW * 0.42;
+      const lensH = lensW * 0.62;
+      const bridgeX1 = leftInner.x;
+      const bridgeX2 = rightInner.x;
+      const bridgeY = (leftInner.y + rightInner.y) / 2;
+
+      // Angle de rotation (inclinaison de la tête)
+      const angle = Math.atan2(
+        rightOuter.y - leftOuter.y,
+        rightOuter.x - leftOuter.x
+      );
+
+      if (!glassesEl) {
+        glassesEl = document.createElementNS('http://www.w3.org/2000/svg','svg');
+        glassesEl.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none;overflow:visible;';
+        document.getElementById('camera-container').appendChild(glassesEl);
+      }
+      glassesEl.setAttribute('viewBox',`0 0 ${W} ${H}`);
+
+      const deg = angle * 180 / Math.PI;
+      glassesEl.innerHTML = `
+        <defs>
+          <radialGradient id="lensGrad" cx="40%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="rgba(20,20,40,0.75)"/>
+            <stop offset="100%" stop-color="rgba(5,5,15,0.92)"/>
+          </radialGradient>
+          <radialGradient id="shineGrad" cx="30%" cy="25%" r="55%">
+            <stop offset="0%" stop-color="rgba(255,255,255,0.18)"/>
+            <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+          </radialGradient>
+          <filter id="gf"><feGaussianBlur stdDeviation="1.5"/></filter>
+        </defs>
+        <g transform="rotate(${deg},${(leftCX+rightCX)/2},${(leftCY+rightCY)/2})">
+          <!-- Verre gauche -->
+          <ellipse cx="${leftCX}" cy="${leftCY}" rx="${lensW}" ry="${lensH}"
+            fill="url(#lensGrad)" stroke="rgba(80,60,40,0.9)" stroke-width="${lensW*0.045}"/>
+          <ellipse cx="${leftCX}" cy="${leftCY}" rx="${lensW}" ry="${lensH}"
+            fill="url(#shineGrad)"/>
+          <!-- Verre droit -->
+          <ellipse cx="${rightCX}" cy="${rightCY}" rx="${lensW}" ry="${lensH}"
+            fill="url(#lensGrad)" stroke="rgba(80,60,40,0.9)" stroke-width="${lensW*0.045}"/>
+          <ellipse cx="${rightCX}" cy="${rightCY}" rx="${lensW}" ry="${lensH}"
+            fill="url(#shineGrad)"/>
+          <!-- Pont -->
+          <path d="M${bridgeX1-lensW*0.05} ${bridgeY} Q${(bridgeX1+bridgeX2)/2} ${bridgeY-lensH*0.28} ${bridgeX2+lensW*0.05} ${bridgeY}"
+            fill="none" stroke="rgba(80,60,40,0.9)" stroke-width="${lensW*0.055}" stroke-linecap="round"/>
+          <!-- Branches (tempes) -->
+          <line x1="${leftCX-lensW*0.95}" y1="${leftCY}"
+                x2="${leftCX-lensW*1.55}" y2="${leftCY+lensH*0.1}"
+            stroke="rgba(80,60,40,0.9)" stroke-width="${lensW*0.045}" stroke-linecap="round"/>
+          <line x1="${rightCX+lensW*0.95}" y1="${rightCY}"
+                x2="${rightCX+lensW*1.55}" y2="${rightCY+lensH*0.1}"
+            stroke="rgba(80,60,40,0.9)" stroke-width="${lensW*0.045}" stroke-linecap="round"/>
+        </g>`;
+    }
+    function removeGlasses() {
+      if (glassesEl) { glassesEl.remove(); glassesEl = null; }
+    }
+
+    // ---- Flou uniquement sur les yeux ----
+    let eyeBlurCanvas = null, eyeBlurCtx = null, eyeBlurRaf = null;
+    function startEyeBlur() {
+      if (!mpReady && !mpLoadFailed) { loadMediaPipe(); }
+      else if (mpReady) startMPLoopEyeBlur();
+    }
+    function stopEyeBlur() {
+      if (eyeBlurRaf) { cancelAnimationFrame(eyeBlurRaf); eyeBlurRaf = null; }
+      if (eyeBlurCanvas) { eyeBlurCanvas.remove(); eyeBlurCanvas = null; eyeBlurCtx = null; }
+    }
+
+    let eyeBlurMpRaf = null;
+    function startMPLoopEyeBlur() {
+      if (!mpReady || eyeBlurMpRaf) return;
+      const tick = async () => {
+        if (!eyeBlurCanvas) { eyeBlurMpRaf = null; return; }
+        const now = performance.now();
+        const video = document.getElementById('camera-preview');
+        if (video && video.readyState >= 2 && now - mpLastSend > 80) {
+          mpLastSend = now;
+          try { await mpFaceMesh.send({ image: video }); } catch(e) {}
+        }
+        drawEyeBlurOverlay();
+        eyeBlurMpRaf = requestAnimationFrame(tick);
+      };
+      eyeBlurMpRaf = requestAnimationFrame(tick);
+    }
+    function stopMPLoopEyeBlur() {
+      if (eyeBlurMpRaf) { cancelAnimationFrame(eyeBlurMpRaf); eyeBlurMpRaf = null; }
+    }
+
+    function ensureEyeBlurCanvas() {
+      if (eyeBlurCanvas) return;
+      eyeBlurCanvas = document.createElement('canvas');
+      eyeBlurCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;';
+      document.getElementById('camera-container').appendChild(eyeBlurCanvas);
+      eyeBlurCtx = eyeBlurCanvas.getContext('2d');
+    }
+
+    function drawEyeBlurOverlay() {
+      if (!eyeBlurCtx||!eyeBlurCanvas||!lastFaceLandmarks) return;
+      const W=eyeBlurCanvas.width=window.innerWidth;
+      const H=eyeBlurCanvas.height=window.innerHeight;
+      eyeBlurCtx.clearRect(0,0,W,H);
+      const lm=lastFaceLandmarks;
+      const flip=facingMode==='user';
+      const video=document.getElementById('camera-preview');
+      if(!video||video.readyState<2) return;
+
+      [MP_LEFT_EYE_INNER, MP_RIGHT_EYE_INNER].forEach(eyePts => {
+        const pts=eyePts.map(i=>pt(lm,i,W,H,flip)).filter(Boolean);
+        if(pts.length<4) return;
+        const cx=pts.reduce((s,p)=>s+p.x,0)/pts.length;
+        const cy=pts.reduce((s,p)=>s+p.y,0)/pts.length;
+        const rad=Math.max(...pts.map(p=>Math.sqrt((p.x-cx)**2+(p.y-cy)**2)))*2.8;
+
+        // Dessiner la vidéo floutée seulement sur la zone oeil
+        eyeBlurCtx.save();
+        eyeBlurCtx.beginPath();
+        eyeBlurCtx.arc(cx,cy,rad,0,Math.PI*2);
+        eyeBlurCtx.clip();
+
+        // Copier la vidéo avec flou fort
+        eyeBlurCtx.filter = 'blur(12px)';
+        const vw=video.videoWidth, vh=video.videoHeight;
+        const vr=vw/vh, cr=W/H;
+        let sx=0,sy=0,sw=vw,sh=vh;
+        if(vr>cr){sw=vh*cr;sx=(vw-sw)/2;}else{sh=vw/cr;sy=(vh-sh)/2;}
+        eyeBlurCtx.save();
+        if(flip){eyeBlurCtx.translate(W,0);eyeBlurCtx.scale(-1,1);}
+        eyeBlurCtx.drawImage(video,sx,sy,sw,sh,0,0,W,H);
+        eyeBlurCtx.restore();
+        eyeBlurCtx.filter='none';
+
+        // Fondu sur les bords pour un rendu naturel
+        const fadeGrad=eyeBlurCtx.createRadialGradient(cx,cy,rad*0.6,cx,cy,rad);
+        fadeGrad.addColorStop(0,'rgba(0,0,0,0)');
+        fadeGrad.addColorStop(1,'rgba(0,0,0,1)');
+        eyeBlurCtx.globalCompositeOperation='destination-out';
+        eyeBlurCtx.fillStyle=fadeGrad;
+        eyeBlurCtx.beginPath();
+        eyeBlurCtx.arc(cx,cy,rad,0,Math.PI*2);
+        eyeBlurCtx.fill();
+        eyeBlurCtx.globalCompositeOperation='source-over';
+        eyeBlurCtx.restore();
+      });
+    }
+
+    // ---- Lunettes loop (Mystère avec MediaPipe) ----
+    let glassesRaf = null;
+    function startGlassesLoop() {
+      if (glassesRaf) return;
+      const tick = async () => {
+        if (!glassesEl && !mysteryBarEl) { glassesRaf = null; return; }
+        const now = performance.now();
+        const video = document.getElementById('camera-preview');
+        if (mpReady && video && video.readyState >= 2 && now - mpLastSend > 80) {
+          mpLastSend = now;
+          try { await mpFaceMesh.send({ image: video }); } catch(e) {}
+        }
+        if (lastFaceLandmarks && mpReady) {
+          const W=window.innerWidth, H=window.innerHeight;
+          showGlasses(lastFaceLandmarks, W, H, facingMode==='user');
+          removeMysteryBar();
+        }
+        glassesRaf = requestAnimationFrame(tick);
+      };
+      glassesRaf = requestAnimationFrame(tick);
+    }
+    function stopGlassesLoop() {
+      if (glassesRaf) { cancelAnimationFrame(glassesRaf); glassesRaf = null; }
+      removeGlasses();
+    }
+
+    // ---- Barre Mystère (fallback si pas de MediaPipe) ----
     function showMysteryBar() {
       if (mysteryBarEl) return;
       mysteryBarEl = document.createElement('div');
       mysteryBarEl.id = 'mystery-bar';
       mysteryBarEl.style.cssText = 'position:absolute;top:28%;left:8%;right:8%;height:12%;border-radius:120px;background:linear-gradient(135deg,rgba(0,0,0,0.92),rgba(20,20,20,0.88));z-index:4;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.06);';
       const shine = document.createElement('div');
-      shine.style.cssText = 'position:absolute;top:0;left:0;right:0;height:40%;border-radius:120px 120px 0 0;background:linear-gradient(180deg,rgba(255,255,255,0.08),transparent);pointer-events:none;';
+      shine.style.cssText = 'position:absolute;top:0;left:0;right:0;height:40%;border-radius:120px 120px 0 0;background:linear-gradient(180deg,rgba(255,255,255,0.08),transparent);';
       mysteryBarEl.appendChild(shine);
       document.getElementById('camera-container').appendChild(mysteryBarEl);
     }
@@ -1179,34 +1404,42 @@
       if (mysteryBarEl) { mysteryBarEl.remove(); mysteryBarEl = null; }
     }
 
-    // =====================================================
-    // applyFilter — orchestration
-    // =====================================================
+    // ---- applyFilter ----
     function applyFilter(filterId) {
       activeFilterId = filterId;
       const f = getActiveFilter();
       const video = document.getElementById('camera-preview');
 
-      // Reset
-      stopGLLoop(); stopMPLoop(); removeMysteryBar();
-      removeOverlayCanvas();
+      // Stop tout
+      stopGLLoop(); stopMPLoop(); stopGlassesLoop(); stopEyeBlur();
+      stopMPLoopEyeBlur();
+      removeMysteryBar(); removeGlasses(); removeOverlayCanvas();
       if (video) video.style.filter = 'none';
 
       if (f.id === 'naturel') {
-        // Rien — vidéo brute
+        // Vidéo brute
       } else if (f.privacy && f.privacyType === 'bar') {
-        showMysteryBar();
+        // Lunettes SVG qui suivent les yeux (MediaPipe) + fallback barre
+        showMysteryBar(); // barre statique en attendant MediaPipe
+        ensureOverlayCanvas(); resizeOverlayCanvas();
+        if (!mpReady && !mpLoadFailed) {
+          loadMediaPipe().then(() => { if (mpReady) startGlassesLoop(); });
+        } else if (mpReady) {
+          startGlassesLoop();
+        }
       } else if (f.privacy && f.privacyType === 'blur') {
-        if (video) video.style.filter = 'blur(10px)';
+        // Flou uniquement sur les yeux
+        ensureEyeBlurCanvas();
+        if (!mpReady && !mpLoadFailed) {
+          loadMediaPipe().then(() => { if (mpReady) startMPLoopEyeBlur(); });
+        } else if (mpReady) {
+          startMPLoopEyeBlur();
+        }
       } else {
         // Skin smoothing WebGL
-        if (gl) {
-          startGLLoop();
-        } else {
-          // Fallback CSS si WebGL non dispo
-          if (video && f.css && f.css !== 'none') video.style.filter = f.css;
-        }
-        // Effets visage MediaPipe par-dessus
+        if (gl) startGLLoop();
+        else if (video && f.css !== 'none') video.style.filter = f.css;
+        // Effets visage MediaPipe
         if (f.faceEffect) {
           ensureOverlayCanvas(); resizeOverlayCanvas();
           if (!mpReady && !mpLoadFailed) loadMediaPipe();
@@ -1253,9 +1486,7 @@
       container.style.bottom = (bottomBar.offsetHeight || 130) + 'px';
     }
 
-    // =====================================================
-    // Enregistrement
-    // =====================================================
+    // ---- Enregistrement ----
     let recRafId = null;
     function stopCanvasCapture() {
       if (recRafId) { cancelAnimationFrame(recRafId); recRafId = null; }
@@ -1265,75 +1496,117 @@
       const f = getActiveFilter();
       if (!mediaStream) return mediaStream;
       if (f.id === 'naturel') return mediaStream;
-      if (f.privacy && f.privacyType === 'blur') return mediaStream;
 
-      if (f.privacy && f.privacyType === 'bar') {
+      // Flou yeux : composite vidéo + eyeBlurCanvas
+      if (f.privacy && f.privacyType === 'blur' && eyeBlurCanvas) {
         try {
-          const barCanvas = document.createElement('canvas');
-          barCanvas.width = window.innerWidth; barCanvas.height = window.innerHeight;
-          const bCtx = barCanvas.getContext('2d');
+          const comp = document.createElement('canvas');
+          comp.width = window.innerWidth; comp.height = window.innerHeight;
+          const cCtx = comp.getContext('2d');
           const video = document.getElementById('camera-preview');
-          function drawBar() {
+          function drawEyeComp() {
             if (!isRecording) return;
             if (video && video.readyState >= 2) {
-              const W=barCanvas.width, H=barCanvas.height;
-              const vw=video.videoWidth, vh=video.videoHeight;
-              if (vw && vh) {
-                bCtx.save();
-                if (facingMode==='user'){bCtx.translate(W,0);bCtx.scale(-1,1);}
+              const W=comp.width,H=comp.height,vw=video.videoWidth,vh=video.videoHeight;
+              if(vw&&vh){
+                cCtx.save();
+                if(facingMode==='user'){cCtx.translate(W,0);cCtx.scale(-1,1);}
                 const vr=vw/vh,cr=W/H;
                 let sx=0,sy=0,sw=vw,sh=vh;
                 if(vr>cr){sw=vh*cr;sx=(vw-sw)/2;}else{sh=vw/cr;sy=(vh-sh)/2;}
-                bCtx.drawImage(video,sx,sy,sw,sh,0,0,W,H);
-                bCtx.restore();
-                const barY=H*0.28,barH=H*0.12,margin=W*0.08,rx2=barH/2;
-                bCtx.fillStyle='rgba(0,0,0,0.92)';
-                bCtx.beginPath();
-                bCtx.moveTo(margin+rx2,barY);
-                bCtx.lineTo(margin+(W-margin*2)-rx2,barY);
-                bCtx.arc(margin+(W-margin*2)-rx2,barY+rx2,rx2,-Math.PI/2,Math.PI/2);
-                bCtx.lineTo(margin+rx2,barY+barH);
-                bCtx.arc(margin+rx2,barY+rx2,rx2,Math.PI/2,-Math.PI/2);
-                bCtx.closePath(); bCtx.fill();
+                cCtx.drawImage(video,sx,sy,sw,sh,0,0,W,H);
+                cCtx.restore();
+                if(eyeBlurCanvas) cCtx.drawImage(eyeBlurCanvas,0,0);
               }
             }
-            recRafId = requestAnimationFrame(drawBar);
+            recRafId = requestAnimationFrame(drawEyeComp);
           }
-          recRafId = requestAnimationFrame(drawBar);
-          const s = barCanvas.captureStream(30);
+          recRafId = requestAnimationFrame(drawEyeComp);
+          const s = comp.captureStream(30);
           mediaStream.getAudioTracks().forEach(t=>s.addTrack(t));
           return s;
         } catch(e) { return mediaStream; }
       }
 
-      // Composite GL + overlay MediaPipe
+      // Mystère lunettes : composite GL + SVG
+      if (f.privacy && f.privacyType === 'bar') {
+        try {
+          const comp = document.createElement('canvas');
+          comp.width = window.innerWidth; comp.height = window.innerHeight;
+          const cCtx = comp.getContext('2d');
+          const video = document.getElementById('camera-preview');
+          function drawGlassComp() {
+            if (!isRecording) return;
+            if (video && video.readyState >= 2) {
+              const W=comp.width,H=comp.height,vw=video.videoWidth,vh=video.videoHeight;
+              if(vw&&vh){
+                cCtx.save();
+                if(facingMode==='user'){cCtx.translate(W,0);cCtx.scale(-1,1);}
+                const vr=vw/vh,cr=W/H;
+                let sx=0,sy=0,sw=vw,sh=vh;
+                if(vr>cr){sw=vh*cr;sx=(vw-sw)/2;}else{sh=vw/cr;sy=(vh-sh)/2;}
+                cCtx.drawImage(video,sx,sy,sw,sh,0,0,W,H);
+                cCtx.restore();
+              }
+              // Dessiner les lunettes via canvas depuis SVG
+              if (glassesEl) {
+                try {
+                  const svgStr = new XMLSerializer().serializeToString(glassesEl);
+                  const blob = new Blob([svgStr],{type:'image/svg+xml'});
+                  const url = URL.createObjectURL(blob);
+                  const img = new Image();
+                  img.onload = () => { cCtx.drawImage(img,0,0); URL.revokeObjectURL(url); };
+                  img.src = url;
+                } catch(e) {}
+              }
+            }
+            recRafId = requestAnimationFrame(drawGlassComp);
+          }
+          recRafId = requestAnimationFrame(drawGlassComp);
+          const s = comp.captureStream(30);
+          mediaStream.getAudioTracks().forEach(t=>s.addTrack(t));
+          return s;
+        } catch(e) { return mediaStream; }
+      }
+
+      // Filtre beauté : GL + overlay
       if (gl && glCanvas && glRunning) {
         try {
-          const compCanvas = document.createElement('canvas');
-          compCanvas.width = window.innerWidth; compCanvas.height = window.innerHeight;
-          const cCtx = compCanvas.getContext('2d');
-          function drawComp() {
+          const comp = document.createElement('canvas');
+          comp.width = window.innerWidth; comp.height = window.innerHeight;
+          const cCtx = comp.getContext('2d');
+          function drawBeautyComp() {
             if (!isRecording) return;
-            cCtx.drawImage(glCanvas, 0, 0, compCanvas.width, compCanvas.height);
-            if (overlayCanvas) cCtx.drawImage(overlayCanvas, 0, 0);
-            recRafId = requestAnimationFrame(drawComp);
+            cCtx.drawImage(glCanvas,0,0,comp.width,comp.height);
+            if (overlayCanvas) cCtx.drawImage(overlayCanvas,0,0);
+            recRafId = requestAnimationFrame(drawBeautyComp);
           }
-          recRafId = requestAnimationFrame(drawComp);
-          const s = compCanvas.captureStream(30);
+          recRafId = requestAnimationFrame(drawBeautyComp);
+          const s = comp.captureStream(30);
           mediaStream.getAudioTracks().forEach(t=>s.addTrack(t));
           return s;
         } catch(e) {}
       }
-
       return mediaStream;
     }
 
     function startFilterLoop() {
       const f = getActiveFilter();
-      if (f.privacy) { applyCSSFilterFallback(); return; }
       if (f.id === 'naturel') return;
+      if (f.privacy && f.privacyType === 'bar') {
+        showMysteryBar();
+        if (mpReady) startGlassesLoop();
+        else if (!mpLoadFailed) loadMediaPipe().then(()=>{ if(mpReady) startGlassesLoop(); });
+        return;
+      }
+      if (f.privacy && f.privacyType === 'blur') {
+        ensureEyeBlurCanvas();
+        if (mpReady) startMPLoopEyeBlur();
+        else if (!mpLoadFailed) loadMediaPipe().then(()=>{ if(mpReady) startMPLoopEyeBlur(); });
+        return;
+      }
       if (gl) startGLLoop();
-      else { const video = document.getElementById('camera-preview'); if(video && f.css !== 'none') video.style.filter = f.css; }
+      else { const v=document.getElementById('camera-preview'); if(v&&f.css!=='none') v.style.filter=f.css; }
       if (f.faceEffect) {
         ensureOverlayCanvas(); resizeOverlayCanvas();
         if (mpReady) startMPLoop();
@@ -1341,20 +1614,12 @@
       }
     }
 
-    function applyCSSFilterFallback() {
-      const f = getActiveFilter();
-      const video = document.getElementById('camera-preview');
-      if (!video) return;
-      if (f.privacy && f.privacyType === 'blur') video.style.filter = 'blur(10px)';
-      else if (f.privacy && f.privacyType === 'bar') showMysteryBar();
-      else if (f.css && f.css !== 'none') video.style.filter = f.css;
-    }
-
     function stopFilterLoop() {
-      stopGLLoop(); stopMPLoop(); stopCanvasCapture(); removeOverlayCanvas();
+      stopGLLoop(); stopMPLoop(); stopGlassesLoop();
+      stopEyeBlur(); stopMPLoopEyeBlur(); stopCanvasCapture();
+      removeOverlayCanvas(); removeGlasses(); removeMysteryBar();
       const video = document.getElementById('camera-preview');
       if (video) video.style.filter = 'none';
-      removeMysteryBar();
     }
 
     /* =====================================================
