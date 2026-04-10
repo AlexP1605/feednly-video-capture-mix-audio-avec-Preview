@@ -929,14 +929,14 @@
 
     const FILTER_PARAMS = {
       naturel:  { smooth:0.0,  bright:0.0,  warmth:0.0,  glow:0.0  },
-      soleil:   { smooth:0.85, bright:0.90, warmth:1.0,  glow:1.0  },
-      doux:     { smooth:1.0,  bright:0.55, warmth:0.55, glow:0.65 },
-      rose:     { smooth:0.90, bright:0.70, warmth:0.60, glow:0.75 },
-      glamour:  { smooth:0.95, bright:0.95, warmth:0.80, glow:1.0  },
-      dore:     { smooth:0.88, bright:0.80, warmth:1.0,  glow:0.85 },
-      mascara:  { smooth:0.80, bright:0.30, warmth:0.30, glow:0.45 },
-      blush:    { smooth:0.90, bright:0.70, warmth:0.70, glow:0.75 },
-      halo:     { smooth:0.75, bright:0.65, warmth:0.50, glow:0.70 },
+      soleil:   { smooth:1.0,  bright:1.0,  warmth:1.0,  glow:1.0  },
+      doux:     { smooth:1.0,  bright:0.80, warmth:0.70, glow:0.80 },
+      rose:     { smooth:1.0,  bright:0.85, warmth:0.75, glow:0.90 },
+      glamour:  { smooth:1.0,  bright:1.0,  warmth:0.90, glow:1.0  },
+      dore:     { smooth:1.0,  bright:0.90, warmth:1.0,  glow:1.0  },
+      mascara:  { smooth:1.0,  bright:0.50, warmth:0.40, glow:0.60 },
+      blush:    { smooth:1.0,  bright:0.85, warmth:0.80, glow:0.90 },
+      halo:     { smooth:1.0,  bright:0.85, warmth:0.65, glow:0.85 },
     };
 
     function renderGLFrame() {
@@ -1187,10 +1187,22 @@
       const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
       const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
       const maxR = Math.max(...pts.map(p=>Math.sqrt((p.x-cx)**2+(p.y-cy)**2)));
-      const outerPts = pts.map(p => ({ x: cx+(p.x-cx)*1.32, y: cy+(p.y-cy)*1.32 }));
-      const innerPts = pts.map(p => ({ x: cx+(p.x-cx)*1.02, y: cy+(p.y-cy)*1.02 }));
+
+      // Anneau uniforme tout autour — points dilatés régulièrement
+      const outerPts = pts.map(p => {
+        const dx=p.x-cx, dy=p.y-cy;
+        const d = Math.sqrt(dx*dx+dy*dy)||1;
+        return { x: cx+dx/d*(maxR*1.42), y: cy+dy/d*(maxR*1.42) };
+      });
+      const innerPts = pts.map(p => {
+        const dx=p.x-cx, dy=p.y-cy;
+        const d = Math.sqrt(dx*dx+dy*dy)||1;
+        return { x: cx+dx/d*(maxR*1.02), y: cy+dy/d*(maxR*1.02) };
+      });
+
       ctx.save();
-      ctx.filter = 'blur(7px)';
+      // Passe 1 : anneau flou (glow extérieur)
+      ctx.filter = 'blur(10px)';
       ctx.beginPath();
       ctx.moveTo(outerPts[0].x, outerPts[0].y);
       for(let i=1;i<outerPts.length;i++) ctx.lineTo(outerPts[i].x,outerPts[i].y);
@@ -1198,18 +1210,30 @@
       ctx.moveTo(innerPts[innerPts.length-1].x, innerPts[innerPts.length-1].y);
       for(let i=innerPts.length-2;i>=0;i--) ctx.lineTo(innerPts[i].x,innerPts[i].y);
       ctx.closePath();
-      const grad = ctx.createRadialGradient(cx,cy,maxR*0.95,cx,cy,maxR*1.38);
-      grad.addColorStop(0,   'rgba(255,255,220,0)');
-      grad.addColorStop(0.3, 'rgba(255,255,230,0.55)');
-      grad.addColorStop(0.55,'rgba(255,255,240,0.90)');
-      grad.addColorStop(0.75,'rgba(255,252,220,0.55)');
-      grad.addColorStop(1,   'rgba(255,252,210,0)');
-      ctx.fillStyle = grad;
+      ctx.fillStyle = 'rgba(255,255,230,0.70)';
       ctx.fill('evenodd');
+
+      // Passe 2 : anneau net + intense au centre
+      ctx.filter = 'blur(3px)';
+      const midPts = pts.map(p => {
+        const dx=p.x-cx, dy=p.y-cy;
+        const d = Math.sqrt(dx*dx+dy*dy)||1;
+        return { x: cx+dx/d*(maxR*1.20), y: cy+dy/d*(maxR*1.20) };
+      });
+      ctx.beginPath();
+      ctx.moveTo(midPts[0].x, midPts[0].y);
+      for(let i=1;i<midPts.length;i++) ctx.lineTo(midPts[i].x,midPts[i].y);
+      ctx.closePath();
+      ctx.moveTo(innerPts[innerPts.length-1].x, innerPts[innerPts.length-1].y);
+      for(let i=innerPts.length-2;i>=0;i--) ctx.lineTo(innerPts[i].x,innerPts[i].y);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255,255,245,0.92)';
+      ctx.fill('evenodd');
+
       ctx.restore();
     }
 
-    // ---- Vraies lunettes de soleil SVG (monture rectangulaire) ----
+    // ---- Mystère : 2 ronds noirs sur les yeux ----
     function showGlasses(lm, W, H, flip) {
       const lOuter=pt(lm,33,W,H,flip), lInner=pt(lm,133,W,H,flip);
       const rInner=pt(lm,362,W,H,flip), rOuter=pt(lm,263,W,H,flip);
@@ -1217,50 +1241,20 @@
       const lCX=(lOuter.x+lInner.x)/2, lCY=(lOuter.y+lInner.y)/2;
       const rCX=(rInner.x+rOuter.x)/2, rCY=(rInner.y+rOuter.y)/2;
       const totalW=Math.abs(rOuter.x-lOuter.x);
-      const lensW=totalW*0.385, lensH=lensW*0.68, corner=lensH*0.22;
+      const rx=totalW*0.22, ry=rx*0.65;
       const angle=Math.atan2(rOuter.y-lOuter.y,rOuter.x-lOuter.x);
       const deg=angle*180/Math.PI;
       const pivotX=(lCX+rCX)/2, pivotY=(lCY+rCY)/2;
-      const armLen=lensW*0.9;
-      const bridgeCY=(lInner.y+rInner.y)/2;
       if (!glassesEl) {
         glassesEl=document.createElementNS('http://www.w3.org/2000/svg','svg');
         glassesEl.style.cssText='position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none;overflow:visible;';
         document.getElementById('camera-container').appendChild(glassesEl);
       }
       glassesEl.setAttribute('viewBox',`0 0 ${W} ${H}`);
-      glassesEl.innerHTML = `<defs>
-          <linearGradient id="lensShine" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="rgba(255,255,255,0.15)"/>
-            <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
-          </linearGradient>
-          <linearGradient id="frameGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#2a1a00"/>
-            <stop offset="100%" stop-color="#0a0800"/>
-          </linearGradient>
-          <filter id="lensDrop">
-            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.4)"/>
-          </filter>
-        </defs>
-        <g transform="rotate(${deg},${pivotX},${pivotY})" filter="url(#lensDrop)">
-          <line x1="${lCX-lensW*0.92}" y1="${lCY}" x2="${lCX-lensW*0.92-armLen}" y2="${lCY+lensH*0.15}"
-            stroke="url(#frameGrad)" stroke-width="${lensH*0.10}" stroke-linecap="round"/>
-          <rect x="${lCX-lensW}" y="${lCY-lensH/2}" width="${lensW*2}" height="${lensH}"
-            rx="${corner}" ry="${corner}" fill="rgba(15,10,30,0.82)"
-            stroke="url(#frameGrad)" stroke-width="${lensH*0.095}"/>
-          <rect x="${lCX-lensW+lensH*0.12}" y="${lCY-lensH/2+lensH*0.10}"
-            width="${lensW*0.9}" height="${lensH*0.35}"
-            rx="${corner*0.7}" ry="${corner*0.7}" fill="url(#lensShine)"/>
-          <path d="M${lCX+lensW*0.88} ${lCY} C${lCX+lensW*0.95} ${bridgeCY-lensH*1.2} ${rCX-lensW*0.95} ${bridgeCY-lensH*1.2} ${rCX-lensW*0.88} ${rCY}"
-            fill="none" stroke="url(#frameGrad)" stroke-width="${lensH*0.085}" stroke-linecap="round"/>
-          <rect x="${rCX-lensW}" y="${rCY-lensH/2}" width="${lensW*2}" height="${lensH}"
-            rx="${corner}" ry="${corner}" fill="rgba(15,10,30,0.82)"
-            stroke="url(#frameGrad)" stroke-width="${lensH*0.095}"/>
-          <rect x="${rCX-lensW+lensH*0.12}" y="${rCY-lensH/2+lensH*0.10}"
-            width="${lensW*0.9}" height="${lensH*0.35}"
-            rx="${corner*0.7}" ry="${corner*0.7}" fill="url(#lensShine)"/>
-          <line x1="${rCX+lensW*0.92}" y1="${rCY}" x2="${rCX+lensW*0.92+armLen}" y2="${rCY+lensH*0.15}"
-            stroke="url(#frameGrad)" stroke-width="${lensH*0.10}" stroke-linecap="round"/>
+      glassesEl.innerHTML=`
+        <g transform="rotate(${deg},${pivotX},${pivotY})">
+          <ellipse cx="${lCX}" cy="${lCY}" rx="${rx}" ry="${ry}" fill="rgba(0,0,0,0.92)"/>
+          <ellipse cx="${rCX}" cy="${rCY}" rx="${rx}" ry="${ry}" fill="rgba(0,0,0,0.92)"/>
         </g>`;
     }
     function removeGlasses() {
@@ -1307,36 +1301,47 @@
     function drawEyeBlurOverlay() {
       if (!eyeBlurCtx||!eyeBlurCanvas) return;
       const W=window.innerWidth, H=window.innerHeight;
-      if(eyeBlurCanvas.width!==W||eyeBlurCanvas.height!==H){eyeBlurCanvas.width=W;eyeBlurCanvas.height=H;}
+      if(eyeBlurCanvas.width!==W||eyeBlurCanvas.height!==H){
+        eyeBlurCanvas.width=W; eyeBlurCanvas.height=H;
+      }
       eyeBlurCtx.clearRect(0,0,W,H);
       if (!lastFaceLandmarks||!lastFaceLandmarks.length) return;
       const lm=lastFaceLandmarks, flip=facingMode==='user';
       const video=document.getElementById('camera-preview');
       if (!video||video.readyState<2) return;
+
+      // Cover-fit de la vidéo
       const vW=video.videoWidth||W, vH=video.videoHeight||H;
       const vr=vW/vH, cr=W/H;
       let sx=0,sy=0,sw=vW,sh=vH;
       if(vr>cr){sw=vH*cr;sx=(vW-sw)/2;}else{sh=vW/cr;sy=(vH-sh)/2;}
-      [MP_LEFT_EYE_INNER,MP_RIGHT_EYE_INNER].forEach(eyePts => {
+
+      [MP_LEFT_EYE_INNER, MP_RIGHT_EYE_INNER].forEach(eyePts => {
         const pts=eyePts.map(i=>pt(lm,i,W,H,flip)).filter(Boolean);
         if(pts.length<4) return;
         const cx=pts.reduce((s,p)=>s+p.x,0)/pts.length;
         const cy=pts.reduce((s,p)=>s+p.y,0)/pts.length;
-        const rad=Math.max(...pts.map(p=>Math.sqrt((p.x-cx)**2+(p.y-cy)**2)))*3.0;
+        const rad=Math.max(...pts.map(p=>Math.sqrt((p.x-cx)**2+(p.y-cy)**2)))*3.2;
+
+        // Créer un canvas temporaire avec la vidéo très floutée
         const tmp=document.createElement('canvas');
         tmp.width=W; tmp.height=H;
         const tCtx=tmp.getContext('2d');
         tCtx.save();
         if(flip){tCtx.translate(W,0);tCtx.scale(-1,1);}
-        tCtx.filter='blur(16px)';
+        tCtx.filter='blur(18px)';
         tCtx.drawImage(video,sx,sy,sw,sh,0,0,W,H);
         tCtx.restore();
+        tCtx.filter='none';
+
+        // Appliquer la zone floutée en forme de rond avec fondu sur les bords
         eyeBlurCtx.save();
         eyeBlurCtx.beginPath();
         eyeBlurCtx.arc(cx,cy,rad,0,Math.PI*2);
         eyeBlurCtx.clip();
         eyeBlurCtx.drawImage(tmp,0,0);
-        const fade=eyeBlurCtx.createRadialGradient(cx,cy,rad*0.5,cx,cy,rad);
+        // Fondu progressif sur les bords pour un rendu naturel
+        const fade=eyeBlurCtx.createRadialGradient(cx,cy,rad*0.45,cx,cy,rad);
         fade.addColorStop(0,'rgba(0,0,0,0)');
         fade.addColorStop(1,'rgba(0,0,0,1)');
         eyeBlurCtx.globalCompositeOperation='destination-out';
@@ -1349,7 +1354,6 @@
       });
     }
 
-    let glassesActive = false;
     function startGlassesLoop() {
       if (glassesActive) return;
       glassesActive = true;
