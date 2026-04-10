@@ -52,90 +52,6 @@
     video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
     video::-webkit-media-controls { display: none !important; }
 
-    /* --- FILTER CANVAS WebGL --- */
-    #filter-canvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      pointer-events: none;
-      z-index: 2;
-      visibility: hidden;
-      object-fit: cover;
-    }
-
-    /* --- BARRE DE FILTRES --- */
-    #filter-bar-container {
-      position: absolute;
-      left: 0; right: 0;
-      z-index: 21;
-      padding: 0 0 10px 0;
-      pointer-events: auto;
-    }
-    #filter-bar {
-      display: flex;
-      gap: 12px;
-      padding: 8px 16px;
-      overflow-x: auto;
-      scrollbar-width: none;
-      -webkit-overflow-scrolling: touch;
-      scroll-snap-type: x mandatory;
-    }
-    .filter-chip {
-      scroll-snap-align: center;
-    }
-    #filter-bar::-webkit-scrollbar { display: none; }
-
-    .filter-chip {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 5px;
-      cursor: pointer;
-      flex-shrink: 0;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .filter-thumb {
-      width: 54px;
-      height: 54px;
-      border-radius: 50%;
-      border: 2.5px solid rgba(255,255,255,0.35);
-      overflow: hidden;
-      position: relative;
-      transition: border-color 0.2s, box-shadow 0.2s;
-      background: #222;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .filter-thumb.selected {
-      border-color: #fff;
-      box-shadow: 0 0 0 2px rgba(255,255,255,0.45);
-    }
-    .filter-thumb-canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      border-radius: 50%;
-    }
-    .filter-thumb-icon {
-      font-size: 22px;
-      line-height: 1;
-    }
-    .filter-label {
-      font-size: 10px;
-      color: rgba(255,255,255,0.75);
-      font-weight: 500;
-      white-space: nowrap;
-      text-align: center;
-      letter-spacing: 0.1px;
-    }
-    .filter-label.selected {
-      color: #fff;
-      font-weight: 700;
-    }
-
     /* --- COUNTDOWN --- */
     #countdown-display {
       position: fixed; inset: 0; z-index: 40;
@@ -166,7 +82,6 @@
       contain: layout style;
     }
     body.recording .top-bar, body.recording .bottom-bar .side { opacity: 0; pointer-events: none; }
-    body.recording #filter-bar-container { opacity: 0; pointer-events: none; }
     .side { pointer-events: auto; }
     .btn {
       width: 48px; height: 48px; border-radius: 50%;
@@ -216,18 +131,34 @@
 
     /* --- TAP TO PLAY OVERLAY --- */
     #tap-to-play {
-      position: absolute; inset: 0; z-index: 60;
-      display: none; flex-direction: column;
-      align-items: center; justify-content: center;
-      background: transparent; cursor: pointer; pointer-events: none;
+      position: absolute;
+      inset: 0;
+      z-index: 60;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      cursor: pointer;
+      pointer-events: none;
     }
-    #tap-to-play.active { display: flex; pointer-events: auto; }
-    #tap-to-play.paused { display: flex; pointer-events: auto; background: rgba(0,0,0,0.3); }
+    #tap-to-play.active {
+      display: flex;
+      pointer-events: auto;
+    }
+    #tap-to-play.paused {
+      display: flex;
+      pointer-events: auto;
+      background: rgba(0,0,0,0.3);
+    }
     .tap-to-play-btn {
-      width: 72px; height: 72px; border-radius: 50%;
-      background: rgba(0,0,0,0.45); border: 2px solid rgba(255,255,255,0.7);
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.45);
+      border: 2px solid rgba(255,255,255,0.7);
       display: flex; align-items: center; justify-content: center;
-      margin-bottom: 10px; backdrop-filter: blur(8px);
+      margin-bottom: 10px;
+      backdrop-filter: blur(8px);
       transition: transform 0.15s ease;
     }
     #tap-to-play:active .tap-to-play-btn { transform: scale(0.9); }
@@ -236,47 +167,78 @@
     .tap-to-play-icon-pause { display: none; }
     #tap-to-play.paused .tap-to-play-icon-play { display: none; }
     #tap-to-play.paused .tap-to-play-icon-pause { display: block; }
-    .tap-to-play-label { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); letter-spacing: 0.2px; }
+    .tap-to-play-label {
+      font-size: 13px; font-weight: 600;
+      color: rgba(255,255,255,0.9);
+      letter-spacing: 0.2px;
+    }
 
     /* =====================================================
-       PREVIEW OVERLAY
+       PREVIEW OVERLAY — TikTok style fullscreen
        ===================================================== */
     #preview-overlay {
       position: fixed; inset: 0; z-index: 50;
-      background: #000; display: none; opacity: 0;
+      background: #000;
+      display: none; opacity: 0;
       transition: opacity 0.2s ease;
       width: var(--preview-viewport-width, var(--app-viewport-width, 100vw));
       height: var(--preview-viewport-height, var(--app-viewport-height, 100svh));
-      overflow: hidden; contain: strict; isolation: isolate;
+      overflow: hidden;
+      contain: strict;
+      isolation: isolate;
     }
     #preview-overlay.active { display: block; opacity: 1; }
 
     #preview-video {
-      position: absolute; inset: 0; width: 100%; height: 100%;
-      object-fit: cover; display: none; pointer-events: none;
-      background: #000; will-change: transform; transform: translateZ(0);
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+      pointer-events: none;
+      background: #000;
+      will-change: transform;
+      transform: translateZ(0);
     }
 
     .preview-scrim {
-      position: absolute; inset: 0;
-      background: linear-gradient(180deg, rgba(0,0,0,0.25) 0%, transparent 25%, transparent 55%, rgba(0,0,0,0.55) 100%);
-      pointer-events: none; z-index: 1;
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        180deg,
+        rgba(0,0,0,0.25) 0%,
+        transparent 25%,
+        transparent 55%,
+        rgba(0,0,0,0.55) 100%
+      );
+      pointer-events: none;
+      z-index: 1;
     }
 
+    /* --- OVERLAY CONTROLS --- */
     .preview-top-controls {
-      position: absolute; top: 0; left: 0; right: 0;
+      position: absolute;
+      top: 0; left: 0; right: 0;
       padding-top: max(16px, env(safe-area-inset-top));
-      display: flex; justify-content: center; align-items: center;
-      z-index: 10; pointer-events: none;
+      padding-left: 0;
+      padding-right: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+      pointer-events: none;
     }
     .preview-top-controls > * { pointer-events: auto; }
 
     .original-mute-btn {
       width: 44px; height: 44px; border-radius: 50%;
-      background: rgba(15,15,15,0.7); border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(15,15,15,0.7);
+      border: 1px solid rgba(255,255,255,0.18);
       backdrop-filter: blur(14px);
       display: flex; align-items: center; justify-content: center;
-      cursor: pointer; color: #fff; transition: transform 0.2s ease, background 0.2s ease;
+      cursor: pointer; color: #fff;
+      transition: transform 0.2s ease, background 0.2s ease;
     }
     .original-mute-btn:active { transform: scale(0.92); }
     .original-mute-btn svg { width: 22px; height: 22px; fill: currentColor; }
@@ -284,28 +246,47 @@
     .original-mute-btn.muted svg { fill: #ff3b30; }
 
     .thumbnail-btn-overlay {
-      position: absolute; left: 16px; z-index: 10;
-      cursor: pointer; pointer-events: auto; transition: transform 0.2s ease;
+      position: absolute;
+      left: 16px;
+      z-index: 10;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: transform 0.2s ease;
     }
     .thumbnail-btn-overlay:active { transform: scale(0.92); }
     .thumbnail-btn-overlay canvas {
-      width: 70px !important; height: 95px !important;
-      min-width: 70px !important; max-width: 70px !important;
-      min-height: 95px !important; max-height: 95px !important;
-      border-radius: 14px; border: 2px solid rgba(255,255,255,0.65);
-      display: block; background: rgba(255,255,255,0.08);
+      width: 70px !important;
+      height: 95px !important;
+      min-width: 70px !important;
+      max-width: 70px !important;
+      min-height: 95px !important;
+      max-height: 95px !important;
+      border-radius: 14px;
+      border: 2px solid rgba(255,255,255,0.65);
+      display: block;
+      background: rgba(255,255,255,0.08);
       image-rendering: -webkit-optimize-contrast;
     }
 
-    .music-trigger-row { display: flex; justify-content: center; pointer-events: auto; }
+    .music-trigger-row {
+      display: flex;
+      justify-content: center;
+      pointer-events: auto;
+    }
 
     .music-overlay {
-      padding: 0 12px; display: flex; align-items: center; gap: 10px;
+      padding: 0 12px;
+      display: flex; align-items: center; gap: 10px;
       background: linear-gradient(135deg, rgba(15,15,15,0.85), rgba(25,25,25,0.85));
-      border: 1px solid rgba(255,255,255,0.18); border-radius: 22px;
-      color: #fff; font-size: 13px; backdrop-filter: blur(14px);
-      cursor: pointer; height: 44px; max-width: 200px; min-width: 0;
-      pointer-events: auto; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 22px; color: #fff; font-size: 13px;
+      backdrop-filter: blur(14px);
+      cursor: pointer;
+      height: 44px;
+      max-width: 200px;
+      min-width: 0;
+      pointer-events: auto;
+      overflow: hidden;
     }
     .music-overlay.empty .music-clear { display: none; }
     .music-meta { display: flex; flex-direction: column; min-width: 0; }
@@ -318,55 +299,94 @@
     .music-icon { width: 22px; height: 22px; fill: #fff; flex-shrink: 0; display: block; }
     .music-clear {
       width: 26px; height: 26px; border-radius: 50%;
-      border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.08);
-      color: #fff; display: grid; place-items: center; flex-shrink: 0; transition: all 0.2s;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.08);
+      color: #fff; display: grid; place-items: center; flex-shrink: 0;
+      transition: all 0.2s;
     }
     .music-clear svg { width: 12px; height: 12px; }
     .music-clear:active { transform: scale(0.92); }
 
+    /* --- BARRE DE PROGRESSION VIDÉO --- */
     .video-progress-bar {
-      position: absolute; left: 0; right: 0; height: 28px; z-index: 15;
-      cursor: pointer; display: flex; align-items: flex-end; touch-action: none;
+      position: absolute;
+      left: 0; right: 0;
+      height: 28px;
+      z-index: 15;
+      cursor: pointer;
+      display: flex;
+      align-items: flex-end;
+      touch-action: none;
     }
     .video-progress-bar-bg {
-      width: 100%; height: 3px; background: rgba(255,255,255,0.2);
-      position: relative; flex-shrink: 0;
+      width: 100%;
+      height: 3px;
+      background: rgba(255,255,255,0.2);
+      position: relative;
+      flex-shrink: 0;
     }
     .video-progress-bar-fill {
-      position: absolute; left: 0; top: 0; bottom: 0;
-      width: 0%; background: #fff; border-radius: 0 2px 2px 0;
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 0%;
+      background: #fff;
+      border-radius: 0 2px 2px 0;
     }
     .video-progress-thumb {
-      position: absolute; top: 50%; left: 0%;
-      width: 14px; height: 14px; border-radius: 50%; background: #fff;
-      transform: translate(-50%, -50%); box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-      opacity: 0; transition: opacity 0.15s ease; pointer-events: none;
+      position: absolute;
+      top: 50%; left: 0%;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      pointer-events: none;
     }
     .video-progress-bar:active .video-progress-thumb,
-    .video-progress-bar.dragging .video-progress-thumb { opacity: 1; }
+    .video-progress-bar.dragging .video-progress-thumb {
+      opacity: 1;
+    }
 
+    /* --- PREVIEW ACTIONS (bas d'écran) ---
+       FIX: on supprime le fond noir en utilisant un fond transparent
+       avec un dégradé sombre pour la lisibilité, et on s'assure que
+       la progress bar est visible au-dessus */
     #preview-actions {
-      position: absolute; left: 0; right: 0; bottom: 0;
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      /* FIX: pas de background #000 plein, on utilise un dégradé */
       background: linear-gradient(0deg, rgba(0,0,0,0.92) 60%, rgba(0,0,0,0) 100%);
-      display: flex; align-items: center; justify-content: center; gap: 12px;
+      display: flex; align-items: center; justify-content: center;
+      gap: 12px;
       padding: 32px 20px max(14px, env(safe-area-inset-bottom));
-      pointer-events: auto; z-index: 20;
+      pointer-events: auto;
+      z-index: 20;
     }
     .action-btn { flex: 1; height: 50px; font-size: 16px; font-weight: 700; border: none; cursor: pointer; border-radius: 14px; }
     #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
     #next-button { background: #fff; color: #000; }
 
+    /* --- MUSIC SHEET ---
+       FIX: z-index élevé pour passer par-dessus tout (progress bar, boutons) */
     #music-controls {
-      position: absolute; left: 0; right: 0; bottom: 0;
+      position: absolute;
+      left: 0; right: 0;
+      bottom: 0;
+      /* FIX: la sheet démarre depuis le bas et couvre tout */
       height: 80dvh; max-height: 80dvh;
-      pointer-events: auto; z-index: 100;
+      pointer-events: auto;
+      z-index: 100; /* FIX: au-dessus de tout */
     }
 
+    /* --- THUMBNAIL SHEET --- */
     #thumbnail-sheet {
       position: absolute; left: 0; right: 0; bottom: 0;
       background: rgba(10,10,10,0.97);
       border-top-left-radius: 26px; border-top-right-radius: 26px;
-      z-index: 90; transform: translateY(100%);
+      z-index: 90;
+      transform: translateY(100%);
       transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
       pointer-events: none;
       padding: 18px 20px calc(20px + env(safe-area-inset-bottom));
@@ -374,68 +394,124 @@
       box-shadow: 0 -18px 40px rgba(0,0,0,0.55);
     }
     #thumbnail-sheet.active { transform: translateY(0); pointer-events: auto; }
-    .thumbnail-sheet-handle { width: 70px; height: 6px; border-radius: 10px; background: #2f2f2f; align-self: center; margin-bottom: 4px; }
-    .thumbnail-sheet-title { font-size: 15px; font-weight: 700; color: #fff; text-align: center; }
-    .thumbnail-preview-container { display: flex; justify-content: center; }
+    .thumbnail-sheet-handle {
+      width: 70px; height: 6px; border-radius: 10px;
+      background: #2f2f2f; align-self: center; margin-bottom: 4px;
+    }
+    .thumbnail-sheet-title {
+      font-size: 15px; font-weight: 700; color: #fff; text-align: center;
+    }
+    .thumbnail-preview-container {
+      display: flex; justify-content: center;
+    }
     .thumbnail-preview-inner {
-      width: min(160px, 45vw); aspect-ratio: 9/16; border-radius: 14px;
-      overflow: hidden; border: 1px solid rgba(255,255,255,0.18);
-      background: rgba(255,255,255,0.06); box-shadow: 0 12px 24px rgba(0,0,0,0.45);
+      width: min(160px, 45vw);
+      aspect-ratio: 9/16;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.06);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.45);
     }
     #thumbnailCanvas { width: 100%; height: 100%; display: block; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; }
     .thumbnail-slider-row {
-      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-      border-radius: 14px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.05);
     }
-    .thumbnail-slider-label { font-size: 12px; color: rgba(255,255,255,0.65); flex: 0 0 auto; }
+    .thumbnail-slider-label {
+      font-size: 12px; color: rgba(255,255,255,0.65); flex: 0 0 auto;
+    }
     .thumbnail-time-slider { flex: 1; min-width: 0; touch-action: pan-x; cursor: pointer; }
-    .thumbnail-time-display { font-size: 12px; color: rgba(255,255,255,0.9); min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+    .thumbnail-time-display {
+      font-size: 12px; color: rgba(255,255,255,0.9);
+      min-width: 36px; text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
     .thumbnail-sheet-close {
-      height: 50px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+      height: 50px; background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
       border-radius: 14px; color: #fff; font-size: 15px; font-weight: 600;
       cursor: pointer; display: flex; align-items: center; justify-content: center;
     }
     .thumbnail-sheet-close:active { transform: scale(0.97); }
 
+    /* --- SHEET (musique) --- */
     .sheet-backdrop {
       position: absolute; inset: 0;
       background: linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.65));
-      opacity: 0; pointer-events: none; transition: opacity 0.25s ease; z-index: 98;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+      z-index: 98; /* juste sous les sheets */
     }
     .sheet-backdrop.active { opacity: 1; pointer-events: auto; }
 
     .sheet {
       position: absolute; left: 0; right: 0; bottom: 0;
-      padding: 20px 18px 0; display: flex; flex-direction: column; gap: 18px;
+      padding: 20px 18px 0;
+      display: flex; flex-direction: column; gap: 18px;
       background: rgba(10,10,10,0.96); color: #fff;
       border-top-left-radius: 26px; border-top-right-radius: 26px;
       transform: translateY(100%);
+      /* FIX: transition plus fluide pour le filtre */
       transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-      z-index: 100; box-shadow: 0 -18px 40px rgba(0,0,0,0.55);
+      z-index: 100; /* FIX: au-dessus de tout */
+      box-shadow: 0 -18px 40px rgba(0,0,0,0.55);
       height: 80dvh; max-height: 80dvh;
-      overflow: hidden; overflow-x: hidden; pointer-events: none; will-change: transform;
+      overflow: hidden; overflow-x: hidden;
+      pointer-events: none;
+      will-change: transform;
     }
     .sheet.active { transform: translateY(0); pointer-events: auto; }
-    #music-filter-sheet { height: 35dvh; max-height: 35dvh; z-index: 101; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+    /* FIX: sheet filtre avec transition améliorée */
+    #music-filter-sheet {
+      height: 35dvh; max-height: 35dvh;
+      z-index: 101; /* au-dessus de la sheet musique */
+      transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    }
     .sheet .sheet-handle { width: 70px; height: 6px; border-radius: 10px; background: #2f2f2f; align-self: center; margin-bottom: 4px; }
     .sheet-content { display: flex; flex-direction: column; gap: 18px; flex: 1; overflow-y: auto; overflow-x: hidden; padding-bottom: 24px; }
     .sheet header { display: flex; align-items: center; justify-content: center; gap: 10px; }
     .sheet .title { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; font-weight: 800; letter-spacing: 0.3px; text-align: center; }
     .sheet label { font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+    /* FIX: input search — empêcher le saut hors écran sur iOS */
     .sheet input[type="search"] {
-      width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid #2b2b2d;
-      background: #131316; color: #fff; font-size: 16px;
-      -webkit-appearance: none; appearance: none; transform: translateZ(0);
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid #2b2b2d;
+      background: #131316;
+      color: #fff;
+      font-size: 16px; /* FIX: 16px minimum évite le zoom iOS */
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+      /* FIX: empêcher le redimensionnement */
+      -webkit-appearance: none;
+      appearance: none;
+      transform: translateZ(0); /* force GPU layer, évite le saut */
     }
-    .sheet input[type="search"]:focus { outline: none; border-color: rgba(255,255,255,0.35); }
+    .sheet input[type="search"]:focus {
+      outline: none;
+      border-color: rgba(255,255,255,0.35);
+    }
     .sheet select, .sheet input[type="range"] { flex: 1; padding: 8px 10px; border-radius: 12px; border: 1px solid #2b2b2d; background: #151519; color: #fff; }
     .sheet .toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; background: rgba(255,255,255,0.04); padding: 12px; border-radius: 14px; border: 1px solid #1f1f24; }
-    .music-search-row { display: flex; gap: 10px; align-items: center; width: 100%; position: relative; }
+
+    /* FIX: search row — s'assurer qu'il reste dans l'écran */
+    .music-search-row {
+      display: flex; gap: 10px; align-items: center;
+      width: 100%;
+      /* FIX: éviter que le focus iOS scroll la page */
+      position: relative;
+    }
     .music-search-row input[type="search"] { flex: 1 1 auto; min-width: 0; width: auto; }
     .music-filter-btn {
       height: 44px; min-width: 44px; width: 44px; padding: 0;
-      border-radius: 14px; border: 1px solid #2b2b2d; background: #151519; color: #fff;
-      display: grid; place-items: center; cursor: pointer; flex-shrink: 0;
+      border-radius: 14px; border: 1px solid #2b2b2d;
+      background: #151519; color: #fff;
+      display: grid; place-items: center; cursor: pointer;
+      flex-shrink: 0;
     }
     .music-filter-btn svg { width: 20px; height: 20px; fill: currentColor; }
     .tag-grid { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -454,14 +530,32 @@
     .timeline-row .time-chip { background: rgba(255,255,255,0.1); border-radius: 10px; padding: 6px 10px; font-size: 12px; letter-spacing: 0.2px; }
     .waveform-visual {
       height: 72px; border-radius: 14px; border: 1px solid #1f1f24;
-      background: rgba(255,255,255,0.04); display: grid; grid-auto-flow: column;
-      grid-auto-columns: 1fr; gap: 2px; padding: 8px 10px; align-items: center;
-      cursor: pointer; overflow: hidden; position: relative; touch-action: none; overscroll-behavior: none;
+      background: rgba(255,255,255,0.04);
+      display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+      gap: 2px; padding: 8px 10px; align-items: center;
+      cursor: pointer; overflow: hidden; position: relative;
+      touch-action: none;
+      overscroll-behavior: none;
     }
-    .waveform-visual span { display: block; width: 3px; align-self: center; border-radius: 3px; background: rgba(255,255,255,0.22); transition: background 0.15s, transform 0.15s; height: var(--bar-height, 30%); }
-    .waveform-visual span.active { background: rgba(255,255,255,0.9); transform: scaleY(1.08); }
-    .waveform-handle { position: absolute; top: 4px; bottom: 4px; width: 2px; background: rgba(255,255,255,0.95); transform: translateX(-50%); border-radius: 2px; pointer-events: none; }
+    .waveform-visual span {
+      display: block; width: 3px; align-self: center; border-radius: 3px;
+      background: rgba(255,255,255,0.22);
+      transition: background 0.15s, transform 0.15s;
+      height: var(--bar-height, 30%);
+    }
+    .waveform-visual span.active {
+      background: rgba(255,255,255,0.9);
+      transform: scaleY(1.08);
+    }
+    .waveform-handle {
+      position: absolute; top: 4px; bottom: 4px; width: 2px;
+      background: rgba(255,255,255,0.95); transform: translateX(-50%);
+      border-radius: 2px;
+      pointer-events: none;
+    }
+    .waveform-handle::after { content: none; }
     .waveform-handle.end { background: rgba(255,255,255,0.5); }
+    .waveform-handle.end::after { content: none; }
     .slider-row { display: flex; align-items: center; gap: 10px; }
 
     .icon-btn {
@@ -483,18 +577,62 @@
     .icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
     .audio-tab-content { display: flex; flex-direction: column; gap: 14px; }
-    .volume-section { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); }
-    .volume-section-label { font-size: 13px; font-weight: 700; color: #e5e5e7; display: flex; justify-content: space-between; align-items: center; }
-    .volume-value-chip { padding: 4px 10px; border-radius: 10px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); font-size: 12px; letter-spacing: 0.3px; min-width: 40px; text-align: center; color: #fff; }
+    .volume-section {
+      display: flex; flex-direction: column; gap: 10px;
+      padding: 14px; border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+    }
+    .volume-section-label {
+      font-size: 13px; font-weight: 700; color: #e5e5e7;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .volume-value-chip {
+      padding: 4px 10px; border-radius: 10px;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14);
+      font-size: 12px; letter-spacing: 0.3px; min-width: 40px; text-align: center;
+      color: #fff;
+    }
 
-    .vol-slider { --slider-hit-padding: 22px; -webkit-appearance: none; appearance: none; width: 100%; height: calc(8px + var(--slider-hit-padding) * 2); padding: var(--slider-hit-padding) 0; background: transparent; border-radius: 999px; outline: none; border: none; touch-action: pan-x; cursor: pointer; }
-    .vol-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.35); margin-top: calc((8px - 18px) / 2); }
-    .vol-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.35); }
-    .vol-slider::-moz-range-track { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.16); border: none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.1); }
-    .vol-slider::-webkit-slider-runnable-track { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.16); box-shadow: inset 0 1px 0 rgba(255,255,255,0.1); }
+    .vol-slider {
+      --slider-hit-padding: 22px;
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: calc(8px + var(--slider-hit-padding) * 2);
+      padding: var(--slider-hit-padding) 0;
+      background: transparent; border-radius: 999px; outline: none; border: none;
+      touch-action: pan-x;
+      cursor: pointer;
+    }
+    .vol-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #fff; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+      margin-top: calc((8px - 18px) / 2);
+    }
+    .vol-slider::-moz-range-thumb {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #fff; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+    }
+    .vol-slider::-moz-range-track {
+      height: 8px; border-radius: 999px; background: rgba(255,255,255,0.16);
+      border: none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .vol-slider::-webkit-slider-runnable-track {
+      height: 8px; border-radius: 999px; background: rgba(255,255,255,0.16);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+    }
 
-    .tab-bar { display: flex; gap: 10px; background: rgba(20,20,20,0.9); border: 1px solid rgba(255,255,255,0.12); padding: 6px 10px; border-radius: 16px; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
-    .tab-btn { flex: 1; height: 46px; border-radius: 12px; border: 1px solid transparent; background: transparent; color: rgba(255,255,255,0.7); cursor: pointer; transition: all 0.2s ease; display: grid; place-items: center; }
+    .tab-bar {
+      display: flex; gap: 10px; background: rgba(20,20,20,0.9);
+      border: 1px solid rgba(255,255,255,0.12); padding: 6px 10px;
+      border-radius: 16px; justify-content: space-between;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .tab-btn {
+      flex: 1; height: 46px; border-radius: 12px; border: 1px solid transparent;
+      background: transparent; color: rgba(255,255,255,0.7); cursor: pointer;
+      transition: all 0.2s ease; display: grid; place-items: center;
+    }
     .tab-btn svg { width: 22px; height: 22px; fill: currentColor; }
     .tab-btn.active { background: rgba(255,255,255,0.18); color: #fff; border-color: rgba(255,255,255,0.35); box-shadow: 0 10px 20px rgba(0,0,0,0.35); }
     .tab-btn .tab-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -502,6 +640,7 @@
     .tab-panel.active { display: flex; }
     .sheet header .title svg { width: 18px; height: 18px; fill: currentColor; }
 
+    /* --- UPLOAD --- */
     #upload-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; opacity: 0; visibility: hidden; transition: opacity 0.2s; }
     #upload-overlay.active { opacity: 1; visibility: visible; }
     .spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.2); border-top: 4px solid #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -513,19 +652,37 @@
     #upload-text.show-mixing #upload-progress-text { opacity: 0; }
     #upload-text.show-mixing #upload-mix-text { opacity: 1; }
     #upload-overlay .spinner { order: 1; }
-    #upload-cancel-btn { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.7); font-size: 15px; font-weight: 600; padding: 12px 32px; border-radius: 14px; cursor: pointer; transition: all 0.2s ease; order: 3; }
+    #upload-cancel-btn {
+      background: transparent; border: 1px solid rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.7); font-size: 15px; font-weight: 600;
+      padding: 12px 32px; border-radius: 14px; cursor: pointer;
+      transition: all 0.2s ease; order: 3;
+    }
     #upload-cancel-btn:active { transform: scale(0.96); background: rgba(255,255,255,0.08); }
     #upload-cancel-btn.hidden { display: none; }
 
-    #error-toast { position: fixed; top: 100px; left: 50%; transform: translateX(-50%) translateY(-20px); background: rgba(255, 59, 48, 0.9); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 12px 24px; border-radius: 30px; font-weight: 600; font-size: 14px; z-index: 300; opacity: 0; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none; text-align: center; width: 90%; max-width: 300px; }
+    /* --- ERROR TOAST --- */
+    #error-toast {
+      position: fixed; top: 100px; left: 50%; transform: translateX(-50%) translateY(-20px);
+      background: rgba(255, 59, 48, 0.9); border: 1px solid rgba(255,255,255,0.2);
+      color: white; padding: 12px 24px; border-radius: 30px;
+      font-weight: 600; font-size: 14px; z-index: 300;
+      opacity: 0; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      pointer-events: none; text-align: center; width: 90%; max-width: 300px;
+    }
     #error-toast.active { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-    #recording-timer { position: fixed; top: calc(env(safe-area-inset-top) + 6px); left: 50%; transform: translateX(-50%); z-index: 45; padding: 8px 14px; border-radius: 20px; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255,255,255,0.2); color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 0.5px; opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
+    #recording-timer {
+      position: fixed; top: calc(env(safe-area-inset-top) + 6px); left: 50%;
+      transform: translateX(-50%); z-index: 45; padding: 8px 14px; border-radius: 20px;
+      background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255,255,255,0.2);
+      color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 0.5px;
+      opacity: 0; transition: opacity 0.2s ease; pointer-events: none;
+    }
     body.recording #recording-timer { opacity: 1; }
 
     input[type="file"] { display: none; }
     body.showing-preview .controls { display: none !important; }
-    body.showing-preview #filter-bar-container { display: none !important; }
     .visually-hidden { position: absolute !important; height: 1px; width: 1px; overflow: hidden; clip: rect(1px, 1px, 1px, 1px); white-space: nowrap; }
   </style>
 </head>
@@ -537,8 +694,6 @@
 
   <div id="camera-container">
     <video id="camera-preview" playsinline muted autoplay></video>
-    <!-- Canvas filtré par-dessus la caméra -->
-    <canvas id="filter-canvas"></canvas>
     <div class="controls">
       <div class="top-bar">
         <button type="button" class="btn" id="flash-btn">
@@ -568,14 +723,11 @@
     </div>
   </div>
 
-  <!-- BARRE DE FILTRES (au-dessus du bottom-bar) -->
-  <div id="filter-bar-container">
-    <div id="filter-bar"></div>
-  </div>
-
   <!-- ===================== PREVIEW OVERLAY ===================== -->
   <div id="preview-overlay">
+
     <video id="preview-video" playsinline webkit-playsinline preload="auto" loop disablepictureinpicture x-webkit-airplay="deny"></video>
+
     <div class="preview-scrim"></div>
 
     <div id="tap-to-play">
@@ -586,6 +738,7 @@
       <span class="tap-to-play-label">Appuyer pour lire</span>
     </div>
 
+    <!-- Haut centre : bouton Ajouter un son -->
     <div class="preview-top-controls">
       <div class="music-trigger-row" id="music-trigger-row">
         <div id="music-overlay" class="music-overlay empty">
@@ -598,23 +751,32 @@
             <span class="music-duration" id="music-duration"></span>
           </div>
           <button type="button" id="music-clear-btn" class="music-clear" aria-label="Supprimer la musique">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M3.5 3.5l9 9m0-9l-9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
           </button>
         </div>
       </div>
     </div>
 
+    <!-- Haut droit : bouton volume son original -->
     <div style="position:absolute;top:0;right:16px;padding-top:max(16px,env(safe-area-inset-top));z-index:11;pointer-events:auto;">
       <button type="button" class="original-mute-btn" id="original-mute-btn" aria-label="Volume son original">
-        <svg id="mic-icon-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-        <svg id="mic-icon-off" viewBox="0 0 24 24" aria-hidden="true" style="display:none;"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+        <svg id="mic-icon-on" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+        </svg>
+        <svg id="mic-icon-off" viewBox="0 0 24 24" aria-hidden="true" style="display:none;">
+          <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+        </svg>
       </button>
     </div>
 
+    <!-- Bouton miniature (bas gauche) -->
     <div class="thumbnail-btn-overlay" id="thumbnail-btn-overlay" aria-label="Choisir la miniature">
       <canvas id="thumbnailCanvas"></canvas>
     </div>
 
+    <!-- Sheet musique — z-index 100, couvre tout -->
     <div id="music-controls" class="sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-content">
@@ -633,16 +795,21 @@
           </button>
         </div>
 
+        <!-- Onglet Musique -->
         <div id="tab-music" class="tab-panel active">
           <div class="music-search-row">
             <input id="music-search" type="search" placeholder="Rechercher un titre ou un artiste" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+            <!-- FIX: vraie icône filtre (entonnoir) -->
             <button type="button" id="music-filter-btn" class="music-filter-btn" aria-label="Filtre">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.25 5.61C6.27 8.2 10 13 10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-6s3.72-4.8 5.74-7.39A.998.998 0 0 0 18.95 4H5.04a1 1 0 0 0-.79 1.61z"/></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4.25 5.61C6.27 8.2 10 13 10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-6s3.72-4.8 5.74-7.39A.998.998 0 0 0 18.95 4H5.04a1 1 0 0 0-.79 1.61z"/>
+              </svg>
             </button>
           </div>
           <div id="music-list" class="music-list"></div>
         </div>
 
+        <!-- Onglet Waveform -->
         <div id="tab-waveform" class="tab-panel">
           <div class="timeline-row">
             <div class="timeline-header">
@@ -655,6 +822,7 @@
           </div>
         </div>
 
+        <!-- Onglet Son -->
         <div id="tab-audio" class="tab-panel">
           <div class="audio-tab-content">
             <div class="volume-section">
@@ -676,6 +844,7 @@
       </div>
     </div>
 
+    <!-- Barre de progression vidéo draggable -->
     <div class="video-progress-bar" id="video-progress-bar">
       <div class="video-progress-bar-bg">
         <div class="video-progress-bar-fill" id="video-progress-fill"></div>
@@ -683,19 +852,25 @@
       </div>
     </div>
 
+    <!-- Actions bas d'écran -->
     <div id="preview-actions">
       <button type="button" id="restart-button" class="action-btn">Recommencer</button>
       <button type="button" id="next-button" class="action-btn">Suivant</button>
     </div>
 
+    <!-- Sheet backdrop -->
     <div id="sheet-backdrop" class="sheet-backdrop"></div>
 
+    <!-- Sheet filtre musique -->
     <div id="music-filter-sheet" class="sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-content">
         <header>
           <div class="title">
-            <svg viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;fill:currentColor;"><path d="M4.25 5.61C6.27 8.2 10 13 10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-6s3.72-4.8 5.74-7.39A.998.998 0 0 0 18.95 4H5.04a1 1 0 0 0-.79 1.61z"/></svg>
+            <!-- FIX: même vraie icône filtre -->
+            <svg viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;fill:currentColor;">
+              <path d="M4.25 5.61C6.27 8.2 10 13 10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-6s3.72-4.8 5.74-7.39A.998.998 0 0 0 18.95 4H5.04a1 1 0 0 0-.79 1.61z"/>
+            </svg>
             <span>Filtres</span>
           </div>
         </header>
@@ -703,6 +878,7 @@
       </div>
     </div>
 
+    <!-- Sheet miniature -->
     <div id="thumbnail-sheet">
       <div class="thumbnail-sheet-handle"></div>
       <div class="thumbnail-sheet-title">Choisir la miniature</div>
@@ -718,7 +894,9 @@
       </div>
       <button type="button" class="thumbnail-sheet-close" id="thumbnail-sheet-close">Valider</button>
     </div>
+
   </div>
+  <!-- ===================== FIN PREVIEW OVERLAY ===================== -->
 
   <div id="upload-overlay">
     <div class="spinner"></div>
@@ -726,941 +904,12 @@
       <span id="upload-mix-text"></span>
       <span id="upload-progress-text">Préparation...</span>
     </div>
-    <button type="button" id="upload-cancel-btn" class="hidden">Annuler</button>
+  <button type="button" id="upload-cancel-btn" class="hidden">Annuler</button>
   </div>
   <input type="file" id="camera-input" accept="video/*" capture="environment" />
   <input type="file" id="galleryInput" accept="video/*" />
 
   <script>
-
-    /* =====================================================
-       FILTRES CAMÉRA — moteur WebGL LUT
-       ===================================================== */
-
-    const FILTERS = [
-      // ---- Colorimétrie (gauche) ----
-      { id:'vintage',  name:'Vintage',  css:'sepia(0.55) contrast(1.1) brightness(0.96) saturate(0.85)',  dot:'linear-gradient(135deg,#c9a96e,#7a5c3a)', side:'left'  },
-      { id:'fraiche',  name:'Fraîche',  css:'hue-rotate(15deg) saturate(1.3) brightness(1.06) contrast(0.97)', dot:'linear-gradient(135deg,#a8e6cf,#3db88c)', side:'left'  },
-      { id:'chaud',    name:'Chaud',    css:'sepia(0.2) saturate(1.4) brightness(1.08) hue-rotate(-8deg)', dot:'linear-gradient(135deg,#ffb347,#e05c00)',   side:'left'  },
-      // ---- Naturel (centre) ----
-      { id:'naturel',  name:'Naturel',  css:'none',                                                         dot:null,                                        side:'center'},
-      // ---- Effets visage (droite) ----
-      { id:'doux',     name:'Doux',     css:'brightness(1.03) saturate(0.96)',                              dot:'linear-gradient(135deg,#f5d9c0,#e8a870)',   side:'right', faceEffect:'soft'    },
-      { id:'glamour',  name:'Glamour',  css:'brightness(1.04) contrast(1.03)',                              dot:'linear-gradient(135deg,#e8c8f0,#b060d0)',   side:'right', faceEffect:'glamour' },
-      { id:'blush',    name:'Blush',    css:'brightness(1.03) saturate(1.05)',                              dot:'linear-gradient(135deg,#ffb0b0,#e04060)',   side:'right', faceEffect:'blush'   },
-      { id:'mystere',  name:'Mystère',  css:'none',                                                         dot:'linear-gradient(135deg,#333,#000)',          side:'right', privacy:true, privacyType:'fixed' },
-    ];
-    let activeFilterId = 'naturel';
-
-    function getActiveFilter() {
-      return FILTERS.find(f => f.id === activeFilterId) || FILTERS[0];
-    }
-
-    /* =====================================================
-       MOTEUR BEAUTY v3 — WebGL cover-fit + MediaPipe
-       ===================================================== */
-
-    let gl = null, glCanvas = null, glRaf = null;
-    let glProgram = null, glVideoTex = null;
-    let glRunning = false;
-
-    let mpFaceMesh = null, mpReady = false, mpLoading = false, mpLoadFailed = false;
-    let lastFaceLandmarks = null, mpRafId = null;
-    let overlayCanvas = null, overlayCtx = null;
-    let mysteryBarEl = null;
-    let eyeBlurCanvas = null, eyeBlurCtx = null, eyeBlurRaf = null, eyeBlurMpRaf = null, eyeBlurActive = false;
-    let glassesEl = null, glassesRaf = null;
-
-    // ---- Vertex shader : cover-fit correct ----
-    // On calcule le crop dans le vertex shader pour que
-    // la vidéo remplisse le canvas sans déformation
-    const VS_SRC = `
-      attribute vec2 a_pos;
-      varying vec2 v_uv;
-      uniform vec2 u_scale;   // facteur de crop pour cover-fit
-      uniform vec2 u_offset;  // offset de centrage
-      uniform bool u_flip;
-      void main() {
-        // UV couvrant tout le canvas (0..1)
-        vec2 uv = vec2(a_pos.x * 0.5 + 0.5, 0.5 - a_pos.y * 0.5);
-        // Appliquer le cover-fit : crop + centrer
-        uv = uv * u_scale + u_offset;
-        // Miroir caméra frontale
-        if (u_flip) uv.x = 1.0 - uv.x;
-        v_uv = uv;
-        gl_Position = vec4(a_pos, 0.0, 1.0);
-      }
-    `;
-
-    // ---- Fragment shader : skin detection + lissage ----
-    const FS_SRC = `
-      precision mediump float;
-      uniform sampler2D u_video;
-      uniform vec2 u_px;
-      uniform float u_smooth;
-      uniform float u_bright;
-      uniform float u_warmth;
-      uniform float u_glow;
-      varying vec2 v_uv;
-
-      float isSkin(vec3 c) {
-        float y  =  0.299*c.r + 0.587*c.g + 0.114*c.b;
-        float cb = -0.169*c.r - 0.331*c.g + 0.500*c.b + 0.5;
-        float cr =  0.500*c.r - 0.419*c.g - 0.081*c.b + 0.5;
-        float inCb = step(0.73, cb) * (1.0 - step(0.92, cb));
-        float inCr = step(0.78, cr) * (1.0 - step(0.94, cr));
-        float inY  = step(0.12, y)  * (1.0 - step(0.98, y));
-        return clamp(inCb * inCr * inY, 0.0, 1.0);
-      }
-
-      vec3 smoothSkin(vec2 uv, float mask) {
-        if (mask < 0.01) return texture2D(u_video, uv).rgb;
-        vec3 col = vec3(0.0);
-        float total = 0.0;
-        // Kernel 7x7 avec rayon plus large pour lissage visible
-        for (int dx = -3; dx <= 3; dx++) {
-          for (int dy = -3; dy <= 3; dy++) {
-            float w = exp(-float(dx*dx + dy*dy) * 0.28);
-            vec2 off = vec2(float(dx), float(dy)) * u_px * 3.5;
-            vec3 s = texture2D(u_video, uv + off).rgb;
-            float ns = isSkin(s);
-            w *= (0.2 + 0.8 * ns);
-            col += s * w;
-            total += w;
-          }
-        }
-        col /= total;
-        // Double passe pour renforcer l'effet
-        vec3 col2 = vec3(0.0);
-        float total2 = 0.0;
-        for (int dx = -2; dx <= 2; dx++) {
-          for (int dy = -2; dy <= 2; dy++) {
-            float w = exp(-float(dx*dx + dy*dy) * 0.5);
-            vec2 off = vec2(float(dx), float(dy)) * u_px * 2.0;
-            vec3 s = texture2D(u_video, uv + off).rgb;
-            w *= (0.3 + 0.7 * isSkin(s));
-            col2 += s * w;
-            total2 += w;
-          }
-        }
-        col2 /= total2;
-        vec3 smoothed = mix(col, col2, 0.5);
-        vec3 orig = texture2D(u_video, uv).rgb;
-        return mix(orig, smoothed, mask * u_smooth);
-      }
-
-      void main() {
-        if (v_uv.x < 0.0 || v_uv.x > 1.0 || v_uv.y < 0.0 || v_uv.y > 1.0) {
-          gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-          return;
-        }
-        vec3 orig = texture2D(u_video, v_uv).rgb;
-        float skinVal = isSkin(orig);
-        vec3 col = smoothSkin(v_uv, skinVal);
-        float lum = dot(col, vec3(0.299, 0.587, 0.114));
-        float hilight = smoothstep(0.52, 0.82, lum) * skinVal;
-        col += hilight * u_glow * vec3(0.10, 0.08, 0.06);
-        col.r += skinVal * u_warmth * 0.035;
-        col.g += skinVal * u_warmth * 0.012;
-        col.b -= skinVal * u_warmth * 0.018;
-        col *= (1.0 + u_bright * 0.10);
-        gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
-      }
-    `;
-
-    function initWebGL() {
-      glCanvas = document.getElementById('filter-canvas');
-      if (!glCanvas) return false;
-      gl = glCanvas.getContext('webgl', {
-        antialias: false, alpha: false, preserveDrawingBuffer: true
-      });
-      if (!gl) return false;
-      const vs = compileShader(gl.VERTEX_SHADER, VS_SRC);
-      const fs = compileShader(gl.FRAGMENT_SHADER, FS_SRC);
-      if (!vs || !fs) { gl = null; return false; }
-      glProgram = gl.createProgram();
-      gl.attachShader(glProgram, vs);
-      gl.attachShader(glProgram, fs);
-      gl.linkProgram(glProgram);
-      if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS)) {
-        console.warn('GL link:', gl.getProgramInfoLog(glProgram));
-        gl = null; return false;
-      }
-      gl.useProgram(glProgram);
-      const buf = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      gl.bufferData(gl.ARRAY_BUFFER,
-        new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-      const loc = gl.getAttribLocation(glProgram, 'a_pos');
-      gl.enableVertexAttribArray(loc);
-      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-      glVideoTex = createTex();
-      return true;
-    }
-
-    function compileShader(type, src) {
-      const s = gl.createShader(type);
-      gl.shaderSource(s, src); gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-        console.warn('Shader:', gl.getShaderInfoLog(s)); return null;
-      }
-      return s;
-    }
-    function createTex() {
-      const t = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, t);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      return t;
-    }
-
-    // Calculer le cover-fit : scale + offset pour que la vidéo
-    // remplisse le canvas sans déformation (comme object-fit:cover)
-    function computeCoverFit(videoW, videoH, canvasW, canvasH) {
-      const videoRatio = videoW / videoH;
-      const canvasRatio = canvasW / canvasH;
-      let scaleX, scaleY, offsetX, offsetY;
-      if (videoRatio > canvasRatio) {
-        // Vidéo plus large → crop horizontal
-        scaleY = 1.0;
-        scaleX = canvasRatio / videoRatio;
-        offsetX = (1.0 - scaleX) / 2.0;
-        offsetY = 0.0;
-      } else {
-        // Vidéo plus haute → crop vertical
-        scaleX = 1.0;
-        scaleY = videoRatio / canvasRatio;
-        offsetX = 0.0;
-        offsetY = (1.0 - scaleY) / 2.0;
-      }
-      return { scaleX, scaleY, offsetX, offsetY };
-    }
-
-    function resizeGL() {
-      if (!glCanvas) return;
-      const W = window.innerWidth, H = window.innerHeight;
-      if (glCanvas.width !== W || glCanvas.height !== H) {
-        glCanvas.width = W; glCanvas.height = H;
-        if (gl) gl.viewport(0, 0, W, H);
-      }
-    }
-
-    const FILTER_PARAMS = {
-      naturel:  { smooth:0.0,  bright:0.0,  warmth:0.0,  glow:0.0  },
-      doux:     { smooth:1.0,  bright:0.20, warmth:0.15, glow:0.10 },
-      glamour:  { smooth:1.0,  bright:1.0,  warmth:1.0,  glow:1.0  },
-      blush:    { smooth:1.0,  bright:0.50, warmth:0.45, glow:0.55 },
-    };
-
-    function renderGLFrame() {
-      if (!glRunning) return;
-      const video = document.getElementById('camera-preview');
-      if (!gl || !video || video.readyState < 2) {
-        glRaf = requestAnimationFrame(renderGLFrame); return;
-      }
-      resizeGL();
-      const W = glCanvas.width, H = glCanvas.height;
-      const vW = video.videoWidth || W;
-      const vH = video.videoHeight || H;
-      const f = getActiveFilter();
-      const p = FILTER_PARAMS[f.id] || FILTER_PARAMS.naturel;
-      const { scaleX, scaleY, offsetX, offsetY } = computeCoverFit(vW, vH, W, H);
-
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, glVideoTex);
-      try { gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,video); } catch(e) {
-        glRaf = requestAnimationFrame(renderGLFrame); return;
-      }
-
-      gl.uniform1i(gl.getUniformLocation(glProgram,'u_video'), 0);
-      gl.uniform2f(gl.getUniformLocation(glProgram,'u_px'), 1/vW, 1/vH);
-      gl.uniform2f(gl.getUniformLocation(glProgram,'u_scale'), scaleX, scaleY);
-      gl.uniform2f(gl.getUniformLocation(glProgram,'u_offset'), offsetX, offsetY);
-      gl.uniform1i(gl.getUniformLocation(glProgram,'u_flip'), facingMode==='user'?1:0);
-      gl.uniform1f(gl.getUniformLocation(glProgram,'u_smooth'), p.smooth);
-      gl.uniform1f(gl.getUniformLocation(glProgram,'u_bright'), p.bright);
-      gl.uniform1f(gl.getUniformLocation(glProgram,'u_warmth'), p.warmth);
-      gl.uniform1f(gl.getUniformLocation(glProgram,'u_glow'),   p.glow);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      glRaf = requestAnimationFrame(renderGLFrame);
-    }
-
-    function startGLLoop() {
-      if (!gl) return;
-      resizeGL();
-      glCanvas.style.cssText = [
-        'position:absolute','inset:0','width:100%','height:100%',
-        'z-index:2','pointer-events:none','opacity:1','visibility:visible'
-      ].join(';');
-      glRunning = true;
-      if (glRaf) cancelAnimationFrame(glRaf);
-      glRaf = requestAnimationFrame(renderGLFrame);
-    }
-    function stopGLLoop() {
-      glRunning = false;
-      if (glRaf) { cancelAnimationFrame(glRaf); glRaf = null; }
-      if (glCanvas) { glCanvas.style.opacity='0'; glCanvas.style.visibility='hidden'; }
-    }
-
-    // ---- MediaPipe ----
-    function loadScript(src) {
-      return new Promise((res, rej) => {
-        if (document.querySelector(`script[src="${src}"]`)) { res(); return; }
-        const s = document.createElement('script');
-        s.src = src; s.crossOrigin = 'anonymous';
-        s.onload = res; s.onerror = rej;
-        document.head.appendChild(s);
-      });
-    }
-
-    async function loadMediaPipe() {
-      if (mpLoading||mpReady||mpLoadFailed) return;
-      mpLoading = true;
-      try {
-        await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js');
-        mpFaceMesh = new window.FaceMesh({
-          locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${f}`
-        });
-        mpFaceMesh.setOptions({
-          maxNumFaces:1, refineLandmarks:true,
-          minDetectionConfidence:0.55, minTrackingConfidence:0.5
-        });
-        mpFaceMesh.onResults(r => {
-          lastFaceLandmarks = r.multiFaceLandmarks?.[0] || null;
-        });
-        await mpFaceMesh.initialize();
-        mpReady = true; mpLoading = false;
-        startMPLoop();
-      } catch(e) {
-        console.warn('MediaPipe failed:', e);
-        mpLoadFailed = true; mpLoading = false;
-      }
-    }
-
-    let mpLastSend = 0, mpLoopActive = false;
-    function startMPLoop() {
-      if (!mpReady || mpLoopActive) return;
-      mpLoopActive = true;
-      const tick = async () => {
-        if (!mpLoopActive || !mpReady || !isFilterWithFaceEffect() || isPreviewOpen()) {
-          mpRafId = null; mpLoopActive = false; return;
-        }
-        const now = performance.now();
-        const video = document.getElementById('camera-preview');
-        if (video && video.readyState >= 2 && now - mpLastSend > 80) {
-          mpLastSend = now;
-          try { await mpFaceMesh.send({ image: video }); } catch(e) {}
-        }
-        if (!mpLoopActive) { mpRafId = null; return; }
-        resizeOverlayCanvas();
-        drawFaceEffects();
-        mpRafId = requestAnimationFrame(tick);
-      };
-      mpRafId = requestAnimationFrame(tick);
-    }
-    function stopMPLoop() {
-      mpLoopActive = false;
-      if (mpRafId) { cancelAnimationFrame(mpRafId); mpRafId = null; }
-      lastFaceLandmarks = null;
-      if (overlayCtx && overlayCanvas)
-        overlayCtx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);
-    }
-    function isFilterWithFaceEffect() {
-      const f = getActiveFilter();
-      return !!(f.faceEffect && !f.privacy);
-    }
-
-    function ensureOverlayCanvas() {
-      if (overlayCanvas) return;
-      overlayCanvas = document.createElement('canvas');
-      overlayCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;';
-      document.getElementById('camera-container').appendChild(overlayCanvas);
-      overlayCtx = overlayCanvas.getContext('2d');
-    }
-    function removeOverlayCanvas() {
-      if (overlayCanvas) { overlayCanvas.remove(); overlayCanvas = null; overlayCtx = null; }
-    }
-    function resizeOverlayCanvas() {
-      if (!overlayCanvas) return;
-      const W = window.innerWidth, H = window.innerHeight;
-      if (overlayCanvas.width!==W || overlayCanvas.height!==H) {
-        overlayCanvas.width=W; overlayCanvas.height=H;
-      }
-    }
-
-    // ---- Points MediaPipe ----
-    const MP_FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
-    const MP_LEFT_CHEEK = [116,123,147,213,192,214,212,216,206,203,36,101,119];
-    const MP_RIGHT_CHEEK = [345,352,376,433,411,434,432,436,426,423,266,330,348];
-    // Yeux avec landmarks raffinés
-    const MP_LEFT_EYE_INNER  = [133,173,157,158,159,160,161,246,33,7,163,144,145,153,154,155];
-    const MP_RIGHT_EYE_INNER = [362,382,381,380,374,373,390,249,263,466,388,387,386,385,384,398];
-    // Coins externes des yeux pour positionner les lunettes
-    const MP_LEFT_EYE_OUTER  = [33, 130, 226, 247, 30, 29, 27, 28, 56, 190];
-    const MP_RIGHT_EYE_OUTER = [263, 359, 446, 467, 260, 259, 257, 258, 286, 414];
-
-    function pt(lm, idx, W, H, flip) {
-      const p = lm[idx]; if (!p) return null;
-      return { x: flip ? W-p.x*W : p.x*W, y: p.y*H };
-    }
-    function getFaceCenter(lm, W, H, flip) {
-      const pts = MP_FACE_OVAL.map(i=>pt(lm,i,W,H,flip)).filter(Boolean);
-      if (!pts.length) return null;
-      const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
-      const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
-      const rx = Math.max(...pts.map(p=>Math.abs(p.x-cx)));
-      const ry = Math.max(...pts.map(p=>Math.abs(p.y-cy)));
-      return { cx, cy, rx, ry };
-    }
-    function getFaceOvalPath(ctx, lm, W, H, flip) {
-      const pts = MP_FACE_OVAL.map(i=>pt(lm,i,W,H,flip)).filter(Boolean);
-      if (pts.length<3) return false;
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x,pts[0].y);
-      for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
-      ctx.closePath(); return true;
-    }
-
-    // ---- Effets visage ----
-    function drawFaceEffects() {
-      if (!overlayCtx||!overlayCanvas) return;
-      const W=overlayCanvas.width, H=overlayCanvas.height;
-      overlayCtx.clearRect(0,0,W,H);
-      if (!lastFaceLandmarks||!lastFaceLandmarks.length) return;
-      const f = getActiveFilter();
-      const lm = lastFaceLandmarks;
-      const flip = facingMode==='user';
-
-      if (f.faceEffect==='rose')    { drawCheekBlush(lm,W,H,flip,240,130,140,0.20); }
-      if (f.faceEffect==='glamour') { drawCheekBlush(lm,W,H,flip,255,200,180,0.10); }
-      if (f.faceEffect==='blush')   { drawCheekBlush(lm,W,H,flip,220,100,120,0.24); }
-      if (f.faceEffect==='mascara') { drawEyeShadow(lm,W,H,flip); }
-      if (f.faceEffect==='dore')    { drawWarmGlow(lm,W,H,flip); }
-      // Lunettes pour Mystère (géré séparément via overlay)
-    }
-
-    function drawCheekBlush(lm,W,H,flip,r,g,b,alpha) {
-      const ctx=overlayCtx;
-      [MP_LEFT_CHEEK,MP_RIGHT_CHEEK].forEach(pts=>{
-        const points=pts.map(i=>pt(lm,i,W,H,flip)).filter(Boolean);
-        if(points.length<3) return;
-        const cx=points.reduce((s,p)=>s+p.x,0)/points.length;
-        const cy=points.reduce((s,p)=>s+p.y,0)/points.length;
-        const rad=Math.max(...points.map(p=>Math.sqrt((p.x-cx)**2+(p.y-cy)**2)))*1.4;
-        ctx.save(); ctx.filter='blur(8px)';
-        const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,rad);
-        grad.addColorStop(0,`rgba(${r},${g},${b},${alpha})`);
-        grad.addColorStop(0.5,`rgba(${r},${g},${b},${alpha*0.35})`);
-        grad.addColorStop(1,`rgba(${r},${g},${b},0)`);
-        ctx.fillStyle=grad;
-        ctx.beginPath(); ctx.arc(cx,cy,rad*1.2,0,Math.PI*2); ctx.fill();
-        ctx.restore();
-      });
-    }
-
-    function drawEyeShadow(lm,W,H,flip) {
-      const ctx=overlayCtx;
-      [MP_LEFT_EYE_INNER,MP_RIGHT_EYE_INNER].forEach(eyePts=>{
-        const pts=eyePts.map(i=>pt(lm,i,W,H,flip)).filter(Boolean);
-        if(pts.length<4) return;
-        const cx=pts.reduce((s,p)=>s+p.x,0)/pts.length;
-        const cy=pts.reduce((s,p)=>s+p.y,0)/pts.length;
-        const rad=Math.max(...pts.map(p=>Math.sqrt((p.x-cx)**2+(p.y-cy)**2)))*2.0;
-        ctx.save(); ctx.filter='blur(5px)';
-        const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,rad);
-        grad.addColorStop(0,'rgba(10,5,20,0.12)');
-        grad.addColorStop(0.5,'rgba(10,5,20,0.05)');
-        grad.addColorStop(1,'rgba(10,5,20,0)');
-        ctx.fillStyle=grad;
-        ctx.beginPath(); ctx.arc(cx,cy,rad,0,Math.PI*2); ctx.fill();
-        ctx.restore();
-      });
-    }
-
-    function drawWarmGlow(lm,W,H,flip) {
-      const face=getFaceCenter(lm,W,H,flip); if(!face) return;
-      const {cx,cy,rx,ry}=face; const ctx=overlayCtx;
-      ctx.save();
-      if(!getFaceOvalPath(ctx,lm,W,H,flip)){ctx.restore();return;}
-      ctx.clip();
-      const grad=ctx.createRadialGradient(cx,cy-ry*0.1,0,cx,cy,Math.max(rx,ry)*1.05);
-      grad.addColorStop(0,'rgba(255,210,140,0.13)');
-      grad.addColorStop(0.5,'rgba(255,200,120,0.06)');
-      grad.addColorStop(1,'rgba(255,200,120,0)');
-      ctx.fillStyle=grad; ctx.fillRect(0,0,W,H); ctx.restore();
-    }
-
-    // ---- Halo lumineux autour de la tête (ring light effect) ----
-
-    // ---- Mystère : ellipses fixes centrées ----
-    let fixedEllipsesEl = null;
-    function showFixedEllipses() {
-      if (fixedEllipsesEl) return;
-      fixedEllipsesEl = document.createElement('div');
-      fixedEllipsesEl.id = 'fixed-ellipses';
-      // Positionnement CSS pur — stable, zéro clignotement
-      fixedEllipsesEl.style.cssText = [
-        'position:absolute',
-        'top:0','left:0','right:0','bottom:0',
-        'z-index:4','pointer-events:none',
-        'display:flex',
-        'align-items:center',
-        'justify-content:center',
-        'gap:0',
-      ].join(';');
-
-      // Container pour les 2 ellipses côte à côte
-      const container = document.createElement('div');
-      container.style.cssText = [
-        'display:flex',
-        'align-items:center',
-        'justify-content:center',
-        'gap:0',
-        'margin-top:-8%', // légèrement au-dessus du centre (hauteur des yeux)
-      ].join(';');
-
-      // Taille des ellipses basée sur la largeur de l'écran
-      const size = Math.min(window.innerWidth * 0.26, 110);
-      const h = size * 0.68;
-
-      [0, 1].forEach(() => {
-        const ellipse = document.createElement('div');
-        ellipse.style.cssText = [
-          `width:${size}px`,
-          `height:${h}px`,
-          'border-radius:50%',
-          'background:rgba(0,0,0,0.92)',
-          'flex-shrink:0',
-          `margin:0 ${-size*0.05}px`, // léger chevauchement
-        ].join(';');
-        container.appendChild(ellipse);
-      });
-
-      fixedEllipsesEl.appendChild(container);
-      document.getElementById('camera-container').appendChild(fixedEllipsesEl);
-    }
-    function removeFixedEllipses() {
-      if (fixedEllipsesEl) { fixedEllipsesEl.remove(); fixedEllipsesEl = null; }
-    }
-    // Garder removeGlasses pour compatibilité
-    function removeGlasses() { removeFixedEllipses(); }
-    function showGlasses() {} // deprecated
-
-    // ---- Flou uniquement sur les yeux ----
-
-    function stopEyeBlur() {
-      if (eyeBlurRaf) { cancelAnimationFrame(eyeBlurRaf); eyeBlurRaf = null; }
-      if (eyeBlurCanvas) { eyeBlurCanvas.remove(); eyeBlurCanvas = null; eyeBlurCtx = null; }
-    }
-
-    function startMPLoopEyeBlur() {
-      if (!mpReady || eyeBlurActive) return;
-      eyeBlurActive = true;
-      const tick = async () => {
-        if (!eyeBlurActive || !eyeBlurCanvas || isPreviewOpen()) { eyeBlurMpRaf = null; eyeBlurActive = false; return; }
-        const now = performance.now();
-        const video = document.getElementById('camera-preview');
-        if (video && video.readyState >= 2 && now - mpLastSend > 80) {
-          mpLastSend = now;
-          try { await mpFaceMesh.send({ image: video }); } catch(e) {}
-        }
-        if (!eyeBlurActive) { eyeBlurMpRaf = null; return; }
-        drawEyeBlurOverlay();
-        eyeBlurMpRaf = requestAnimationFrame(tick);
-      };
-      eyeBlurMpRaf = requestAnimationFrame(tick);
-    }
-    function stopMPLoopEyeBlur() {
-      eyeBlurActive = false;
-      if (eyeBlurMpRaf) { cancelAnimationFrame(eyeBlurMpRaf); eyeBlurMpRaf = null; }
-    }
-
-    function ensureEyeBlurCanvas() {
-      if (eyeBlurCanvas) return;
-      eyeBlurCanvas = document.createElement('canvas');
-      eyeBlurCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;';
-      document.getElementById('camera-container').appendChild(eyeBlurCanvas);
-      eyeBlurCtx = eyeBlurCanvas.getContext('2d');
-    }
-
-    function drawEyeBlurOverlay() {
-      if (!eyeBlurCtx||!eyeBlurCanvas) return;
-      const W = window.innerWidth, H = window.innerHeight;
-      if (eyeBlurCanvas.width!==W||eyeBlurCanvas.height!==H) {
-        eyeBlurCanvas.width=W; eyeBlurCanvas.height=H;
-      }
-      eyeBlurCtx.clearRect(0,0,W,H);
-      if (!lastFaceLandmarks||!lastFaceLandmarks.length) return;
-      const lm = lastFaceLandmarks, flip = facingMode==='user';
-      const video = document.getElementById('camera-preview');
-      if (!video||video.readyState<2) return;
-
-      // Points des yeux
-      const lOuter = pt(lm,33,W,H,flip), lInner = pt(lm,133,W,H,flip);
-      const rInner = pt(lm,362,W,H,flip), rOuter = pt(lm,263,W,H,flip);
-      if (!lOuter||!lInner||!rInner||!rOuter) return;
-
-      const lCX=(lOuter.x+lInner.x)/2, lCY=(lOuter.y+lInner.y)/2;
-      const rCX=(rInner.x+rOuter.x)/2, rCY=(rInner.y+rOuter.y)/2;
-      const dist=Math.abs(rCX-lCX);
-      const rx=dist/2*1.05, ry=rx*0.72;
-      const angle=Math.atan2(rOuter.y-lOuter.y,rOuter.x-lOuter.x);
-
-      // Cover-fit vidéo
-      const vW=video.videoWidth||W, vH=video.videoHeight||H;
-      const vr=vW/vH, cr=W/H;
-      let sx=0,sy=0,sw=vW,sh=vH;
-      if(vr>cr){sw=vH*cr;sx=(vW-sw)/2;}else{sh=vW/cr;sy=(vH-sh)/2;}
-
-      // Canvas vidéo très floutée
-      const tmp = document.createElement('canvas');
-      tmp.width=W; tmp.height=H;
-      const tCtx = tmp.getContext('2d');
-      tCtx.save();
-      if(flip){tCtx.translate(W,0);tCtx.scale(-1,1);}
-      tCtx.filter = 'blur(20px)';
-      tCtx.drawImage(video,sx,sy,sw,sh,0,0,W,H);
-      tCtx.restore();
-      tCtx.filter = 'none';
-
-      // Dessiner les 2 ellipses floutées avec rotation
-      const ctx = eyeBlurCtx;
-      ctx.save();
-      ctx.translate(pivotX, pivotY(lCX,rCX,lCY,rCY));
-      ctx.rotate(angle);
-      ctx.translate(-pivotX, -pivotY(lCX,rCX,lCY,rCY));
-
-      [{ cx:lCX, cy:lCY }, { cx:rCX, cy:rCY }].forEach(eye => {
-        ctx.save();
-        // Clip ellipse
-        ctx.beginPath();
-        ctx.ellipse(eye.cx, eye.cy, rx, ry, 0, 0, Math.PI*2);
-        ctx.clip();
-        ctx.drawImage(tmp, 0, 0);
-        // Fondu sur les bords
-        const fade = ctx.createRadialGradient(eye.cx,eye.cy,Math.min(rx,ry)*0.4,eye.cx,eye.cy,Math.max(rx,ry));
-        fade.addColorStop(0,'rgba(0,0,0,0)');
-        fade.addColorStop(1,'rgba(0,0,0,1)');
-        ctx.globalCompositeOperation='destination-out';
-        ctx.fillStyle=fade;
-        ctx.beginPath();
-        ctx.ellipse(eye.cx, eye.cy, rx, ry, 0, 0, Math.PI*2);
-        ctx.fill();
-        ctx.globalCompositeOperation='source-over';
-        ctx.restore();
-      });
-      ctx.restore();
-    }
-    function pivotY(lCX,rCX,lCY,rCY){ return (lCY+rCY)/2; }
-    function pivotX(lCX,rCX){ return (lCX+rCX)/2; }
-
-    function startGlassesLoop() {
-      if (glassesActive) return;
-      glassesActive = true;
-      let lastDraw = 0;
-      const tick = async () => {
-        if (!glassesActive || isPreviewOpen()) {
-          glassesRaf = null; glassesActive = false; removeGlasses(); return;
-        }
-        const now = performance.now();
-        const video = document.getElementById('camera-preview');
-        // Si on enregistre : ne plus mettre à jour les ellipses
-        // elles restent figées à la dernière position — pas de clignotement
-        if (!isRecording) {
-          if (mpReady && video && video.readyState >= 2 && now - mpLastSend > 66) {
-            mpLastSend = now;
-            try { await mpFaceMesh.send({ image: video }); } catch(e) {}
-          }
-          if (!glassesActive || isPreviewOpen()) {
-            glassesRaf = null; glassesActive = false; removeGlasses(); return;
-          }
-          if (lastFaceLandmarks && mpReady && now - lastDraw > 50) {
-            lastDraw = now;
-            const W = window.innerWidth, H = window.innerHeight;
-            showGlasses(lastFaceLandmarks, W, H, facingMode === 'user');
-            removeMysteryBar();
-          }
-        }
-        glassesRaf = requestAnimationFrame(tick);
-      };
-      glassesRaf = requestAnimationFrame(tick);
-    }
-    function stopGlassesLoop() {
-      glassesActive = false;
-      if (glassesRaf) { cancelAnimationFrame(glassesRaf); glassesRaf = null; }
-      removeGlasses();
-    }
-
-    // ---- Barre Mystère (fallback si pas de MediaPipe) ----
-    function showMysteryBar() {
-      if (mysteryBarEl) return;
-      mysteryBarEl = document.createElement('div');
-      mysteryBarEl.id = 'mystery-bar';
-      mysteryBarEl.style.cssText = 'position:absolute;top:28%;left:8%;right:8%;height:12%;border-radius:120px;background:linear-gradient(135deg,rgba(0,0,0,0.92),rgba(20,20,20,0.88));z-index:4;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.06);';
-      const shine = document.createElement('div');
-      shine.style.cssText = 'position:absolute;top:0;left:0;right:0;height:40%;border-radius:120px 120px 0 0;background:linear-gradient(180deg,rgba(255,255,255,0.08),transparent);';
-      mysteryBarEl.appendChild(shine);
-      document.getElementById('camera-container').appendChild(mysteryBarEl);
-    }
-    function removeMysteryBar() {
-      if (mysteryBarEl) { mysteryBarEl.remove(); mysteryBarEl = null; }
-    }
-
-    // ---- applyFilter ----
-    function applyFilter(filterId) {
-      activeFilterId = filterId;
-      const f = getActiveFilter();
-      const video = document.getElementById('camera-preview');
-
-      // Stop tout
-      stopGLLoop(); stopMPLoop(); stopGlassesLoop();
-      stopEyeBlur(); stopMPLoopEyeBlur();
-      removeMysteryBar(); removeGlasses(); removeOverlayCanvas();
-      if (video) video.style.filter = 'none';
-
-      if (f.id === 'naturel') {
-        // Vidéo brute
-      } else if (f.privacy && f.privacyType === 'fixed') {
-        // Mystère : 2 ellipses noires fixes centrées — pas de MediaPipe
-        showFixedEllipses();
-      } else {
-        // Filtre WebGL skin smoothing
-        if (gl) startGLLoop();
-        else if (video && f.css !== 'none') video.style.filter = f.css;
-        // Effets visage MediaPipe si disponible
-        if (f.faceEffect) {
-          ensureOverlayCanvas(); resizeOverlayCanvas();
-          if (!mpReady && !mpLoadFailed) loadMediaPipe();
-          else if (mpReady) startMPLoop();
-        }
-      }
-
-      // CSS colorimétrie pour les filtres de gauche (sans WebGL)
-      if (f.side === 'left' && video && f.css !== 'none') {
-        stopGLLoop();
-        video.style.filter = f.css;
-      }
-
-      document.querySelectorAll('.filter-chip').forEach(chip => {
-        const sel = chip.dataset.filterId === filterId;
-        chip.querySelector('.filter-thumb')?.classList.toggle('selected', sel);
-        chip.querySelector('.filter-label')?.classList.toggle('selected', sel);
-      });
-    }
-
-    function buildFilterBar() {
-      const bar = document.getElementById('filter-bar');
-      bar.innerHTML = '';
-
-      // Séparer les filtres par côté
-      const leftFilters   = FILTERS.filter(f => f.side === 'left');
-      const centerFilters = FILTERS.filter(f => f.side === 'center');
-      const rightFilters  = FILTERS.filter(f => f.side === 'right');
-
-      // Construire dans l'ordre : gauche, centre, droite
-      [...leftFilters, ...centerFilters, ...rightFilters].forEach(f => {
-        const chip = document.createElement('div');
-        chip.className = 'filter-chip'; chip.dataset.filterId = f.id;
-
-        const thumb = document.createElement('div');
-        thumb.className = 'filter-thumb' + (f.id === activeFilterId ? ' selected' : '');
-
-        if (f.id === 'naturel') {
-          thumb.style.background = 'transparent';
-        } else {
-          const dot = document.createElement('div');
-          dot.style.cssText = 'width:100%;height:100%;border-radius:50%;background:' + f.dot + ';';
-          thumb.appendChild(dot);
-        }
-
-        const label = document.createElement('div');
-        label.className = 'filter-label' + (f.id === activeFilterId ? ' selected' : '');
-        label.textContent = f.name;
-
-        chip.appendChild(thumb); chip.appendChild(label);
-        chip.addEventListener('click', () => applyFilter(f.id));
-        bar.appendChild(chip);
-      });
-
-      // Padding dynamique pour centrer Naturel avec le bouton record
-      requestAnimationFrame(() => {
-        const naturalChip = bar.querySelector('[data-filter-id="naturel"]');
-        const container = bar.parentElement;
-        if (!naturalChip || !container) return;
-        const containerW = container.offsetWidth;
-        const leftFiltersW = Array.from(bar.children)
-          .filter(c => {
-            const fid = c.dataset.filterId;
-            const f = FILTERS.find(f => f.id === fid);
-            return f && f.side === 'left';
-          })
-          .reduce((sum, c) => sum + c.offsetWidth + 12, 0);
-        // Padding gauche = moitié écran - largeur filtres gauche - moitié chip naturel
-        const paddingLeft = Math.max(16, containerW/2 - leftFiltersW - naturalChip.offsetWidth/2);
-        const rightFiltersW = Array.from(bar.children)
-          .filter(c => {
-            const fid = c.dataset.filterId;
-            const f = FILTERS.find(f => f.id === fid);
-            return f && f.side === 'right';
-          })
-          .reduce((sum, c) => sum + c.offsetWidth + 12, 0);
-        const paddingRight = Math.max(16, containerW/2 - rightFiltersW - naturalChip.offsetWidth/2);
-        bar.style.paddingLeft = paddingLeft + 'px';
-        bar.style.paddingRight = paddingRight + 'px';
-        // Scroll pour que Naturel soit centré
-        container.scrollLeft = naturalChip.offsetLeft - containerW/2 + naturalChip.offsetWidth/2;
-      });
-    }
-
-    function positionFilterBar() {
-      const container = document.getElementById('filter-bar-container');
-      if (!container) return;
-      const bottomBar = document.querySelector('.bottom-bar');
-      if (!bottomBar) return;
-      container.style.bottom = (bottomBar.offsetHeight || 130) + 'px';
-    }
-
-    // ---- Enregistrement ----
-    let recRafId = null;
-    function stopCanvasCapture() {
-      if (recRafId) { cancelAnimationFrame(recRafId); recRafId = null; }
-    }
-
-    function getRecordingStream() {
-      const f = getActiveFilter();
-      if (!mediaStream) return mediaStream;
-      if (f.id === 'naturel') return mediaStream;
-
-      // Flou yeux : composite vidéo + eyeBlurCanvas
-      if (f.privacy && f.privacyType === 'blur' && eyeBlurCanvas) {
-        try {
-          const comp = document.createElement('canvas');
-          comp.width = window.innerWidth; comp.height = window.innerHeight;
-          const cCtx = comp.getContext('2d');
-          const video = document.getElementById('camera-preview');
-          function drawEyeComp() {
-            if (!isRecording) return;
-            if (video && video.readyState >= 2) {
-              const W=comp.width,H=comp.height,vw=video.videoWidth,vh=video.videoHeight;
-              if(vw&&vh){
-                cCtx.save();
-                if(facingMode==='user'){cCtx.translate(W,0);cCtx.scale(-1,1);}
-                const vr=vw/vh,cr=W/H;
-                let sx=0,sy=0,sw=vw,sh=vh;
-                if(vr>cr){sw=vh*cr;sx=(vw-sw)/2;}else{sh=vw/cr;sy=(vh-sh)/2;}
-                cCtx.drawImage(video,sx,sy,sw,sh,0,0,W,H);
-                cCtx.restore();
-                if(eyeBlurCanvas) cCtx.drawImage(eyeBlurCanvas,0,0);
-              }
-            }
-            recRafId = requestAnimationFrame(drawEyeComp);
-          }
-          recRafId = requestAnimationFrame(drawEyeComp);
-          const s = comp.captureStream(30);
-          mediaStream.getAudioTracks().forEach(t=>s.addTrack(t));
-          return s;
-        } catch(e) { return mediaStream; }
-      }
-
-      // Mystère lunettes : composite GL + SVG
-      if (f.privacy) {
-        try {
-          const comp = document.createElement('canvas');
-          comp.width = window.innerWidth; comp.height = window.innerHeight;
-          const cCtx = comp.getContext('2d');
-          const video = document.getElementById('camera-preview');
-          function drawGlassComp() {
-            if (!isRecording) return;
-            if (video && video.readyState >= 2) {
-              const W=comp.width,H=comp.height,vw=video.videoWidth,vh=video.videoHeight;
-              if(vw&&vh){
-                cCtx.save();
-                if(facingMode==='user'){cCtx.translate(W,0);cCtx.scale(-1,1);}
-                const vr=vw/vh,cr=W/H;
-                let sx=0,sy=0,sw=vw,sh=vh;
-                if(vr>cr){sw=vh*cr;sx=(vw-sw)/2;}else{sh=vw/cr;sy=(vh-sh)/2;}
-                cCtx.drawImage(video,sx,sy,sw,sh,0,0,W,H);
-                cCtx.restore();
-              }
-              // Dessiner les lunettes via canvas depuis SVG
-              if (glassesEl) {
-                try {
-                  const svgStr = new XMLSerializer().serializeToString(glassesEl);
-                  const blob = new Blob([svgStr],{type:'image/svg+xml'});
-                  const url = URL.createObjectURL(blob);
-                  const img = new Image();
-                  img.onload = () => { cCtx.drawImage(img,0,0); URL.revokeObjectURL(url); };
-                  img.src = url;
-                } catch(e) {}
-              }
-            }
-            recRafId = requestAnimationFrame(drawGlassComp);
-          }
-          recRafId = requestAnimationFrame(drawGlassComp);
-          const s = comp.captureStream(30);
-          mediaStream.getAudioTracks().forEach(t=>s.addTrack(t));
-          return s;
-        } catch(e) { return mediaStream; }
-      }
-
-      // Filtre beauté : GL + overlay
-      if (gl && glCanvas && glRunning) {
-        try {
-          const comp = document.createElement('canvas');
-          comp.width = window.innerWidth; comp.height = window.innerHeight;
-          const cCtx = comp.getContext('2d');
-          function drawBeautyComp() {
-            if (!isRecording) return;
-            cCtx.drawImage(glCanvas,0,0,comp.width,comp.height);
-            if (overlayCanvas) cCtx.drawImage(overlayCanvas,0,0);
-            recRafId = requestAnimationFrame(drawBeautyComp);
-          }
-          recRafId = requestAnimationFrame(drawBeautyComp);
-          const s = comp.captureStream(30);
-          mediaStream.getAudioTracks().forEach(t=>s.addTrack(t));
-          return s;
-        } catch(e) {}
-      }
-      return mediaStream;
-    }
-
-    function startFilterLoop() {
-      const f = getActiveFilter();
-      if (f.id === 'naturel') return;
-      if (f.privacy && f.privacyType === 'bar') {
-        showMysteryBar();
-        if (mpReady) startGlassesLoop();
-        else if (!mpLoadFailed) loadMediaPipe().then(()=>{ if(mpReady) startGlassesLoop(); });
-        return;
-      }
-      if (f.privacy && f.privacyType === 'blur') {
-        ensureEyeBlurCanvas();
-        if (mpReady) startMPLoopEyeBlur();
-        else if (!mpLoadFailed) loadMediaPipe().then(()=>{ if(mpReady) startMPLoopEyeBlur(); });
-        return;
-      }
-      if (gl) startGLLoop();
-      else { const v=document.getElementById('camera-preview'); if(v&&f.css!=='none') v.style.filter=f.css; }
-      if (f.faceEffect) {
-        ensureOverlayCanvas(); resizeOverlayCanvas();
-        if (mpReady) startMPLoop();
-        else if (!mpLoadFailed) loadMediaPipe();
-      }
-    }
-
-    function stopFilterLoop() {
-      stopGLLoop(); stopMPLoop(); stopGlassesLoop();
-      stopEyeBlur(); stopMPLoopEyeBlur(); stopCanvasCapture();
-      removeOverlayCanvas(); removeGlasses(); removeFixedEllipses(); removeMysteryBar();
-      const video = document.getElementById('camera-preview');
-      if (video) video.style.filter = 'none';
-    }
-
-    /* =====================================================
-       Variables globales originales
-       ===================================================== */
     const cameraPreview = document.getElementById('camera-preview');
     const previewVideo = document.getElementById('preview-video');
     const previewOverlay = document.getElementById('preview-overlay');
@@ -1756,7 +1005,6 @@
         pendingRecordUI = false;
       }
       scheduleSafeMusicPreload();
-      startFilterLoop();
     };
     cameraPreview.addEventListener('loadeddata', markCameraReady);
 
@@ -1772,6 +1020,7 @@
     let cameraReady = false;
     let pendingRecordUI = false;
 
+    // --- MUSIQUE ---
     const DEFAULT_MUSIC_OPTIONS = [
       { id: 'default', title: 'Default music', artist: 'Feednly', url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3' }
     ];
@@ -1975,6 +1224,9 @@
       return `${Math.floor(totalSeconds / 60)}:${(totalSeconds % 60).toString().padStart(2, '0')}`;
     }
 
+    /* =====================================================
+       THUMBNAIL
+       ===================================================== */
     const DEFAULT_THUMBNAIL_TIME = 0.5;
 
     function updateThumbnailTimeLabel(timeSeconds) {
@@ -2015,15 +1267,25 @@
     }
 
     function resizeThumbnailCanvases() {
-      if (thumbnailCanvas) { thumbnailCanvas.width = 140; thumbnailCanvas.height = 190; }
-      if (thumbnailCanvasSheet) { thumbnailCanvasSheet.width = 720; thumbnailCanvasSheet.height = 1280; thumbnailCanvasSheet.style.width = '100%'; thumbnailCanvasSheet.style.height = 'auto'; }
+      if (thumbnailCanvas) {
+        thumbnailCanvas.width = 140;
+        thumbnailCanvas.height = 190;
+      }
+      if (thumbnailCanvasSheet) {
+        thumbnailCanvasSheet.width = 720;
+        thumbnailCanvasSheet.height = 1280;
+        thumbnailCanvasSheet.style.width = '100%';
+        thumbnailCanvasSheet.style.height = 'auto';
+      }
     }
 
     function requestDrawThumbnail(targetCanvas = 'both') {
       if (thumbnailDrawRaf !== null) return;
       thumbnailDrawRaf = requestAnimationFrame(() => {
         thumbnailDrawRaf = null;
-        if (targetCanvas === 'both') drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas);
+        if (targetCanvas === 'both') {
+          drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas);
+        }
         drawThumbnailToCanvas(thumbnailCtxSheet, thumbnailCanvasSheet);
       });
     }
@@ -2052,6 +1314,9 @@
       setSelectedThumbnail(nextTime);
     }
 
+    /* =====================================================
+       POSITIONNEMENT DYNAMIQUE
+       ===================================================== */
     const videoProgressFill = document.getElementById('video-progress-fill');
     const videoProgressBar = document.getElementById('video-progress-bar');
     const videoProgressThumb = document.getElementById('video-progress-thumb');
@@ -2087,28 +1352,69 @@
       const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
       const dur = previewVideo.duration;
       if (!dur || isNaN(dur)) return;
-      previewVideo.currentTime = pct * dur;
+      const newTime = pct * dur;
+      previewVideo.currentTime = newTime;
       videoProgressFill.style.width = (pct * 100) + '%';
       if (videoProgressThumb) videoProgressThumb.style.left = (pct * 100) + '%';
     }
 
     if (videoProgressBar) {
-      videoProgressBar.addEventListener('pointerdown', (e) => { e.preventDefault(); isDraggingProgress = true; videoProgressBar.classList.add('dragging'); videoProgressBar.setPointerCapture?.(e.pointerId); seekVideoFromClientX(e.clientX); }, { passive: false });
-      videoProgressBar.addEventListener('pointermove', (e) => { if (!isDraggingProgress) return; e.preventDefault(); seekVideoFromClientX(e.clientX); }, { passive: false });
-      const endProgressDrag = (e) => { if (!isDraggingProgress) return; isDraggingProgress = false; videoProgressBar.classList.remove('dragging'); videoProgressBar.releasePointerCapture?.(e.pointerId); };
+      videoProgressBar.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        isDraggingProgress = true;
+        videoProgressBar.classList.add('dragging');
+        videoProgressBar.setPointerCapture?.(e.pointerId);
+        seekVideoFromClientX(e.clientX);
+      }, { passive: false });
+
+      videoProgressBar.addEventListener('pointermove', (e) => {
+        if (!isDraggingProgress) return;
+        e.preventDefault();
+        seekVideoFromClientX(e.clientX);
+      }, { passive: false });
+
+      const endProgressDrag = (e) => {
+        if (!isDraggingProgress) return;
+        isDraggingProgress = false;
+        videoProgressBar.classList.remove('dragging');
+        videoProgressBar.releasePointerCapture?.(e.pointerId);
+      };
       videoProgressBar.addEventListener('pointerup', endProgressDrag);
       videoProgressBar.addEventListener('pointercancel', endProgressDrag);
-      videoProgressBar.addEventListener('touchstart', (e) => { e.preventDefault(); isDraggingProgress = true; videoProgressBar.classList.add('dragging'); const touch = e.touches[0]; if (touch) seekVideoFromClientX(touch.clientX); }, { passive: false });
-      videoProgressBar.addEventListener('touchmove', (e) => { e.preventDefault(); const touch = e.touches[0]; if (touch) seekVideoFromClientX(touch.clientX); }, { passive: false });
-      videoProgressBar.addEventListener('touchend', (e) => { isDraggingProgress = false; videoProgressBar.classList.remove('dragging'); const touch = e.changedTouches?.[0]; if (touch) seekVideoFromClientX(touch.clientX); }, { passive: false });
+
+      videoProgressBar.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isDraggingProgress = true;
+        videoProgressBar.classList.add('dragging');
+        const touch = e.touches[0];
+        if (touch) seekVideoFromClientX(touch.clientX);
+      }, { passive: false });
+
+      videoProgressBar.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        if (touch) seekVideoFromClientX(touch.clientX);
+      }, { passive: false });
+
+      videoProgressBar.addEventListener('touchend', (e) => {
+        isDraggingProgress = false;
+        videoProgressBar.classList.remove('dragging');
+        const touch = e.changedTouches?.[0];
+        if (touch) seekVideoFromClientX(touch.clientX);
+      }, { passive: false });
     }
 
     function positionPreviewOverlays() {
       const actionsH = previewActions?.offsetHeight || 86;
+      // FIX: progress bar positionnée juste au-dessus des boutons
       if (videoProgressBar) videoProgressBar.style.bottom = `${actionsH}px`;
+      // Miniature : au-dessus de la barre de progression
       if (thumbnailBtnOverlay) thumbnailBtnOverlay.style.bottom = `${actionsH + 28 + 6}px`;
     }
 
+    /* =====================================================
+       THUMBNAIL SHEET
+       ===================================================== */
     function openThumbnailSheet() {
       thumbnailSheet?.classList.add('active');
       if (previewVideo && !previewVideo.paused) previewVideo.pause();
@@ -2120,7 +1426,9 @@
       if (previewVideo && previewVideo.paused) {
         previewVideo.muted = true;
         previewVideo.play().then(() => {
-          if (!videoMediaSource) connectVideoToAudioGraph();
+          if (!videoMediaSource) {
+            connectVideoToAudioGraph();
+          }
           applyOriginalVolume(originalVolume);
           restartMusicSync();
         }).catch(() => {});
@@ -2144,13 +1452,18 @@
     }
 
     previewVideo.addEventListener('seeked', () => {
-      if (thumbnailSheet?.classList.contains('active')) requestDrawThumbnail('sheet');
+      if (thumbnailSheet?.classList.contains('active')) {
+        requestDrawThumbnail('sheet');
+      }
     });
     previewVideo.addEventListener('loadeddata', () => {
       resizeThumbnailCanvases();
       requestDrawThumbnail();
     });
 
+    /* =====================================================
+       VOLUME SON ORIGINAL
+       ===================================================== */
     let micUnlockSource = null;
     function unlockAudioContextViaStream(stream) {
       if (!stream || !stream.active) return;
@@ -2162,7 +1475,10 @@
         silentGain.gain.value = 0;
         src.connect(silentGain);
         micUnlockSource = src;
-        setTimeout(() => { try { src.disconnect(); silentGain.disconnect(); } catch(e) {} micUnlockSource = null; }, 500);
+        setTimeout(() => {
+          try { src.disconnect(); silentGain.disconnect(); } catch(e) {}
+          micUnlockSource = null;
+        }, 500);
       } catch(e) {}
     }
 
@@ -2171,7 +1487,9 @@
       try {
         const audioCtx = ensureMusicAudioContext();
         if (!audioCtx) return;
-        if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume().catch(() => {});
+        }
         videoGainNode = audioCtx.createGain();
         videoGainNode.gain.value = clampVolume(originalVolume);
         videoGainNode.connect(audioCtx.destination);
@@ -2180,7 +1498,8 @@
         previewVideo.muted = false;
         previewVideo.volume = 1;
       } catch(e) {
-        videoMediaSource = null; videoGainNode = null;
+        videoMediaSource = null;
+        videoGainNode = null;
         previewVideo.muted = false;
         try { previewVideo.volume = clampVolume(originalVolume); } catch(_) {}
       }
@@ -2197,15 +1516,24 @@
       const clamped = clampVolume(Number.isFinite(value) ? value : 1);
       originalVolume = clamped;
       isOriginalMuted = clamped === 0;
+
       if (videoGainNode) {
         const audioCtx = ensureMusicAudioContext();
-        if (audioCtx) videoGainNode.gain.setTargetAtTime(clamped, audioCtx.currentTime, 0.01);
-        else videoGainNode.gain.value = clamped;
+        if (audioCtx) {
+          videoGainNode.gain.setTargetAtTime(clamped, audioCtx.currentTime, 0.01);
+        } else {
+          videoGainNode.gain.value = clamped;
+        }
         previewVideo.muted = false;
       } else {
-        if (clamped === 0) previewVideo.muted = true;
-        else { previewVideo.muted = false; try { previewVideo.volume = clamped; } catch(e) {} }
+        if (clamped === 0) {
+          previewVideo.muted = true;
+        } else {
+          previewVideo.muted = false;
+          try { previewVideo.volume = clamped; } catch(e) {}
+        }
       }
+
       if (syncInput && originalVolumeSlider) originalVolumeSlider.value = String(clamped);
       if (originalVolumeValue) originalVolumeValue.textContent = Math.round(clamped * 100);
       updateMicIcon();
@@ -2214,21 +1542,42 @@
     function updateMicIcon() {
       if (!micIconOn || !micIconOff || !originalMuteBtn) return;
       if (isOriginalMuted || originalVolume === 0) {
-        micIconOn.style.display = 'none'; micIconOff.style.display = 'block'; originalMuteBtn.classList.add('muted');
+        micIconOn.style.display = 'none';
+        micIconOff.style.display = 'block';
+        originalMuteBtn.classList.add('muted');
       } else {
-        micIconOn.style.display = 'block'; micIconOff.style.display = 'none'; originalMuteBtn.classList.remove('muted');
+        micIconOn.style.display = 'block';
+        micIconOff.style.display = 'none';
+        originalMuteBtn.classList.remove('muted');
       }
     }
 
     let originalVolumeBeforeMute = 1;
+
     originalMuteBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (!isOriginalMuted && originalVolume > 0) { originalVolumeBeforeMute = originalVolume || 1; applyOriginalVolume(0); }
-      else applyOriginalVolume(originalVolumeBeforeMute || 1);
+      if (!isOriginalMuted && originalVolume > 0) {
+        originalVolumeBeforeMute = originalVolume || 1;
+        applyOriginalVolume(0);
+      } else {
+        applyOriginalVolume(originalVolumeBeforeMute || 1);
+      }
     });
-    originalVolumeSlider?.addEventListener('input', (e) => { const val = parseFloat(e.target.value); if (val > 0) originalVolumeBeforeMute = val; applyOriginalVolume(val, { syncInput: false }); });
-    originalVolumeSlider?.addEventListener('change', (e) => { const val = parseFloat(e.target.value); if (val > 0) originalVolumeBeforeMute = val; applyOriginalVolume(val, { syncInput: false }); });
 
+    originalVolumeSlider?.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      if (val > 0) originalVolumeBeforeMute = val;
+      applyOriginalVolume(val, { syncInput: false });
+    });
+    originalVolumeSlider?.addEventListener('change', (e) => {
+      const val = parseFloat(e.target.value);
+      if (val > 0) originalVolumeBeforeMute = val;
+      applyOriginalVolume(val, { syncInput: false });
+    });
+
+    /* =====================================================
+       SYNC MUSIQUE ↔ VIDÉO EN BOUCLE
+       ===================================================== */
     function restartMusicSync() {
       if (!selectedMusicId || !musicEngine) return;
       const { start, end } = getLoopBounds();
@@ -2240,22 +1589,36 @@
           musicEngine.playImmediateFromCache(music.url, start, end, { id: music.id })
             || musicEngine.playBufferAudio(music.url, start, end, { id: music.id });
         }
-      } else musicEngine.seek(start);
+      } else {
+        musicEngine.seek(start);
+      }
     }
 
-    previewVideo.addEventListener('play', () => { if (selectedMusicId) restartMusicSync(); startVideoProgress(); });
-    previewVideo.addEventListener('pause', () => { if (videoProgressRaf) cancelAnimationFrame(videoProgressRaf); });
+    previewVideo.addEventListener('play', () => {
+      if (selectedMusicId) restartMusicSync();
+      startVideoProgress();
+    });
+
+    previewVideo.addEventListener('pause', () => {
+      if (videoProgressRaf) cancelAnimationFrame(videoProgressRaf);
+    });
 
     let lastVideoTime = 0;
     previewVideo.addEventListener('timeupdate', () => {
       const ct = previewVideo.currentTime;
       const dur = previewVideo.duration;
       if (lastVideoTime > 0 && ct < lastVideoTime - 0.5 && dur > 0) {
-        if (selectedMusicId && musicEngine?.isPlaying) { const { start } = getLoopBounds(); musicEngine.seek(start); }
+        if (selectedMusicId && musicEngine?.isPlaying) {
+          const { start, end } = getLoopBounds();
+          musicEngine.seek(start);
+        }
       }
       lastVideoTime = ct;
     });
 
+    /* =====================================================
+       UPLOAD PROGRESS
+       ===================================================== */
     function setUploadMixingState(isMixing) { if (!uploadText) return; uploadText.classList.toggle('show-mixing', Boolean(isMixing)); }
     function setUploadStatusText(text) { if (uploadProgressText) uploadProgressText.textContent = text; setUploadMixingState(false); }
     function setUploadProgress(percent) {
@@ -2364,22 +1727,37 @@
       const rect = waveformVisual.getBoundingClientRect();
       const x = Math.min(Math.max(clientX - rect.left, 0), rect.width);
       musicStartTime = (x / rect.width) * currentMusicDuration;
-      clampStartForVideoDuration(); updateWaveformProgress(); updatePositionLabel();
+      clampStartForVideoDuration();
+      updateWaveformProgress();
+      updatePositionLabel();
+
       if (!musicEngine) return;
       const { start, end } = getLoopBounds();
+
       if (!final) {
         if (waveformSeekRaf) return;
         waveformSeekRaf = requestAnimationFrame(() => {
           waveformSeekRaf = null;
-          if (musicEngine.isPlaying) { const src = musicEngine._getSourceNode?.(); if (src) { try { src.loopStart = Math.max(0, start); src.loopEnd = Math.max(start + 0.05, end); } catch(e) {} } }
+          if (musicEngine.isPlaying) {
+            const src = musicEngine._getSourceNode?.();
+            if (src) {
+              try {
+                src.loopStart = Math.max(0, start);
+                src.loopEnd = Math.max(start + 0.05, end);
+              } catch(e) {}
+            }
+          }
         });
         return;
       }
+
       musicEngine.updateLoop(start, end);
       if (musicEngine.isPlaying) musicEngine.seek(start);
     }
 
-    function handleWaveformInteraction(clientX) { updateStartFromClientX(clientX, { final: true }); }
+    function handleWaveformInteraction(clientX) {
+      updateStartFromClientX(clientX, { final: true });
+    }
     function normalizeTag(tag) { return String(tag || '').trim().toLowerCase(); }
     function isDefaultTag(tag) { return !tag || tag === DEFAULT_TAG_VALUE; }
     function resetFilterTag() { activeTag = DEFAULT_TAG_VALUE; renderFilterTags(); renderMusicList(musicSearchInput.value); }
@@ -2402,10 +1780,13 @@
       });
     }
 
+    /* FIX: debounce pour la recherche — évite les lags et bugs d'affichage */
     let musicSearchDebounceTimer = null;
     function debouncedRenderMusicList(query) {
       clearTimeout(musicSearchDebounceTimer);
-      musicSearchDebounceTimer = setTimeout(() => renderMusicList(query), 120);
+      musicSearchDebounceTimer = setTimeout(() => {
+        renderMusicList(query);
+      }, 120);
     }
 
     function renderMusicList(filter = '') {
@@ -2473,7 +1854,12 @@
         };
         item.appendChild(cover); item.appendChild(meta); item.appendChild(duration); item.appendChild(playBtn);
         item.addEventListener('pointerdown', () => ensureAudioReady(), { once: true, passive: true });
-        item.onclick = (e) => { if (e.target.closest('.icon-btn')) return; e.stopPropagation(); selectMusic(opt); startMusicPreview(opt); };
+        item.onclick = (e) => {
+          if (e.target.closest('.icon-btn')) return;
+          e.stopPropagation();
+          selectMusic(opt);
+          startMusicPreview(opt);
+        };
         fragment.appendChild(item);
       });
       musicListEl.appendChild(fragment);
@@ -2544,6 +1930,9 @@
       if (musicEngine?.clearBuffer) musicEngine.clearBuffer();
     }
 
+    /* =====================================================
+       PREVIEW SOURCE MODE
+       ===================================================== */
     function setPreviewVideoVisibility(isVisible) {
       if (!previewVideo) return;
       if (isVisible) { previewVideo.hidden = false; previewVideo.style.display = 'block'; return; }
@@ -2693,24 +2082,54 @@
     });
 
     if (waveformVisual) {
-      waveformVisual.addEventListener('pointerdown', (e) => { e.preventDefault(); isDraggingWaveform = true; waveformVisual.setPointerCapture?.(e.pointerId); updateStartFromClientX(e.clientX); }, { passive: false });
-      waveformVisual.addEventListener('pointermove', (e) => { if (!isDraggingWaveform) return; e.preventDefault(); updateStartFromClientX(e.clientX); }, { passive: false });
+      waveformVisual.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        isDraggingWaveform = true;
+        waveformVisual.setPointerCapture?.(e.pointerId);
+        updateStartFromClientX(e.clientX);
+      }, { passive: false });
+      waveformVisual.addEventListener('pointermove', (e) => {
+        if (!isDraggingWaveform) return;
+        e.preventDefault();
+        updateStartFromClientX(e.clientX);
+      }, { passive: false });
       const endDrag = (e) => {
-        if (!isDraggingWaveform) return; isDraggingWaveform = false; waveformVisual.releasePointerCapture?.(e.pointerId);
+        if (!isDraggingWaveform) return;
+        isDraggingWaveform = false;
+        waveformVisual.releasePointerCapture?.(e.pointerId);
         const { start, end } = getLoopBounds();
-        if (musicEngine) { musicEngine.updateLoop(start, end); if (musicEngine.isPlaying) musicEngine.seek(start); }
+        if (musicEngine) {
+          musicEngine.updateLoop(start, end);
+          if (musicEngine.isPlaying) musicEngine.seek(start);
+        }
       };
       waveformVisual.addEventListener('pointerup', endDrag);
       waveformVisual.addEventListener('pointercancel', endDrag);
-      waveformVisual.addEventListener('touchstart', (e) => { e.preventDefault(); const touch = e.touches[0]; if (touch) updateStartFromClientX(touch.clientX); }, { passive: false });
-      waveformVisual.addEventListener('touchmove', (e) => { e.preventDefault(); const touch = e.touches[0]; if (touch) updateStartFromClientX(touch.clientX); }, { passive: false });
-      waveformVisual.addEventListener('touchend', (e) => { e.preventDefault(); const touch = e.changedTouches?.[0]; if (touch) handleWaveformInteraction(touch.clientX); }, { passive: false });
+      waveformVisual.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        if (touch) updateStartFromClientX(touch.clientX);
+      }, { passive: false });
+      waveformVisual.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        if (touch) updateStartFromClientX(touch.clientX);
+      }, { passive: false });
+      waveformVisual.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        const touch = e.changedTouches?.[0];
+        if (touch) handleWaveformInteraction(touch.clientX);
+      }, { passive: false });
     }
 
     function setActiveTab(tabKey = 'music') {
       const showMusic = tabKey === 'music', showWaveform = tabKey === 'waveform', showAudio = tabKey === 'audio';
-      tabMusicTab?.classList.toggle('active', showMusic); tabWaveform?.classList.toggle('active', showWaveform); tabAudio?.classList.toggle('active', showAudio);
-      tabBtnMusic?.classList.toggle('active', showMusic); tabBtnWaveform?.classList.toggle('active', showWaveform); tabBtnAudio?.classList.toggle('active', showAudio);
+      tabMusicTab?.classList.toggle('active', showMusic);
+      tabWaveform?.classList.toggle('active', showWaveform);
+      tabAudio?.classList.toggle('active', showAudio);
+      tabBtnMusic?.classList.toggle('active', showMusic);
+      tabBtnWaveform?.classList.toggle('active', showWaveform);
+      tabBtnAudio?.classList.toggle('active', showAudio);
     }
     function updateSheetBackdrop() {
       const hasActiveSheet = musicSheet?.classList.contains('active') || musicFilterSheet?.classList.contains('active');
@@ -2739,9 +2158,16 @@
       }
       burstPreloadVisibleTracks();
     }
-    function openFilterSheet() { if (!musicFilterSheet) return; musicFilterSheet.classList.add('active'); updateSheetBackdrop(); }
+    function openFilterSheet() {
+      if (!musicFilterSheet) return;
+      musicFilterSheet.classList.add('active');
+      updateSheetBackdrop();
+    }
     function closeMusicSheet() {
-      if (musicSearchInput && document.activeElement === musicSearchInput) musicSearchInput.blur();
+      // FIX: blur l'input avant de fermer pour que le clavier iOS se ferme
+      if (musicSearchInput && document.activeElement === musicSearchInput) {
+        musicSearchInput.blur();
+      }
       musicSheet?.classList.remove('active');
       if (musicFilterSheet?.classList.contains('active')) { musicFilterSheet.classList.remove('active'); resetFilterTag(); }
       updateSheetBackdrop();
@@ -2753,8 +2179,15 @@
     function syncVolumeLabels() {
       if (musicVolumeValue) musicVolumeValue.textContent = Math.round((Number.isFinite(musicVolume) ? musicVolume : 0) * 100);
     }
-    function syncOriginalMuteState() { applyOriginalVolume(isOriginalMuted ? 0 : originalVolume || 1); }
-    function toggleOriginalMute(force) { if (typeof force === 'boolean') isOriginalMuted = force; else isOriginalMuted = !isOriginalMuted; syncOriginalMuteState(); }
+
+    function syncOriginalMuteState() {
+      applyOriginalVolume(isOriginalMuted ? 0 : originalVolume || 1);
+    }
+    function toggleOriginalMute(force) {
+      if (typeof force === 'boolean') isOriginalMuted = force;
+      else isOriginalMuted = !isOriginalMuted;
+      syncOriginalMuteState();
+    }
 
     tabBtnMusic?.addEventListener('click', () => setActiveTab('music'));
     tabBtnWaveform?.addEventListener('click', () => { setActiveTab('waveform'); updatePositionLabel(); updateWaveformProgress(); });
@@ -2763,22 +2196,62 @@
     musicOverlay.onclick = (e) => { e.stopPropagation(); openMusicSheet(); };
     if (musicClearBtn) musicClearBtn.onclick = (e) => { e.stopPropagation(); clearMusicSelection(); };
 
-    musicSearchInput.oninput = (e) => { debouncedRenderMusicList(e.target.value); };
-    musicSearchInput.addEventListener('focus', () => { setTimeout(() => { document.documentElement.scrollTop = 0; document.body.scrollTop = 0; }, 100); });
-    musicSearchInput.addEventListener('blur', () => { setTimeout(() => { document.documentElement.scrollTop = 0; document.body.scrollTop = 0; }, 100); });
+    /* FIX: input search — debounce + empêcher le scroll iOS */
+    musicSearchInput.oninput = (e) => {
+      debouncedRenderMusicList(e.target.value);
+    };
+    musicSearchInput.addEventListener('focus', () => {
+      // FIX: ne pas scroller — juste s'assurer que l'input est visible
+      // sans provoquer de saut de page
+      setTimeout(() => {
+        // Bloquer tout scroll parasite
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }, 100);
+    });
+    musicSearchInput.addEventListener('blur', () => {
+      // Réinitialiser le scroll après la fermeture du clavier
+      setTimeout(() => {
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }, 100);
+    });
 
-    musicFilterBtn?.addEventListener('click', (e) => { e.stopPropagation(); if (musicFilterSheet?.classList.contains('active')) { closeFilterSheet(); return; } openFilterSheet(); });
+    musicFilterBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (musicFilterSheet?.classList.contains('active')) { closeFilterSheet(); return; }
+      openFilterSheet();
+    });
     musicSheet.onclick = (e) => e.stopPropagation();
     musicFilterSheet.onclick = (e) => e.stopPropagation();
-    sheetBackdrop.onclick = (e) => { e.stopPropagation(); if (musicFilterSheet?.classList.contains('active')) { closeFilterSheet(); return; } closeMusicSheet(); };
-    document.addEventListener('click', (e) => { if (!sheetBackdrop.classList.contains('active')) return; if (e.target === sheetBackdrop) { if (musicFilterSheet?.classList.contains('active')) { closeFilterSheet(); return; } closeMusicSheet(); } });
+    sheetBackdrop.onclick = (e) => {
+      e.stopPropagation();
+      if (musicFilterSheet?.classList.contains('active')) { closeFilterSheet(); return; }
+      closeMusicSheet();
+    };
+    document.addEventListener('click', (e) => {
+      if (!sheetBackdrop.classList.contains('active')) return;
+      if (e.target === sheetBackdrop) { if (musicFilterSheet?.classList.contains('active')) { closeFilterSheet(); return; } closeMusicSheet(); }
+    });
 
     [musicSheet, musicFilterSheet].forEach((sheet) => {
       if (!sheet) return;
       let touchStartY = null, touchLastY = null, dragStartedOnHandle = false, dragStartedInMusicScrollable = false;
-      sheet.addEventListener('touchstart', (e) => { if (!sheet.classList.contains('active')) return; const touch = e.touches[0]; if (!touch) return; touchStartY = touch.clientY; touchLastY = touch.clientY; dragStartedOnHandle = Boolean(e.target.closest('.sheet-handle')); if (sheet === musicSheet) { const ms = getMusicSheetScroller(); dragStartedInMusicScrollable = Boolean(!dragStartedOnHandle && ms && e.target.closest('.sheet-content')); } else dragStartedInMusicScrollable = false; }, { passive: true });
+      sheet.addEventListener('touchstart', (e) => {
+        if (!sheet.classList.contains('active')) return;
+        const touch = e.touches[0]; if (!touch) return;
+        touchStartY = touch.clientY; touchLastY = touch.clientY;
+        dragStartedOnHandle = Boolean(e.target.closest('.sheet-handle'));
+        if (sheet === musicSheet) { const ms = getMusicSheetScroller(); dragStartedInMusicScrollable = Boolean(!dragStartedOnHandle && ms && e.target.closest('.sheet-content')); }
+        else dragStartedInMusicScrollable = false;
+      }, { passive: true });
       sheet.addEventListener('touchmove', (e) => { const touch = e.touches[0]; if (!touch) return; touchLastY = touch.clientY; }, { passive: true });
-      sheet.addEventListener('touchend', () => { if (touchStartY === null || touchLastY === null || !sheet.classList.contains('active')) { touchStartY = null; touchLastY = null; dragStartedOnHandle = false; dragStartedInMusicScrollable = false; return; } const dragDistance = touchLastY - touchStartY; if (dragDistance > 75 && !dragStartedInMusicScrollable) { if (sheet === musicFilterSheet) closeFilterSheet(); else closeMusicSheet(); } touchStartY = null; touchLastY = null; dragStartedOnHandle = false; dragStartedInMusicScrollable = false; });
+      sheet.addEventListener('touchend', () => {
+        if (touchStartY === null || touchLastY === null || !sheet.classList.contains('active')) { touchStartY = null; touchLastY = null; dragStartedOnHandle = false; dragStartedInMusicScrollable = false; return; }
+        const dragDistance = touchLastY - touchStartY;
+        if (dragDistance > 75 && !dragStartedInMusicScrollable) { if (sheet === musicFilterSheet) closeFilterSheet(); else closeMusicSheet(); }
+        touchStartY = null; touchLastY = null; dragStartedOnHandle = false; dragStartedInMusicScrollable = false;
+      });
       sheet.addEventListener('touchcancel', () => { touchStartY = null; touchLastY = null; dragStartedOnHandle = false; dragStartedInMusicScrollable = false; });
     });
 
@@ -2794,16 +2267,14 @@
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
-        stopFilterLoop();
         stopMusicPreview({ hard: true }); audioCtxPrimed = false;
         if (!isRecording && !isCountingDown) { if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; } }
       } else {
         if (!mediaStream && !isRecording && !isCountingDown && !previewOverlay.classList.contains('active') && !uploadCompleted) startCamera();
-        else if (mediaStream && cameraReady && !isPreviewOpen()) startFilterLoop();
       }
     });
 
-    const BEEP_SOURCES = { short: 'data:audio/wav;base64,UklGRiQFAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAFAAAAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2w==', long: 'data:audio/wav;base64,UklGRqQMAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYAMAAAAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0A==' };
+    const BEEP_SOURCES = { short: 'data:audio/wav;base64,UklGRiQFAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAFAAAAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2wAAMyQyMzMkAADN287MzdsAADMkMjMzJAAAzdvOzM3bAAAzJDIzMyQAAM3bzszN2w==', long: 'data:audio/wav;base64,UklGRqQMAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYAMAAAAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0AAATS8zJGnszsxp7DMkTS8AALPQzduXEzIzlxPN27PQAABNLzMkaezOzGnsMyRNLwAAs9DN25cTMjOXE83bs9AAAE0vMyRp7M7MaewzJE0vAACz0M3blxMyM5cTzduz0A==' };
 
     let musicAudioCtx = null;
     let audioCtxPrimed = false;
@@ -2820,6 +2291,9 @@
       const audioCtx = ensureMusicAudioContext(); if (!audioCtx) return null;
       if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
       primeMusicAudioContext(audioCtx);
+      // FIX: ne pas bloquer sur 'running' — sur iOS le contexte peut être
+      // en 'interrupted' ou 'suspended' même après un geste utilisateur.
+      // On retourne le contexte dans tous les cas sauf 'closed'.
       if (audioCtx.state === 'closed') return null;
       return audioCtx;
     }
@@ -2917,28 +2391,47 @@
     function doVideoPlay() {
       const ctx = ensureMusicAudioContext();
       const connect = () => {
-        connectVideoToAudioGraph(); applyOriginalVolume(originalVolume);
+        connectVideoToAudioGraph();
+        applyOriginalVolume(originalVolume);
         if (!isGalleryVideoSource()) restartPreviewIfPlaying();
-        tapToPlay.classList.remove('active'); tapToPlay.classList.remove('paused');
+        tapToPlay.classList.remove('active');
+        tapToPlay.classList.remove('paused');
       };
       previewVideo.muted = true;
       previewVideo.play().then(() => {
-        if (ctx && ctx.state === 'suspended') ctx.resume().then(connect).catch(connect);
-        else connect();
-      }).catch(() => { tapToPlay.classList.add('active'); });
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().then(connect).catch(connect);
+        } else {
+          connect();
+        }
+      }).catch(() => {
+        tapToPlay.classList.add('active');
+      });
     }
 
     tapToPlay?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (previewVideo.paused) doVideoPlay();
-      else { previewVideo.pause(); if (selectedMusicId) musicEngine?.stop(); tapToPlay.classList.remove('active'); tapToPlay.classList.add('paused'); }
+      if (previewVideo.paused) {
+        doVideoPlay();
+      } else {
+        previewVideo.pause();
+        if (selectedMusicId) musicEngine?.stop();
+        tapToPlay.classList.remove('active');
+        tapToPlay.classList.add('paused');
+      }
     });
 
     previewVideo.style.pointerEvents = 'auto';
     previewVideo.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (!previewVideo.paused) { previewVideo.pause(); if (selectedMusicId) musicEngine?.stop(); tapToPlay.classList.remove('active'); tapToPlay.classList.add('paused'); }
-      else doVideoPlay();
+      if (!previewVideo.paused) {
+        previewVideo.pause();
+        if (selectedMusicId) musicEngine?.stop();
+        tapToPlay.classList.remove('active');
+        tapToPlay.classList.add('paused');
+      } else {
+        doVideoPlay();
+      }
     });
 
     function stopMusicPreview({ hard = false } = {}) {
@@ -2971,7 +2464,8 @@
       clampStartForVideoDuration(); updatePositionLabel(); updateWaveformProgress();
       const { start, end } = getLoopBounds(); musicEngine.updateVolume(musicVolume);
       let started = false;
-      try { await musicEngine.load(opt.url, { id: opt.id }); started = await musicEngine.play(start, end); } catch (error) { started = false; }
+      try { await musicEngine.load(opt.url, { id: opt.id }); started = await musicEngine.play(start, end); }
+      catch (error) { started = false; }
       if (started) {
         if (sessionId === musicSessionId && selectedMusicId === expectedId && pendingMusicId === expectedId) { pendingMusicId = null; updateMusicListPlaybackState(); }
         if (sessionId === musicSessionId && selectedMusicId === expectedId) closeMusicSheet();
@@ -3049,7 +2543,6 @@
       try {
         startCamera.isStarting = true;
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        // Caméra vidéo visible pour le canvas (mais cachée visuellement via CSS)
         cameraPreview.srcObject = stream; cameraPreview.play().catch(e => {}); ensureCameraVisible(); mediaStream = stream; markCameraReady();
         cameraPreview.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
         torchEnabled = false; updateFlashUI();
@@ -3072,27 +2565,28 @@
       recordedFacingMode = facingMode; videoSourceType = 'webview-camera'; recordedChunks = []; isStoppingRecording = false;
       const targetVideoBitrate = 2_000_000, targetAudioBitrate = 128_000;
       let options = { videoBitsPerSecond: targetVideoBitrate, audioBitsPerSecond: targetAudioBitrate };
-
-      // Utiliser le stream filtré (canvas) ou le stream brut si filtre naturel
-      const streamToRecord = getRecordingStream();
-
       if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) options.mimeType = 'video/mp4;codecs=avc1';
       else if (MediaRecorder.isTypeSupported('video/mp4')) options.mimeType = 'video/mp4';
       else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) options.mimeType = 'video/webm;codecs=vp9,opus';
       else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) options.mimeType = 'video/webm;codecs=vp8,opus';
-
-      try { mediaRecorder = new MediaRecorder(streamToRecord, options); } catch (e) { mediaRecorder = new MediaRecorder(streamToRecord); }
-      unlockAudioContextViaStream(mediaStream);
+      const streamForRecording = mediaStream;
+      try { mediaRecorder = new MediaRecorder(streamForRecording, options); } catch (e) { mediaRecorder = new MediaRecorder(streamForRecording); }
+      unlockAudioContextViaStream(streamForRecording);
       mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
       mediaRecorder.onstop = () => {
         const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-        recordedBlob = blob; isRecording = false; isStoppingRecording = false;
-        finalizeRecording(); disconnectVideoFromAudioGraph();
+        recordedBlob = blob;
+        isRecording = false;
+        isStoppingRecording = false;
+        finalizeRecording();
+        // FIX: reset le graph audio avant d'afficher la preview
+        // pour que connectVideoToAudioGraph() puisse recréer un nœud frais
+        disconnectVideoFromAudioGraph();
         if (previewTimeout) clearTimeout(previewTimeout);
         previewTimeout = setTimeout(() => {
           previewTimeout = null;
           showPreview(blob);
-        }, 0);
+        }, 32);
       };
       mediaRecorder.start(RECORDER_TIMESLICE_MS); isRecording = true;
       if (cameraReady) document.body.classList.add('recording'); else pendingRecordUI = true;
@@ -3154,15 +2648,6 @@
     }
 
     function showPreview(blob) {
-      // Stopper TOUS les effets filtre caméra avant la preview
-      stopFilterLoop();
-      // Appliquer le filtre CSS actif sur la preview vidéo
-      const f = getActiveFilter();
-      if (f && f.css && f.css !== 'none') {
-        previewVideo.style.filter = f.css;
-      } else {
-        previewVideo.style.filter = 'none';
-      }
       if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
       previewObjectURL = URL.createObjectURL(blob);
       lockPreviewViewport();
@@ -3170,8 +2655,7 @@
       previewVideo.volume = originalVolume;
       previewVideo.loop = true;
       previewVideo.preload = 'auto';
-      // Ne pas inverser — la vidéo WebGL est déjà dans le bon sens
-      previewVideo.style.transform = 'scaleX(1)';
+      previewVideo.style.transform = recordedFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
       previewVideo.load();
       applyPreviewSourceMode();
       previewOverlay.classList.add('active');
@@ -3190,10 +2674,12 @@
     function resetPreviewState() {
       if (previewTimeout) { clearTimeout(previewTimeout); previewTimeout = null; }
       stopMusicPreview({ hard: true }); invalidateMusicSession(); resetThumbnailDefaults();
-      stopVideoProgress(); disconnectVideoFromAudioGraph();
+      stopVideoProgress();
+      disconnectVideoFromAudioGraph();
       previewVideo.src = '';
       if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = null; }
-      recordedBlob = null; videoSourceType = null; videoDurationSeconds = 0; lastVideoTime = 0;
+      recordedBlob = null; videoSourceType = null; videoDurationSeconds = 0;
+      lastVideoTime = 0;
     }
     function hidePreview() {
       previewOverlay.classList.remove('active'); document.body.classList.remove('showing-preview');
@@ -3202,12 +2688,11 @@
       if (tapToPlay) tapToPlay.classList.remove('active');
       resetPreviewState();
       if (!uploadCompleted && (!mediaStream || !mediaStream.active)) startCamera();
-      else if (mediaStream && cameraReady) startFilterLoop();
     }
 
     syncAppViewportVars();
     let viewportSyncRaf = null;
-    function scheduleViewportSync() { if (viewportSyncRaf) return; viewportSyncRaf = requestAnimationFrame(() => { viewportSyncRaf = null; syncAppViewportVars(); positionPreviewOverlays(); positionFilterBar(); }); }
+    function scheduleViewportSync() { if (viewportSyncRaf) return; viewportSyncRaf = requestAnimationFrame(() => { viewportSyncRaf = null; syncAppViewportVars(); positionPreviewOverlays(); }); }
     window.addEventListener('resize', scheduleViewportSync, { passive: true });
     window.addEventListener('orientationchange', scheduleViewportSync, { passive: true });
     if (window.visualViewport) {
@@ -3230,24 +2715,34 @@
       updateMusicOverlay();
       const ctx = ensureMusicAudioContext();
       const connectAfterPlay = () => {
-        connectVideoToAudioGraph(); applyOriginalVolume(originalVolume);
+        // FIX: connectVideoToAudioGraph est déjà appelé ici — le graph est frais
+        // car on a appelé disconnectVideoFromAudioGraph() dans onstop
+        connectVideoToAudioGraph();
+        applyOriginalVolume(originalVolume);
         const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME);
         selectedThumbnailTime = defaultTime;
-        requestAnimationFrame(() => { drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas); drawThumbnailToCanvas(thumbnailCtxSheet, thumbnailCanvasSheet); });
+        requestAnimationFrame(() => {
+          drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas);
+          drawThumbnailToCanvas(thumbnailCtxSheet, thumbnailCanvasSheet);
+        });
         if (!isGalleryVideoSource()) restartPreviewIfPlaying();
         if (tapToPlay) { tapToPlay.classList.remove('active'); tapToPlay.classList.remove('paused'); }
       };
       previewVideo.muted = true;
       previewVideo.play().then(() => {
-        if (ctx && ctx.state === 'suspended') ctx.resume().then(connectAfterPlay).catch(connectAfterPlay);
-        else connectAfterPlay();
-      }).catch(() => { if (tapToPlay) tapToPlay.classList.add('active'); });
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().then(connectAfterPlay).catch(connectAfterPlay);
+        } else {
+          connectAfterPlay();
+        }
+      }).catch(() => {
+        if (tapToPlay) tapToPlay.classList.add('active');
+      });
     };
 
     flashBtn.onclick = toggleFlash;
     switchBtn.onclick = () => {
       if (isRecording || isCountingDown || isSwitching) return; isSwitching = true;
-      stopFilterLoop();
       switchBtn.style.transform = "rotate(180deg)";
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
       facingMode = (facingMode === 'environment') ? 'user' : 'environment';
@@ -3283,19 +2778,23 @@
       let uploadPhaseTimeout = null, uploadSuccessNotified = false, processingStarted = false;
       let activeXhr = null;
 
+      // Afficher le bouton annuler, le masquer une fois upload terminé
       if (uploadCancelBtn) uploadCancelBtn.classList.remove('hidden');
 
       const cancelUpload = () => {
-        if (uploadSuccessNotified) return;
+        if (uploadSuccessNotified) return; // trop tard, déjà envoyé
         if (activeXhr) { activeXhr.abort(); activeXhr = null; }
         stopUploadProgressAnimation(); stopProcessingProgressAnimation();
         if (uploadPhaseTimeout) { clearTimeout(uploadPhaseTimeout); uploadPhaseTimeout = null; }
         uploadOverlay.classList.remove('active');
         if (uploadCancelBtn) uploadCancelBtn.classList.add('hidden');
+        // Relancer la vidéo et la musique
         previewVideo.play().catch(() => {});
       };
 
-      if (uploadCancelBtn) uploadCancelBtn.onclick = cancelUpload;
+      if (uploadCancelBtn) {
+        uploadCancelBtn.onclick = cancelUpload;
+      }
       const selectedThumbnailTimeForUpload = Number.isFinite(selectedThumbnailTime) ? selectedThumbnailTime : DEFAULT_THUMBNAIL_TIME;
 
       function resetAfterUploadSuccess() {
@@ -3344,7 +2843,7 @@
         return 'music+original';
       })();
 
-      const isFastPath = recordedFacingMode === 'environment' && audioMode === 'original' && !hasSelectedMusic && originalVolume > 0 && activeFilterId === 'naturel';
+      const isFastPath = recordedFacingMode === 'environment' && audioMode === 'original' && !hasSelectedMusic && originalVolume > 0;
 
       const startServerUpload = () => {
         const formData = new FormData();
@@ -3407,11 +2906,6 @@
       if (musicFilterSheet.classList.contains('active') && !tappedSheet) { closeFilterSheet(); return; }
       if (!tappedAction) return;
     };
-
-    // Init WebGL + filtres
-    initWebGL();
-    buildFilterBar();
-    positionFilterBar();
 
     setTimeout(() => { window.ReactNativeWebView?.postMessage("test-message"); }, 3000);
     startCamera();
