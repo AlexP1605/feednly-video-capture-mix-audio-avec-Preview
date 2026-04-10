@@ -735,16 +735,11 @@
 
     const FILTERS = [
       { id:'naturel', name:'Naturel', css:'none',                                dot:null,                                       privacy:false, faceEffect:null       },
-      { id:'soleil',  name:'Soleil',  css:'brightness(1.04) saturate(1.05)',      dot:'linear-gradient(135deg,#f9e04b,#f5a623)', privacy:false, faceEffect:'soleil'   },
       { id:'doux',    name:'Doux',    css:'brightness(1.03) saturate(0.96)',       dot:'linear-gradient(135deg,#f5d9c0,#e8a870)', privacy:false, faceEffect:'soft'     },
-      { id:'rose',    name:'Rose',    css:'brightness(1.03) saturate(1.04)',       dot:'linear-gradient(135deg,#ffb6c8,#f06090)', privacy:false, faceEffect:'rose'     },
       { id:'glamour', name:'Glamour', css:'brightness(1.04) contrast(1.03)',       dot:'linear-gradient(135deg,#e8c8f0,#b060d0)', privacy:false, faceEffect:'glamour'  },
-      { id:'dore',    name:'Doré',    css:'brightness(1.03) saturate(1.06)',       dot:'linear-gradient(135deg,#ffd580,#c87820)', privacy:false, faceEffect:'dore'     },
-      { id:'mascara', name:'Mascara', css:'brightness(1.02) contrast(1.04)',       dot:'linear-gradient(135deg,#777,#111)',       privacy:false, faceEffect:'mascara'  },
       { id:'blush',   name:'Blush',   css:'brightness(1.03) saturate(1.05)',       dot:'linear-gradient(135deg,#ffb0b0,#e04060)', privacy:false, faceEffect:'blush'    },
 
       { id:'mystere', name:'Mystère', css:'none',                                 dot:'linear-gradient(135deg,#333,#000)',       privacy:true,  privacyType:'bar',  faceEffect:null },
-      { id:'flou',    name:'Flou',    css:'none',                                 dot:'linear-gradient(135deg,#999,#333)',       privacy:true,  privacyType:'blur', faceEffect:null },
     ];
     let activeFilterId = 'naturel';
 
@@ -929,12 +924,8 @@
 
     const FILTER_PARAMS = {
       naturel:  { smooth:0.0,  bright:0.0,  warmth:0.0,  glow:0.0  },
-      soleil:   { smooth:1.0,  bright:1.0,  warmth:1.0,  glow:1.0  },
       doux:     { smooth:1.0,  bright:0.80, warmth:0.70, glow:0.80 },
-      rose:     { smooth:1.0,  bright:0.85, warmth:0.75, glow:0.90 },
       glamour:  { smooth:1.0,  bright:1.0,  warmth:0.90, glow:1.0  },
-      dore:     { smooth:1.0,  bright:0.90, warmth:1.0,  glow:1.0  },
-      mascara:  { smooth:1.0,  bright:0.50, warmth:0.40, glow:0.60 },
       blush:    { smooth:1.0,  bright:0.85, warmth:0.80, glow:0.90 },
     };
 
@@ -1329,18 +1320,22 @@
     function startGlassesLoop() {
       if (glassesActive) return;
       glassesActive = true;
+      let lastDraw = 0;
       const tick = async () => {
         if (!glassesActive) { glassesRaf = null; return; }
         const now = performance.now();
         const video = document.getElementById('camera-preview');
-        if (mpReady && video && video.readyState >= 2 && now - mpLastSend > 80) {
+        // MediaPipe à 15fps
+        if (mpReady && video && video.readyState >= 2 && now - mpLastSend > 66) {
           mpLastSend = now;
           try { await mpFaceMesh.send({ image: video }); } catch(e) {}
         }
         if (!glassesActive) { glassesRaf = null; return; }
-        if (lastFaceLandmarks && mpReady) {
-          const W=window.innerWidth, H=window.innerHeight;
-          showGlasses(lastFaceLandmarks, W, H, facingMode==='user');
+        // Redessiner SVG à 20fps max — évite le flickering
+        if (lastFaceLandmarks && mpReady && now - lastDraw > 50) {
+          lastDraw = now;
+          const W = window.innerWidth, H = window.innerHeight;
+          showGlasses(lastFaceLandmarks, W, H, facingMode === 'user');
           removeMysteryBar();
         }
         glassesRaf = requestAnimationFrame(tick);
@@ -3079,11 +3074,8 @@
     }
 
     function showPreview(blob) {
-      // Nettoyer filtre caméra quand on passe en preview
-      stopCanvasCapture();
-      const video = document.getElementById('camera-preview');
-      if (video) video.style.filter = 'none';
-      removeMysteryBar();
+      // Stopper TOUS les effets filtre caméra avant la preview
+      stopFilterLoop();
       if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
       previewObjectURL = URL.createObjectURL(blob);
       lockPreviewViewport();
