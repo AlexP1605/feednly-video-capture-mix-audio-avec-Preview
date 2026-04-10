@@ -734,12 +734,17 @@
        ===================================================== */
 
     const FILTERS = [
-      { id:'naturel', name:'Naturel', css:'none',                                dot:null,                                       privacy:false, faceEffect:null       },
-      { id:'doux',    name:'Doux',    css:'brightness(1.03) saturate(0.96)',       dot:'linear-gradient(135deg,#f5d9c0,#e8a870)', privacy:false, faceEffect:'soft'     },
-      { id:'glamour', name:'Glamour', css:'brightness(1.04) contrast(1.03)',       dot:'linear-gradient(135deg,#e8c8f0,#b060d0)', privacy:false, faceEffect:'glamour'  },
-      { id:'blush',   name:'Blush',   css:'brightness(1.03) saturate(1.05)',       dot:'linear-gradient(135deg,#ffb0b0,#e04060)', privacy:false, faceEffect:'blush'    },
-
-      { id:'mystere', name:'Mystère', css:'none',                                 dot:'linear-gradient(135deg,#333,#000)',       privacy:true,  privacyType:'bar',  faceEffect:null },
+      // ---- Colorimétrie (gauche) ----
+      { id:'vintage',  name:'Vintage',  css:'sepia(0.55) contrast(1.1) brightness(0.96) saturate(0.85)',  dot:'linear-gradient(135deg,#c9a96e,#7a5c3a)', side:'left'  },
+      { id:'fraiche',  name:'Fraîche',  css:'hue-rotate(15deg) saturate(1.3) brightness(1.06) contrast(0.97)', dot:'linear-gradient(135deg,#a8e6cf,#3db88c)', side:'left'  },
+      { id:'chaud',    name:'Chaud',    css:'sepia(0.2) saturate(1.4) brightness(1.08) hue-rotate(-8deg)', dot:'linear-gradient(135deg,#ffb347,#e05c00)',   side:'left'  },
+      // ---- Naturel (centre) ----
+      { id:'naturel',  name:'Naturel',  css:'none',                                                         dot:null,                                        side:'center'},
+      // ---- Effets visage (droite) ----
+      { id:'doux',     name:'Doux',     css:'brightness(1.03) saturate(0.96)',                              dot:'linear-gradient(135deg,#f5d9c0,#e8a870)',   side:'right', faceEffect:'soft'    },
+      { id:'glamour',  name:'Glamour',  css:'brightness(1.04) contrast(1.03)',                              dot:'linear-gradient(135deg,#e8c8f0,#b060d0)',   side:'right', faceEffect:'glamour' },
+      { id:'blush',    name:'Blush',    css:'brightness(1.03) saturate(1.05)',                              dot:'linear-gradient(135deg,#ffb0b0,#e04060)',   side:'right', faceEffect:'blush'   },
+      { id:'mystere',  name:'Mystère',  css:'none',                                                         dot:'linear-gradient(135deg,#333,#000)',          side:'right', privacy:true, privacyType:'fixed' },
     ];
     let activeFilterId = 'naturel';
 
@@ -1185,58 +1190,59 @@
 
     // ---- Halo lumineux autour de la tête (ring light effect) ----
 
-    // ---- Mystère : 2 grosses ellipses noires qui se touchent ----
-    function showGlasses(lm, W, H, flip) {
-      const lOuter = pt(lm, 33,  W, H, flip);
-      const lInner = pt(lm, 133, W, H, flip);
-      const rInner = pt(lm, 362, W, H, flip);
-      const rOuter = pt(lm, 263, W, H, flip);
-      if (!lOuter||!lInner||!rInner||!rOuter) return;
+    // ---- Mystère : ellipses fixes centrées ----
+    let fixedEllipsesEl = null;
+    function showFixedEllipses() {
+      if (fixedEllipsesEl) return;
+      fixedEllipsesEl = document.createElement('div');
+      fixedEllipsesEl.id = 'fixed-ellipses';
+      // Positionnement CSS pur — stable, zéro clignotement
+      fixedEllipsesEl.style.cssText = [
+        'position:absolute',
+        'top:0','left:0','right:0','bottom:0',
+        'z-index:4','pointer-events:none',
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+        'gap:0',
+      ].join(';');
 
-      // Centre de chaque oeil
-      const lCX = (lOuter.x + lInner.x) / 2;
-      const lCY = (lOuter.y + lInner.y) / 2;
-      const rCX = (rInner.x + rOuter.x) / 2;
-      const rCY = (rInner.y + rOuter.y) / 2;
+      // Container pour les 2 ellipses côte à côte
+      const container = document.createElement('div');
+      container.style.cssText = [
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+        'gap:0',
+        'margin-top:-8%', // légèrement au-dessus du centre (hauteur des yeux)
+      ].join(';');
 
-      // Taille : les deux ellipses doivent se toucher au centre
-      // Distance entre les deux centres / 2 = rayon horizontal
-      const dist = Math.abs(rCX - lCX);
-      const rx = dist * 0.60; // bien plus grosses, se chevauchent vraiment
-      const ry = rx * 0.75;
+      // Taille des ellipses basée sur la largeur de l'écran
+      const size = Math.min(window.innerWidth * 0.26, 110);
+      const h = size * 0.68;
 
-      const angle = Math.atan2(rOuter.y - lOuter.y, rOuter.x - lOuter.x);
-      const deg = angle * 180 / Math.PI;
-      const pivotX = (lCX + rCX) / 2, pivotY = (lCY + rCY) / 2;
+      [0, 1].forEach(() => {
+        const ellipse = document.createElement('div');
+        ellipse.style.cssText = [
+          `width:${size}px`,
+          `height:${h}px`,
+          'border-radius:50%',
+          'background:rgba(0,0,0,0.92)',
+          'flex-shrink:0',
+          `margin:0 ${-size*0.05}px`, // léger chevauchement
+        ].join(';');
+        container.appendChild(ellipse);
+      });
 
-      if (!glassesEl) {
-        glassesEl = document.createElementNS('http://www.w3.org/2000/svg','svg');
-        glassesEl.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none;overflow:visible;';
-        document.getElementById('camera-container').appendChild(glassesEl);
-      }
-      glassesEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
-      // Mettre à jour sans recréer le DOM — évite le clignotement
-      let grp = glassesEl.querySelector('g');
-      if (!grp) {
-        grp = document.createElementNS('http://www.w3.org/2000/svg','g');
-        const el = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
-        el.setAttribute('fill','rgba(0,0,0,0.92)'); el.classList.add('eye-l');
-        const er = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
-        er.setAttribute('fill','rgba(0,0,0,0.92)'); er.classList.add('eye-r');
-        grp.appendChild(el); grp.appendChild(er);
-        glassesEl.appendChild(grp);
-      }
-      grp.setAttribute('transform', `rotate(${deg},${pivotX},${pivotY})`);
-      const eL = grp.querySelector('.eye-l');
-      const eR = grp.querySelector('.eye-r');
-      eL.setAttribute('cx', lCX); eL.setAttribute('cy', lCY);
-      eL.setAttribute('rx', rx); eL.setAttribute('ry', ry);
-      eR.setAttribute('cx', rCX); eR.setAttribute('cy', rCY);
-      eR.setAttribute('rx', rx); eR.setAttribute('ry', ry);
+      fixedEllipsesEl.appendChild(container);
+      document.getElementById('camera-container').appendChild(fixedEllipsesEl);
     }
-    function removeGlasses() {
-      if (glassesEl) { glassesEl.remove(); glassesEl = null; }
+    function removeFixedEllipses() {
+      if (fixedEllipsesEl) { fixedEllipsesEl.remove(); fixedEllipsesEl = null; }
     }
+    // Garder removeGlasses pour compatibilité
+    function removeGlasses() { removeFixedEllipses(); }
+    function showGlasses() {} // deprecated
 
     // ---- Flou uniquement sur les yeux ----
 
@@ -1405,40 +1411,32 @@
       const video = document.getElementById('camera-preview');
 
       // Stop tout
-      stopGLLoop(); stopMPLoop(); stopGlassesLoop(); stopEyeBlur();
-      stopMPLoopEyeBlur();
+      stopGLLoop(); stopMPLoop(); stopGlassesLoop();
+      stopEyeBlur(); stopMPLoopEyeBlur();
       removeMysteryBar(); removeGlasses(); removeOverlayCanvas();
       if (video) video.style.filter = 'none';
 
       if (f.id === 'naturel') {
         // Vidéo brute
-      } else if (f.privacy && f.privacyType === 'bar') {
-        // Lunettes SVG qui suivent les yeux (MediaPipe) + fallback barre
-        showMysteryBar(); // barre statique en attendant MediaPipe
-        ensureOverlayCanvas(); resizeOverlayCanvas();
-        if (!mpReady && !mpLoadFailed) {
-          loadMediaPipe().then(() => { if (mpReady) startGlassesLoop(); });
-        } else if (mpReady) {
-          startGlassesLoop();
-        }
-      } else if (f.privacy && f.privacyType === 'blur') {
-        // Flou uniquement sur les yeux
-        ensureEyeBlurCanvas();
-        if (!mpReady && !mpLoadFailed) {
-          loadMediaPipe().then(() => { if (mpReady) startMPLoopEyeBlur(); });
-        } else if (mpReady) {
-          startMPLoopEyeBlur();
-        }
+      } else if (f.privacy && f.privacyType === 'fixed') {
+        // Mystère : 2 ellipses noires fixes centrées — pas de MediaPipe
+        showFixedEllipses();
       } else {
-        // Skin smoothing WebGL
+        // Filtre WebGL skin smoothing
         if (gl) startGLLoop();
         else if (video && f.css !== 'none') video.style.filter = f.css;
-        // Effets visage MediaPipe
+        // Effets visage MediaPipe si disponible
         if (f.faceEffect) {
           ensureOverlayCanvas(); resizeOverlayCanvas();
           if (!mpReady && !mpLoadFailed) loadMediaPipe();
           else if (mpReady) startMPLoop();
         }
+      }
+
+      // CSS colorimétrie pour les filtres de gauche (sans WebGL)
+      if (f.side === 'left' && video && f.css !== 'none') {
+        stopGLLoop();
+        video.style.filter = f.css;
       }
 
       document.querySelectorAll('.filter-chip').forEach(chip => {
@@ -1451,11 +1449,20 @@
     function buildFilterBar() {
       const bar = document.getElementById('filter-bar');
       bar.innerHTML = '';
-      FILTERS.forEach(f => {
+
+      // Séparer les filtres par côté
+      const leftFilters   = FILTERS.filter(f => f.side === 'left');
+      const centerFilters = FILTERS.filter(f => f.side === 'center');
+      const rightFilters  = FILTERS.filter(f => f.side === 'right');
+
+      // Construire dans l'ordre : gauche, centre, droite
+      [...leftFilters, ...centerFilters, ...rightFilters].forEach(f => {
         const chip = document.createElement('div');
         chip.className = 'filter-chip'; chip.dataset.filterId = f.id;
+
         const thumb = document.createElement('div');
         thumb.className = 'filter-thumb' + (f.id === activeFilterId ? ' selected' : '');
+
         if (f.id === 'naturel') {
           thumb.style.background = 'transparent';
         } else {
@@ -1463,12 +1470,25 @@
           dot.style.cssText = 'width:100%;height:100%;border-radius:50%;background:' + f.dot + ';';
           thumb.appendChild(dot);
         }
+
         const label = document.createElement('div');
         label.className = 'filter-label' + (f.id === activeFilterId ? ' selected' : '');
         label.textContent = f.name;
+
         chip.appendChild(thumb); chip.appendChild(label);
         chip.addEventListener('click', () => applyFilter(f.id));
         bar.appendChild(chip);
+      });
+
+      // Scroll pour centrer le filtre Naturel
+      requestAnimationFrame(() => {
+        const naturalChip = bar.querySelector('[data-filter-id="naturel"]');
+        if (naturalChip && bar.parentElement) {
+          const barW = bar.parentElement.offsetWidth;
+          const chipLeft = naturalChip.offsetLeft;
+          const chipW = naturalChip.offsetWidth;
+          bar.parentElement.scrollLeft = chipLeft - barW/2 + chipW/2;
+        }
       });
     }
 
@@ -1523,7 +1543,7 @@
       }
 
       // Mystère lunettes : composite GL + SVG
-      if (f.privacy && f.privacyType === 'bar') {
+      if (f.privacy) {
         try {
           const comp = document.createElement('canvas');
           comp.width = window.innerWidth; comp.height = window.innerHeight;
@@ -1611,7 +1631,7 @@
     function stopFilterLoop() {
       stopGLLoop(); stopMPLoop(); stopGlassesLoop();
       stopEyeBlur(); stopMPLoopEyeBlur(); stopCanvasCapture();
-      removeOverlayCanvas(); removeGlasses(); removeMysteryBar();
+      removeOverlayCanvas(); removeGlasses(); removeFixedEllipses(); removeMysteryBar();
       const video = document.getElementById('camera-preview');
       if (video) video.style.filter = 'none';
     }
