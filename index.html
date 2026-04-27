@@ -2563,7 +2563,7 @@
       const hasAudioTrack = mediaStream && mediaStream.getAudioTracks().length > 0;
       if (isRecording || !mediaStream || !hasAudioTrack) return;
       recordedFacingMode = facingMode; videoSourceType = 'webview-camera'; recordedChunks = []; isStoppingRecording = false;
-      const targetVideoBitrate = 2_000_000, targetAudioBitrate = 128_000;
+      const targetVideoBitrate = 4_000_000, targetAudioBitrate = 128_000;
       let options = { videoBitsPerSecond: targetVideoBitrate, audioBitsPerSecond: targetAudioBitrate };
       if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) options.mimeType = 'video/mp4;codecs=avc1';
       else if (MediaRecorder.isTypeSupported('video/mp4')) options.mimeType = 'video/mp4';
@@ -2583,10 +2583,8 @@
         // pour que connectVideoToAudioGraph() puisse recréer un nœud frais
         disconnectVideoFromAudioGraph();
         if (previewTimeout) clearTimeout(previewTimeout);
-        previewTimeout = setTimeout(() => {
-          previewTimeout = null;
-          showPreview(blob);
-        }, 32);
+        previewTimeout = null;
+        showPreview(blob);
       };
       mediaRecorder.start(RECORDER_TIMESLICE_MS); isRecording = true;
       if (cameraReady) document.body.classList.add('recording'); else pendingRecordUI = true;
