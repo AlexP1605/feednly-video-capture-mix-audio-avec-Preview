@@ -456,12 +456,10 @@
     let originalVolume = 1, videoMediaSource = null, videoGainNode = null;
     const revealCameraPreview = () => { cameraPreview.style.opacity = "1"; };
     const ensureCameraVisible = () => { revealCameraPreview(); requestAnimationFrame(revealCameraPreview); setTimeout(revealCameraPreview, 200); };
-    let cameraTimeoutId = null;
     const markCameraReady = () => {
       ensureCameraVisible();
       if (cameraReady) return;
       cameraReady = true;
-      if (cameraTimeoutId) { clearTimeout(cameraTimeoutId); cameraTimeoutId = null; }
       document.body.classList.remove('camera-starting');
       setTimeout(() => { const loader = document.getElementById('camera-loader'); loader.style.transition = ''; loader.style.opacity = ''; document.body.classList.add('camera-ready'); }, 400);
       if (pendingRecordUI && isRecording) { document.body.classList.add('recording'); pendingRecordUI = false; }
@@ -681,7 +679,6 @@
       const constraints = { audio: true, video: { facingMode: facingMode, width: { ideal: 1920, max: 1920 }, height: { ideal: 1080, max: 1080 }, frameRate: { ideal: 30, max: 30 }, aspectRatio: { ideal: 16/9 } } };
       try {
         startCamera.isStarting = true;
-        const cameraTimeoutId = setTimeout(() => { if (!cameraReady) showCameraError('busy'); }, 5000);
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         cameraPreview.srcObject = stream;
         cameraPreview.play().catch(e => {});
@@ -693,7 +690,6 @@
         updateFlashUI();
         setTimeout(() => { const track = mediaStream.getVideoTracks()[0]; const caps = track.getCapabilities ? track.getCapabilities() : {}; torchSupported = !!caps.torch; updateFlashUI(); }, 300);
       } catch (error) {
-        if (cameraTimeoutId) { clearTimeout(cameraTimeoutId); cameraTimeoutId = null; }
         const name = error?.name || '';
         if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
           showCameraError('notallowed');
