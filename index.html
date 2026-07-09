@@ -456,12 +456,14 @@
     let originalVolume = 1, videoMediaSource = null, videoGainNode = null;
     const revealCameraPreview = () => { cameraPreview.style.opacity = "1"; };
     const ensureCameraVisible = () => { revealCameraPreview(); requestAnimationFrame(revealCameraPreview); setTimeout(revealCameraPreview, 200); };
+    let cameraTimeoutId = null;
     const markCameraReady = () => {
       ensureCameraVisible();
       if (cameraReady) return;
       cameraReady = true;
+      if (cameraTimeoutId) { clearTimeout(cameraTimeoutId); cameraTimeoutId = null; }
       document.body.classList.remove('camera-starting');
-      setTimeout(() => { document.body.classList.add('camera-ready'); }, 400);
+      setTimeout(() => { const loader = document.getElementById('camera-loader'); loader.style.transition = ''; loader.style.opacity = ''; document.body.classList.add('camera-ready'); }, 400);
       if (pendingRecordUI && isRecording) { document.body.classList.add('recording'); pendingRecordUI = false; }
       scheduleSafeMusicPreload();
     };
@@ -679,6 +681,7 @@
       const constraints = { audio: true, video: { facingMode: facingMode, width: { ideal: 1920, max: 1920 }, height: { ideal: 1080, max: 1080 }, frameRate: { ideal: 30, max: 30 }, aspectRatio: { ideal: 16/9 } } };
       try {
         startCamera.isStarting = true;
+        const cameraTimeoutId = setTimeout(() => { if (!cameraReady) showCameraError('busy'); }, 5000);
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         cameraPreview.srcObject = stream;
         cameraPreview.play().catch(e => {});
@@ -690,6 +693,7 @@
         updateFlashUI();
         setTimeout(() => { const track = mediaStream.getVideoTracks()[0]; const caps = track.getCapabilities ? track.getCapabilities() : {}; torchSupported = !!caps.torch; updateFlashUI(); }, 300);
       } catch (error) {
+        if (cameraTimeoutId) { clearTimeout(cameraTimeoutId); cameraTimeoutId = null; }
         const name = error?.name || '';
         if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
           showCameraError('notallowed');
@@ -720,7 +724,7 @@
     if (window.visualViewport) { window.visualViewport.addEventListener('resize', scheduleViewportSync, { passive: true }); window.visualViewport.addEventListener('scroll', scheduleViewportSync, { passive: true }); }
     previewVideo.onloadedmetadata = () => { videoDurationSeconds = Math.max(0, Number(previewVideo.duration) || 0); if (shouldCheckDuration) { if (previewVideo.duration > 61) { showError('La vid\u00e9o doit faire moins de 60 secondes'); setTimeout(() => hidePreview(), 1200); shouldCheckDuration = false; return; } shouldCheckDuration = false; } updateThumbnailSliderBounds(); resizeThumbnailCanvases(); if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(DEFAULT_THUMBNAIL_TIME); updateThumbnailTimeLabel(DEFAULT_THUMBNAIL_TIME); const selectedMusic = getSelectedMusic(); if (!isGalleryVideoSource() && selectedMusic) updateSeekDurationFromMeta(selectedMusic); else if (!isGalleryVideoSource()) setSeekLimits(currentMusicDuration); updateMusicOverlay(); const ctx = ensureMusicAudioContext(); const connectAfterPlay = () => { connectVideoToAudioGraph(); applyOriginalVolume(originalVolume); const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME); selectedThumbnailTime = defaultTime; requestAnimationFrame(() => { drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas); drawThumbnailToCanvas(thumbnailCtxSheet, thumbnailCanvasSheet); }); if (!isGalleryVideoSource()) restartPreviewIfPlaying(); if (tapToPlay) { tapToPlay.classList.remove('active'); tapToPlay.classList.remove('paused'); } }; previewVideo.muted = true; previewVideo.play().then(() => { if (ctx && ctx.state === 'suspended') { ctx.resume().then(connectAfterPlay).catch(connectAfterPlay); } else { connectAfterPlay(); } }).catch(() => { if (tapToPlay) tapToPlay.classList.add('active'); }); };
     flashBtn.onclick = toggleFlash;
-    switchBtn.onclick = () => { if (isRecording || isCountingDown || isSwitching) return; isSwitching = true; switchBtn.style.transform = "rotate(180deg)"; document.body.classList.remove('camera-ready'); cameraPreview.style.opacity = '0'; if (mediaStream) mediaStream.getTracks().forEach(t => t.stop()); facingMode = (facingMode === 'environment') ? 'user' : 'environment'; startCamera().then(() => { setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300); isSwitching = false; }).catch(() => { isSwitching = false; }); };
+    switchBtn.onclick = () => { if (isRecording || isCountingDown || isSwitching) return; isSwitching = true; switchBtn.style.transform = "rotate(180deg)"; const loader = document.getElementById('camera-loader'); loader.style.transition = 'none'; loader.style.opacity = '1'; document.body.classList.remove('camera-ready'); cameraPreview.style.opacity = '0'; if (mediaStream) mediaStream.getTracks().forEach(t => t.stop()); facingMode = (facingMode === 'environment') ? 'user' : 'environment'; startCamera().then(() => { setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300); isSwitching = false; }).catch(() => { isSwitching = false; }); };
     galleryBtn.onclick = () => { stopMusicPreview({ hard: true }); if (previewTimeout) { clearTimeout(previewTimeout); previewTimeout = null; } recordedBlob = null; shouldCheckDuration = false; previewVideo.src = ''; if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = null; } hidePreview(); if (mediaStream) mediaStream.getAudioTracks().forEach(track => track.stop()); galleryInput.value = ''; galleryInput.click(); };
     function handleFileSelect(e) { const file = e.target.files[0]; if (!file) { startCamera(); return; } videoSourceType = 'gallery'; recordedBlob = file; shouldCheckDuration = true; shouldPreloadAfterGallery = true; showPreview(file); e.target.value = ''; }
     galleryInput.onchange = handleFileSelect; if (cameraInput) cameraInput.onchange = handleFileSelect;
