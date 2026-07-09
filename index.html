@@ -493,12 +493,12 @@
     function clampVolume(value) { return Math.min(1, Math.max(0, value)); }
     function normalizeMusicVolumeValue(value) { const numeric = Number.isFinite(value) ? value : 0.5; const maxValue = musicVolumeInput ? parseFloat(musicVolumeInput.max || '1') : 1; if (maxValue > 1) return numeric / maxValue; if (numeric > 1) return numeric / 100; return numeric; }
     function applyMusicVolume(value, { syncInput = true, updateEngine = true } = {}) { const normalized = normalizeMusicVolumeValue(value); const clamped = clampVolume(normalized); musicVolume = clamped; if (syncInput && musicVolumeInput) { const maxValue = parseFloat(musicVolumeInput.max || '1'); musicVolumeInput.value = String(maxValue > 1 ? clamped * maxValue : clamped); } syncVolumeLabels(); if (updateEngine && musicEngine) musicEngine.updateVolume(clamped); return clamped; }
-    let facingMode = 'environment', recordedFacingMode = 'environment', torchSupported = false, torchEnabled = false, uploadURL = '';
+    let facingMode = 'user', recordedFacingMode = 'environment', torchSupported = false, torchEnabled = false, uploadURL = '';
     const UPLOAD_FINAL_MESSAGE_WITH_MUSIC = 'Mixage audio en cours, cela peut prendre quelques instants selon votre connexion';
     const UPLOAD_FINAL_MESSAGE_PROCESSING = 'Telechargement en cours, cela peut prendre quelques instants selon votre connexion';
     let uploadProgressRaf = null, uploadProgressValue = 0, uploadProcessingRaf = null, uploadCompleted = false, uploadHasMusic = false;
     if (uploadMixText) uploadMixText.textContent = UPLOAD_FINAL_MESSAGE_PROCESSING;
-    let timerDuration = 0, isCountingDown = false, shouldCheckDuration = false, isToggleLocked = false, isSwitching = false, isSwitchingCamera = false;
+    let timerDuration = 0, isCountingDown = false, shouldCheckDuration = false, isToggleLocked = false, isSwitching = false;
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z", PATH_FLASH_OFF = "M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z";
     const MAX_DURATION = 60000, RECORDER_TIMESLICE_MS = 1000, circumference = 2 * Math.PI * 46;
     let recordingStartTime = 0, progressInterval = null, previewTimeout = null, isStoppingRecording = false;
@@ -662,7 +662,7 @@
       cameraReady = false;
       pendingRecordUI = false;
       document.body.classList.add('camera-starting');
-      if (!isSwitchingCamera) document.body.classList.remove('camera-ready');
+      document.body.classList.remove('camera-ready');
       cameraPreview.style.opacity = "0";
       if (mediaStream && mediaStream.active) {
         cameraPreview.srcObject = mediaStream;
@@ -719,7 +719,7 @@
     if (window.visualViewport) { window.visualViewport.addEventListener('resize', scheduleViewportSync, { passive: true }); window.visualViewport.addEventListener('scroll', scheduleViewportSync, { passive: true }); }
     previewVideo.onloadedmetadata = () => { videoDurationSeconds = Math.max(0, Number(previewVideo.duration) || 0); if (shouldCheckDuration) { if (previewVideo.duration > 61) { showError('La vid\u00e9o doit faire moins de 60 secondes'); setTimeout(() => hidePreview(), 1200); shouldCheckDuration = false; return; } shouldCheckDuration = false; } updateThumbnailSliderBounds(); resizeThumbnailCanvases(); if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(DEFAULT_THUMBNAIL_TIME); updateThumbnailTimeLabel(DEFAULT_THUMBNAIL_TIME); const selectedMusic = getSelectedMusic(); if (!isGalleryVideoSource() && selectedMusic) updateSeekDurationFromMeta(selectedMusic); else if (!isGalleryVideoSource()) setSeekLimits(currentMusicDuration); updateMusicOverlay(); const ctx = ensureMusicAudioContext(); const connectAfterPlay = () => { connectVideoToAudioGraph(); applyOriginalVolume(originalVolume); const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME); selectedThumbnailTime = defaultTime; requestAnimationFrame(() => { drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas); drawThumbnailToCanvas(thumbnailCtxSheet, thumbnailCanvasSheet); }); if (!isGalleryVideoSource()) restartPreviewIfPlaying(); if (tapToPlay) { tapToPlay.classList.remove('active'); tapToPlay.classList.remove('paused'); } }; previewVideo.muted = true; previewVideo.play().then(() => { if (ctx && ctx.state === 'suspended') { ctx.resume().then(connectAfterPlay).catch(connectAfterPlay); } else { connectAfterPlay(); } }).catch(() => { if (tapToPlay) tapToPlay.classList.add('active'); }); };
     flashBtn.onclick = toggleFlash;
-    switchBtn.onclick = () => { if (isRecording || isCountingDown || isSwitching) return; isSwitching = true; switchBtn.style.transform = "rotate(180deg)"; if (mediaStream) mediaStream.getTracks().forEach(t => t.stop()); facingMode = (facingMode === 'environment') ? 'user' : 'environment'; isSwitchingCamera = true; startCamera().then(() => { isSwitchingCamera = false; setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300); isSwitching = false; }).catch(() => { isSwitchingCamera = false; isSwitching = false; }); };
+    switchBtn.onclick = () => { if (isRecording || isCountingDown || isSwitching) return; isSwitching = true; switchBtn.style.transform = "rotate(180deg)"; if (mediaStream) mediaStream.getTracks().forEach(t => t.stop()); facingMode = (facingMode === 'environment') ? 'user' : 'environment'; startCamera().then(() => { setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300); isSwitching = false; }).catch(() => { isSwitching = false; }); };
     galleryBtn.onclick = () => { stopMusicPreview({ hard: true }); if (previewTimeout) { clearTimeout(previewTimeout); previewTimeout = null; } recordedBlob = null; shouldCheckDuration = false; previewVideo.src = ''; if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = null; } hidePreview(); if (mediaStream) mediaStream.getAudioTracks().forEach(track => track.stop()); galleryInput.value = ''; galleryInput.click(); };
     function handleFileSelect(e) { const file = e.target.files[0]; if (!file) { startCamera(); return; } videoSourceType = 'gallery'; recordedBlob = file; shouldCheckDuration = true; shouldPreloadAfterGallery = true; showPreview(file); e.target.value = ''; }
     galleryInput.onchange = handleFileSelect; if (cameraInput) cameraInput.onchange = handleFileSelect;
