@@ -23,12 +23,38 @@
     .bottom-bar { will-change: auto; }
     .record-wrap { flex-shrink: 0; }
     #camera-container { position: absolute; inset: 0; z-index: 1; background: #000; }
-    #camera-loader { position: fixed; inset: 0; z-index: 999; background: #000; pointer-events: none; transition: opacity 0.3s ease; }
-    body.camera-ready #camera-loader { opacity: 0; pointer-events: none; }
+
+    /* ECRAN NOIR + LOADER */
+    #camera-loader {
+      position: fixed; inset: 0; z-index: 999; background: #000;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 20px; pointer-events: none; transition: opacity 0.4s ease;
+    }
+    body.camera-ready #camera-loader { opacity: 0; }
+    .camera-loader-spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .camera-loader-text {
+      font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      font-size: 14px; color: rgba(255,255,255,0.5); letter-spacing: 0.3px;
+    }
+    .camera-loader-hint {
+      font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      font-size: 12px; color: rgba(255,255,255,0.3);
+      position: absolute; bottom: max(32px, env(safe-area-inset-bottom));
+      left: 0; right: 0; text-align: center;
+    }
+
+    /* ECRAN ERREUR CAMERA */
     #camera-error { position: fixed; inset: 0; z-index: 998; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 32px; text-align: center; gap: 16px; }
     #camera-error.active { display: flex; }
     #camera-error-icon { font-size: 48px; }
     #camera-error-message { font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif; font-size: 16px; color: rgba(255,255,255,0.85); line-height: 1.6; max-width: 300px; }
+
     #camera-preview { opacity: 0; transition: none; will-change: opacity, transform; }
     video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
     video::-webkit-media-controls { display: none !important; }
@@ -208,7 +234,11 @@
   </style>
 </head>
 <body>
-  <div id="camera-loader"></div>
+  <div id="camera-loader">
+    <div class="camera-loader-spinner"></div>
+    <div class="camera-loader-text">Chargement de la caméra...</div>
+    <div class="camera-loader-hint">La vidéo doit faire moins de 60 secondes</div>
+  </div>
   <div id="camera-error">
     <div id="camera-error-icon">📷</div>
     <div id="camera-error-message"></div>
@@ -342,6 +372,7 @@
     const cameraErrorMessage = document.getElementById('camera-error-message');
     const cameraErrorIcon = document.getElementById('camera-error-icon');
     function showCameraError(type) {
+      document.getElementById('camera-loader').style.display = 'none';
       if (type === 'notallowed') {
         cameraErrorIcon.textContent = '\ud83d\udd12';
         cameraErrorMessage.textContent = 'Activez votre cam\u00e9ra et votre micro pour pouvoir prendre une vid\u00e9o.';
@@ -351,7 +382,10 @@
       }
       cameraErrorEl.classList.add('active');
     }
-    function hideCameraError() { cameraErrorEl.classList.remove('active'); }
+    function hideCameraError() {
+      cameraErrorEl.classList.remove('active');
+      document.getElementById('camera-loader').style.display = '';
+    }
     const cameraPreview = document.getElementById('camera-preview');
     const previewVideo = document.getElementById('preview-video');
     const previewOverlay = document.getElementById('preview-overlay');
@@ -421,7 +455,15 @@
     let originalVolume = 1, videoMediaSource = null, videoGainNode = null;
     const revealCameraPreview = () => { cameraPreview.style.opacity = "1"; };
     const ensureCameraVisible = () => { revealCameraPreview(); requestAnimationFrame(revealCameraPreview); setTimeout(revealCameraPreview, 200); };
-    const markCameraReady = () => { ensureCameraVisible(); if (cameraReady) return; cameraReady = true; document.body.classList.remove('camera-starting'); document.body.classList.add('camera-ready'); if (pendingRecordUI && isRecording) { document.body.classList.add('recording'); pendingRecordUI = false; } scheduleSafeMusicPreload(); };
+    const markCameraReady = () => {
+      ensureCameraVisible();
+      if (cameraReady) return;
+      cameraReady = true;
+      document.body.classList.remove('camera-starting');
+      setTimeout(() => { document.body.classList.add('camera-ready'); }, 400);
+      if (pendingRecordUI && isRecording) { document.body.classList.add('recording'); pendingRecordUI = false; }
+      scheduleSafeMusicPreload();
+    };
     cameraPreview.addEventListener('loadeddata', markCameraReady);
     let mediaStream = null, mediaRecorder = null, recordedChunks = [], isRecording = false, recordedBlob = null, previewObjectURL = null, selectedThumbnailTime = 0.5, thumbnailPrepareTimeout = null, thumbnailDrawRaf = null, cameraReady = false, pendingRecordUI = false;
     const DEFAULT_MUSIC_OPTIONS = [{ id: 'default', title: 'Default music', artist: 'Feednly', url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3' }];
@@ -675,7 +717,7 @@
     function scheduleViewportSync() { if (viewportSyncRaf) return; viewportSyncRaf = requestAnimationFrame(() => { viewportSyncRaf = null; syncAppViewportVars(); positionPreviewOverlays(); }); }
     window.addEventListener('resize', scheduleViewportSync, { passive: true }); window.addEventListener('orientationchange', scheduleViewportSync, { passive: true });
     if (window.visualViewport) { window.visualViewport.addEventListener('resize', scheduleViewportSync, { passive: true }); window.visualViewport.addEventListener('scroll', scheduleViewportSync, { passive: true }); }
-    previewVideo.onloadedmetadata = () => { videoDurationSeconds = Math.max(0, Number(previewVideo.duration) || 0); if (shouldCheckDuration) { if (previewVideo.duration > 61) { showError('La video doit faire moins de 1 minute'); setTimeout(() => hidePreview(), 1200); shouldCheckDuration = false; return; } shouldCheckDuration = false; } updateThumbnailSliderBounds(); resizeThumbnailCanvases(); if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(DEFAULT_THUMBNAIL_TIME); updateThumbnailTimeLabel(DEFAULT_THUMBNAIL_TIME); const selectedMusic = getSelectedMusic(); if (!isGalleryVideoSource() && selectedMusic) updateSeekDurationFromMeta(selectedMusic); else if (!isGalleryVideoSource()) setSeekLimits(currentMusicDuration); updateMusicOverlay(); const ctx = ensureMusicAudioContext(); const connectAfterPlay = () => { connectVideoToAudioGraph(); applyOriginalVolume(originalVolume); const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME); selectedThumbnailTime = defaultTime; requestAnimationFrame(() => { drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas); drawThumbnailToCanvas(thumbnailCtxSheet, thumbnailCanvasSheet); }); if (!isGalleryVideoSource()) restartPreviewIfPlaying(); if (tapToPlay) { tapToPlay.classList.remove('active'); tapToPlay.classList.remove('paused'); } }; previewVideo.muted = true; previewVideo.play().then(() => { if (ctx && ctx.state === 'suspended') { ctx.resume().then(connectAfterPlay).catch(connectAfterPlay); } else { connectAfterPlay(); } }).catch(() => { if (tapToPlay) tapToPlay.classList.add('active'); }); };
+    previewVideo.onloadedmetadata = () => { videoDurationSeconds = Math.max(0, Number(previewVideo.duration) || 0); if (shouldCheckDuration) { if (previewVideo.duration > 61) { showError('La vid\u00e9o doit faire moins de 60 secondes'); setTimeout(() => hidePreview(), 1200); shouldCheckDuration = false; return; } shouldCheckDuration = false; } updateThumbnailSliderBounds(); resizeThumbnailCanvases(); if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(DEFAULT_THUMBNAIL_TIME); updateThumbnailTimeLabel(DEFAULT_THUMBNAIL_TIME); const selectedMusic = getSelectedMusic(); if (!isGalleryVideoSource() && selectedMusic) updateSeekDurationFromMeta(selectedMusic); else if (!isGalleryVideoSource()) setSeekLimits(currentMusicDuration); updateMusicOverlay(); const ctx = ensureMusicAudioContext(); const connectAfterPlay = () => { connectVideoToAudioGraph(); applyOriginalVolume(originalVolume); const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME); selectedThumbnailTime = defaultTime; requestAnimationFrame(() => { drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas); drawThumbnailToCanvas(thumbnailCtxSheet, thumbnailCanvasSheet); }); if (!isGalleryVideoSource()) restartPreviewIfPlaying(); if (tapToPlay) { tapToPlay.classList.remove('active'); tapToPlay.classList.remove('paused'); } }; previewVideo.muted = true; previewVideo.play().then(() => { if (ctx && ctx.state === 'suspended') { ctx.resume().then(connectAfterPlay).catch(connectAfterPlay); } else { connectAfterPlay(); } }).catch(() => { if (tapToPlay) tapToPlay.classList.add('active'); }); };
     flashBtn.onclick = toggleFlash;
     switchBtn.onclick = () => { if (isRecording || isCountingDown || isSwitching) return; isSwitching = true; switchBtn.style.transform = "rotate(180deg)"; if (mediaStream) mediaStream.getTracks().forEach(t => t.stop()); facingMode = (facingMode === 'environment') ? 'user' : 'environment'; startCamera().then(() => { setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300); isSwitching = false; }).catch(() => { isSwitching = false; }); };
     galleryBtn.onclick = () => { stopMusicPreview({ hard: true }); if (previewTimeout) { clearTimeout(previewTimeout); previewTimeout = null; } recordedBlob = null; shouldCheckDuration = false; previewVideo.src = ''; if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = null; } hidePreview(); if (mediaStream) mediaStream.getAudioTracks().forEach(track => track.stop()); galleryInput.value = ''; galleryInput.click(); };
