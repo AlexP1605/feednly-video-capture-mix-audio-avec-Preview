@@ -693,8 +693,6 @@
         const name = error?.name || '';
         if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
           showCameraError('notallowed');
-        } else {
-          showCameraError('busy');
         }
         document.body.classList.remove('camera-starting');
       } finally {
