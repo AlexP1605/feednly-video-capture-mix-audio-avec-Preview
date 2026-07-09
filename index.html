@@ -19,7 +19,7 @@
     input, textarea, select { user-select: auto; -webkit-user-select: auto; -webkit-touch-callout: default; }
     html { width: 100%; height: 100%; background: #000; overflow: hidden; overflow-x: hidden; }
     body { margin: 0; width: 100%; height: var(--app-viewport-height, 100svh); min-height: var(--app-viewport-height, 100svh); max-height: var(--app-viewport-height, 100svh); background: #000; font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif; position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; overflow-x: hidden; }
-    body.camera-starting * { transition: none !important; animation: none !important; }
+    body.camera-starting *:not(.camera-loader-spinner) { transition: none !important; animation: none !important; }
     .bottom-bar { will-change: auto; }
     .record-wrap { flex-shrink: 0; }
     #camera-container { position: absolute; inset: 0; z-index: 1; background: #000; }
@@ -374,7 +374,7 @@
     function showCameraError(type) {
       document.getElementById('camera-loader').style.display = 'none';
       if (type === 'notallowed') {
-        cameraErrorIcon.textContent = '\ud83d\udd12';
+        cameraErrorIcon.textContent = '\u274c';
         cameraErrorMessage.textContent = 'Activez votre cam\u00e9ra et votre micro pour pouvoir prendre une vid\u00e9o.';
       } else {
         cameraErrorIcon.textContent = '\ud83d\udcf7';
@@ -719,7 +719,7 @@
     if (window.visualViewport) { window.visualViewport.addEventListener('resize', scheduleViewportSync, { passive: true }); window.visualViewport.addEventListener('scroll', scheduleViewportSync, { passive: true }); }
     previewVideo.onloadedmetadata = () => { videoDurationSeconds = Math.max(0, Number(previewVideo.duration) || 0); if (shouldCheckDuration) { if (previewVideo.duration > 61) { showError('La vid\u00e9o doit faire moins de 60 secondes'); setTimeout(() => hidePreview(), 1200); shouldCheckDuration = false; return; } shouldCheckDuration = false; } updateThumbnailSliderBounds(); resizeThumbnailCanvases(); if (thumbnailTimeSlider) thumbnailTimeSlider.value = String(DEFAULT_THUMBNAIL_TIME); updateThumbnailTimeLabel(DEFAULT_THUMBNAIL_TIME); const selectedMusic = getSelectedMusic(); if (!isGalleryVideoSource() && selectedMusic) updateSeekDurationFromMeta(selectedMusic); else if (!isGalleryVideoSource()) setSeekLimits(currentMusicDuration); updateMusicOverlay(); const ctx = ensureMusicAudioContext(); const connectAfterPlay = () => { connectVideoToAudioGraph(); applyOriginalVolume(originalVolume); const defaultTime = Math.min(videoDurationSeconds || DEFAULT_THUMBNAIL_TIME, DEFAULT_THUMBNAIL_TIME); selectedThumbnailTime = defaultTime; requestAnimationFrame(() => { drawThumbnailToCanvas(thumbnailCtx, thumbnailCanvas); drawThumbnailToCanvas(thumbnailCtxSheet, thumbnailCanvasSheet); }); if (!isGalleryVideoSource()) restartPreviewIfPlaying(); if (tapToPlay) { tapToPlay.classList.remove('active'); tapToPlay.classList.remove('paused'); } }; previewVideo.muted = true; previewVideo.play().then(() => { if (ctx && ctx.state === 'suspended') { ctx.resume().then(connectAfterPlay).catch(connectAfterPlay); } else { connectAfterPlay(); } }).catch(() => { if (tapToPlay) tapToPlay.classList.add('active'); }); };
     flashBtn.onclick = toggleFlash;
-    switchBtn.onclick = () => { if (isRecording || isCountingDown || isSwitching) return; isSwitching = true; switchBtn.style.transform = "rotate(180deg)"; if (mediaStream) mediaStream.getTracks().forEach(t => t.stop()); facingMode = (facingMode === 'environment') ? 'user' : 'environment'; startCamera().then(() => { setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300); isSwitching = false; }).catch(() => { isSwitching = false; }); };
+    switchBtn.onclick = () => { if (isRecording || isCountingDown || isSwitching) return; isSwitching = true; switchBtn.style.transform = "rotate(180deg)"; if (mediaStream) mediaStream.getTracks().forEach(t => t.stop()); facingMode = (facingMode === 'environment') ? 'user' : 'environment'; document.body.classList.add('camera-ready'); startCamera().then(() => { setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300); isSwitching = false; }).catch(() => { isSwitching = false; }); };
     galleryBtn.onclick = () => { stopMusicPreview({ hard: true }); if (previewTimeout) { clearTimeout(previewTimeout); previewTimeout = null; } recordedBlob = null; shouldCheckDuration = false; previewVideo.src = ''; if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = null; } hidePreview(); if (mediaStream) mediaStream.getAudioTracks().forEach(track => track.stop()); galleryInput.value = ''; galleryInput.click(); };
     function handleFileSelect(e) { const file = e.target.files[0]; if (!file) { startCamera(); return; } videoSourceType = 'gallery'; recordedBlob = file; shouldCheckDuration = true; shouldPreloadAfterGallery = true; showPreview(file); e.target.value = ''; }
     galleryInput.onchange = handleFileSelect; if (cameraInput) cameraInput.onchange = handleFileSelect;
